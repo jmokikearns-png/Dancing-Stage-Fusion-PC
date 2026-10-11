@@ -2,6 +2,9 @@
 
 /* ours may be more up-to-date */
 #define __glext_h_
+/* Modern Mesa <GL/gl.h> includes <GL/glext.h> under a different include guard
+ * (__gl_glext_h_), which then conflicts with our glext.h; this tells it not to. */
+#define GL_GLEXT_LEGACY
 
 #if defined(WIN32)
 #include <windows.h>
