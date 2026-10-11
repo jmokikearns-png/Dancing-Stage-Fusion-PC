@@ -15,6 +15,7 @@
 #include <sys/wait.h>
 #include <sys/ptrace.h>
 #include <sys/stat.h>
+#include <pthread.h>
 #include <linux/unistd.h>
 #define _LINUX_PTRACE_H // hack to prevent broken linux/ptrace.h from conflicting with sys/ptrace.h
 #include <sys/user.h>
@@ -29,7 +30,10 @@
 
 static bool g_bUsingNPTL = false;
 
-static _syscall0(pid_t,gettid)
+/* The _syscall0() macro is gone from modern kernel headers, and glibc 2.30+
+ * declares its own gettid(), so call the syscall directly under a private name. */
+#include <sys/syscall.h>
+static pid_t sm_gettid() { return (pid_t) syscall( SYS_gettid ); }
 
 #ifndef _CS_GNU_LIBPTHREAD_VERSION
 #define _CS_GNU_LIBPTHREAD_VERSION 3
@@ -133,7 +137,7 @@ static uint64_t GetCurrentThreadIdInternal()
 	static bool GetTidUnsupported = 0;
 	if( !GetTidUnsupported )
 	{
-		pid_t ret = gettid();
+		pid_t ret = sm_gettid();
 
 		/* If this fails with ENOSYS, we're on a kernel before gettid, or we're
 		 * under valgrind.  If we don't have NPTL, then just use getpid().  If
