@@ -46,7 +46,7 @@ int ThreadImpl_Pthreads::Wait()
 	if( ret )
 		RageException::Throw( "pthread_join: %s", strerror(errno) );
 
-	return (int) val;
+	return (int) (intptr_t) val; /* thread exit code was stored in a void* */
 }
 
 ThreadImpl *MakeThisThread()
@@ -69,7 +69,7 @@ static void *StartThread( void *pData )
 	/* Tell MakeThread that we've set m_piThreadID, so it's safe to return. */
 	pThis->m_StartFinishedSem->Post();
 
-	return (void *) pThis->m_pFunc( pThis->m_pData );
+	return (void *) (intptr_t) pThis->m_pFunc( pThis->m_pData );
 }
 
 ThreadImpl *MakeThread( int (*pFunc)(void *pData), void *pData, uint64_t *piThreadID )
