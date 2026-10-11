@@ -54,6 +54,7 @@ fi
 if test -z "$AUTOMAKE" && automake --version > /dev/null 2>&1; then
 	version=`automake --version 2>/dev/null|head -1|sed -e 's/.* \([0-9]\+\.[0-9]\+\).*$/\1/'`
 	
+	save_IFS=$IFS
 	IFS=.
 	set $version
 	if test -z "$version"; then
@@ -64,7 +65,7 @@ if test -z "$AUTOMAKE" && automake --version > /dev/null 2>&1; then
 		echo "1.7 or newer is required."
 		exit 1
 	fi
-	IFS=
+	IFS=$save_IFS
 	ACLOCAL=aclocal
 	AUTOMAKE=automake
 fi
@@ -87,6 +88,21 @@ test -n "$NO_AUTOMAKE" || ($ACLOCAL --version) < /dev/null > /dev/null 2>&1 || {
 
 if test "$DIE" -eq 1; then
   exit 1
+fi
+
+# AM_ICONV (autoconf/m4/iconv.m4, from gettext) requires config.rpath in the
+# aux dir, but "automake -a" does not install it; gettext ships a copy.
+if test ! -f "$srcdir/autoconf/config.rpath"; then
+	for f in /usr/share/gettext/config.rpath /usr/local/share/gettext/config.rpath; do
+		if test -f "$f"; then
+			cp "$f" "$srcdir/autoconf/config.rpath"
+			break
+		fi
+	done
+	if test ! -f "$srcdir/autoconf/config.rpath"; then
+		echo "**Error**: autoconf/config.rpath is missing; install gettext."
+		exit 1
+	fi
 fi
 
 $ACLOCAL $ACLOCAL_OPTIONS
