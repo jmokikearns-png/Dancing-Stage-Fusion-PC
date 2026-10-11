@@ -1,6 +1,8 @@
 #ifndef ARCH_HOOKS_H
 #define ARCH_HOOKS_H
 
+#include <ctime> /* struct tm */
+
 class ArchHooks
 {
 public:

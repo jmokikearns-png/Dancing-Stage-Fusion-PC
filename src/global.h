@@ -49,6 +49,14 @@
 /* And vector: */
 #include <vector>
 
+/* Old (GCC 3.x/4.0) C++ standard library headers pulled these in transitively,
+ * and much of the code relies on that (memset, strlen, INT_MAX, abs, ...).
+ * Modern libraries don't, so include them explicitly. */
+#include <cstring>
+#include <climits>
+#include <cstdlib>
+#include <cstdio>
+
 #if !defined(MISSING_STDINT_H) /* need to define int64_t if so */
 #include <stdint.h>
 #endif
@@ -144,6 +152,7 @@ typedef const CString& CCStringRef;
 #include "RageException.h"
 
 #if !defined(WIN32)
+#include <strings.h> /* strcasecmp, strncasecmp */
 #define stricmp strcasecmp
 #define strnicmp strncasecmp
 #endif

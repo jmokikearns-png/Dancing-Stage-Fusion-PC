@@ -9,6 +9,8 @@
 
 #include <errno.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/sysmacros.h> /* major(), minor(): no longer in <sys/types.h> since glibc 2.28 */
 #include <linux/joystick.h>
 
 #include <set>
