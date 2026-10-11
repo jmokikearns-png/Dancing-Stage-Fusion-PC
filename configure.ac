@@ -17,6 +17,14 @@ AC_PROG_CC
 AC_PROG_CXX
 AC_PROG_RANLIB
 
+# This code base predates C++11 (it uses dynamic exception specifications,
+# auto_ptr, "register", a thread_local macro, etc.).  Modern compilers default
+# to C++17, so compile in the dialect it was written for unless told otherwise.
+AC_ARG_WITH(cxx-std, AS_HELP_STRING([--with-cxx-std=STD], [C++ dialect passed as -std=STD (default: gnu++98; "no" uses the compiler default)]), cxx_std=$withval, cxx_std=gnu++98)
+if test "$cxx_std" != "no" -a "$cxx_std" != "yes"; then
+	CXX="$CXX -std=$cxx_std"
+fi
+
 test "$DEFAULT_CFLAGS" = "yes" && CFLAGS="-Wall -W -Wno-unused -Wno-switch"
 test "$DEFAULT_CXXFLAGS" = "yes" && CXXFLAGS="-Wall -W -Wno-unused -Wno-switch"
 test "$DEFAULT_LDFLAGS" = "yes" && LDFLAGS=""
@@ -208,14 +216,19 @@ AC_ARG_ENABLE(force-oss, AC_HELP_STRING([--enable-force-oss], [Force OSS]), forc
 AC_CHECK_HEADER(stdint.h, , [AC_DEFINE(MISSING_STDINT_H, 1, [stdint.h is missing])])
 AC_CHECK_HEADERS([inttypes.h endian.h])
 
+# This must be tested as C++ (<cstdlib> does not exist in C), and foo() must not
+# be nested inside main(); otherwise the test always fails and the workaround
+# (#define llabs ::llabs) breaks modern <cstdlib>.
+AC_LANG_PUSH([C++])
 AC_MSG_CHECKING(if cstdlib breaks llabs)
-AC_TRY_COMPILE(	[#include <stdlib.h>
-		 #include <cstdlib> ],
-		[int foo() { return llabs(1); }],
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdlib.h>
+		 #include <cstdlib>
+		 int foo() { return llabs(1); }]], [[]])],
 		[AC_MSG_RESULT(no)],
 		[AC_MSG_RESULT(yes)
 		 AC_DEFINE([NEED_CSTDLIB_WORKAROUND], 1, [cstdlib breaks llabs])]
 	      )
+AC_LANG_POP([C++])
 
 AC_CHECK_LIB( pthread, pthread_create, AC_DEFINE([HAVE_LIBPTHREAD],1,[libpthread is available]) )
 AC_CHECK_LIB( pthread, pthread_mutex_timedlock, AC_DEFINE([HAVE_PTHREAD_MUTEX_TIMEDLOCK],1,[pthreads has pthread_mutex_timedlock()]) )
