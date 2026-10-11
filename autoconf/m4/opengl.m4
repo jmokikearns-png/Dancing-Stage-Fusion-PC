@@ -11,8 +11,11 @@ AC_DEFUN([SM_X_WITH_OPENGL],
 	fi
 
 	if test -n "$x_libraries"; then
-	    XLIBS="-L$x_libraries -lX11"
+	    XLIBS="-L$x_libraries"
 	fi
+	# Modern systems have X in the default paths, so AC_PATH_X leaves
+	# x_libraries empty; -lX11 is still needed.
+	XLIBS="$XLIBS -lX11"
 
 	if test -n "$x_includes"; then
 	    # See if we can compile X applications without using $XCFLAGS.
