@@ -18,8 +18,14 @@ AM_CXXFLAGS += $(XCFLAGS)
 LIBS += $(LUA_LIBS)
 LIBS += -lpthread
 
-$(srcdir)/libresample/libresample.a:
-	cd $(srcdir)/libresample && autoconf && sh ./configure && make
+# libresample has its own (non-automake, non-VPATH) build.  Build it inside the
+# build directory, copying the sources there for out-of-tree builds, and use the
+# configure script it ships with instead of regenerating it in the source tree.
+libresample/libresample.a:
+	@if test "$(srcdir)" != "."; then \
+		mkdir -p libresample && cp -R $(srcdir)/libresample/. libresample/ && chmod -R u+w libresample; \
+	fi
+	cd libresample && CC="$(CC)" CFLAGS="$(CFLAGS)" sh ./configure && $(MAKE) libresample.a
 
 Screens = \
 Screen.cpp Screen.h ScreenAttract.cpp ScreenAttract.h \
@@ -362,7 +368,7 @@ main_LDADD = \
 		  $(AUDIO_LIBS) \
 		  $(SDL_LIBS) \
 		  $(XLIBS) \
-		  $(srcdir)/libresample/libresample.a
+		  libresample/libresample.a
 
 stepmania_SOURCES = $(main_SOURCES)
 stepmania_LDADD = $(main_LDADD)
@@ -413,7 +419,7 @@ test_audio_readers_SOURCES = \
 
 test_audio_readers_LDADD = \
 		$(AUDIO_LIBS) \
-		$(srcdir)/libresample/libresample.a
+		libresample/libresample.a
 
 TESTS += test_file_readers
 test_file_readers_SOURCES = \
