@@ -97,7 +97,7 @@ static void DumpMap()
 		}
 }
 
-static void DrawPads()
+static void DrawPads( const char *szScreenshot = NULL )
 {
 	RageDisplay *d = dsf::Display();
 	if( d == NULL || !d->BeginFrame() )
@@ -129,6 +129,11 @@ static void DrawPads()
 			d->DrawQuads( v, 4 );
 		}
 	d->EndFrame();
+	/* RageDisplay_OGL::CreateScreenshot() reads GL_FRONT (2005 code).  On Mesa
+	 * llvmpipe under Xvfb that readback is black although the window shows the
+	 * frame (checked with an X root-window capture); kept as-is for the record. */
+	if( szScreenshot )
+		Log( "SCREENSHOT %s ok=%d", szScreenshot, d->SaveScreenshot( szScreenshot, RageDisplay::SAVE_LOSSLESS )? 1: 0 );
 }
 
 int main( int argc, char **argv )
@@ -234,7 +239,7 @@ int main( int argc, char **argv )
 					bMapped = true;
 			if( !bMapped )
 				Log( "RAW t=%.4f %s dev=%s", e.fTimestamp, e.bPressed? "down": "up", e.sDeviceInput.c_str() );
-			if( e.bPressed && e.sDeviceInput == "Key_esc" )
+			if( e.bPressed && e.sDeviceInput == "Key_escape" )
 				bQuit = true;
 		}
 
@@ -249,11 +254,7 @@ int main( int argc, char **argv )
 	}
 
 	if( !sScreenshot.empty() && dsf::Display() )
-	{
-		DrawPads();
-		bool bOK = dsf::Display()->SaveScreenshot( sScreenshot.c_str(), RageDisplay::SAVE_LOSSLESS );
-		Log( "SCREENSHOT %s ok=%d", sScreenshot.c_str(), bOK? 1: 0 );
-	}
+		DrawPads( sScreenshot.c_str() );
 	Log( "EXIT frames=%d seconds=%.2f", iFrames, start.Ago() );
 	dsf::Shutdown();
 	if( g_pLog )

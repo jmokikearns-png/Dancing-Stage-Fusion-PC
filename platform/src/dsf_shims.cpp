@@ -16,6 +16,8 @@
 #include "arch/Dialog/Dialog.h"
 #include "arch/ArchHooks/ArchHooks.h"
 #include "RageSurface_Save_JPEG.h"
+#include "RageFileDriverDirect.h"
+#include "RageFileDriverMemory.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -160,4 +162,16 @@ bool RageSurfaceUtils::SaveJPEG( RageSurface *, RageFile &, bool )
 {
 	LOG->Warn( "dsfplatform: JPEG screenshots are not built in" );
 	return false;
+}
+
+/* ---- static-library registration ----
+ * RageFileManager finds its "dir"/"mem" drivers through static registrar objects
+ * in RageFileDriverDirect.cpp / RageFileDriverMemory.cpp.  In the full engine
+ * those objects are linked unconditionally; from a static library the linker
+ * would drop them (nothing references them), so reference them from here.
+ * This function is never called. */
+void dsf_ForceLinkFileDrivers()
+{
+	delete new RageFileDriverDirect( "." );
+	delete new RageFileDriverMem;
 }
