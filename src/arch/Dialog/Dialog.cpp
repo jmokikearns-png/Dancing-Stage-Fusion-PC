@@ -133,6 +133,14 @@ void Dialog::SetWindowed( bool bWindowed )
 	g_bWindowed = bWindowed;
 }
 
+/* DSF PC: warnings (OK, Abort/Retry/Ignore) are only shown as pop-ups to
+ * developers who set ShowWarningDialogs=1; players get them in log.txt, and
+ * the default answer (OK / Ignore) is taken.  Fatal errors are still shown. */
+static bool ShowWarningDialogs()
+{
+	return g_bWindowed && PREFSMAN != NULL && PREFSMAN->m_bShowWarningDialogs;
+}
+
 void Dialog::OK( CString sMessage, CString sID )
 {
 	Dialog::Init();
@@ -146,7 +154,7 @@ void Dialog::OK( CString sMessage, CString sID )
 	g_bIsShowingDialog = true;
 	
 	// only show Dialog if windowed
-	if( !g_bWindowed )
+	if( !ShowWarningDialogs() )
 		g_NullDriver.OK( sMessage, sID );
 	else
 		g_pImpl->OK( sMessage, sID );	// call derived version
@@ -168,7 +176,7 @@ Dialog::Result Dialog::AbortRetryIgnore( CString sMessage, CString sID )
 	
 	// only show Dialog if windowed
 	Dialog::Result ret;
-	if( !g_bWindowed )
+	if( !ShowWarningDialogs() )
 		ret = g_NullDriver.AbortRetryIgnore( sMessage, sID );
 	else
 		ret = g_pImpl->AbortRetryIgnore( sMessage, sID );	// call derived version

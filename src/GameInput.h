@@ -44,6 +44,31 @@ enum	// DanceButtons
 	NUM_DANCE_BUTTONS,		// leave this at the end
 };
 
+/* DSF PC: the PlayStation digital pad (SCPH-1080) fed to the original game,
+ * plus two buttons for StepMania itself.  Names are the Keymaps.ini keys
+ * ("1_Cross=..."); keep them stable. */
+enum	// Ps1PadButtons
+{
+	PS1PAD_BUTTON_UP,
+	PS1PAD_BUTTON_DOWN,
+	PS1PAD_BUTTON_LEFT,
+	PS1PAD_BUTTON_RIGHT,
+	PS1PAD_BUTTON_CROSS,
+	PS1PAD_BUTTON_CIRCLE,
+	PS1PAD_BUTTON_SQUARE,
+	PS1PAD_BUTTON_TRIANGLE,
+	PS1PAD_BUTTON_L1,
+	PS1PAD_BUTTON_L2,
+	PS1PAD_BUTTON_R1,
+	PS1PAD_BUTTON_R2,
+	PS1PAD_BUTTON_START,
+	PS1PAD_BUTTON_SELECT,
+	NUM_PS1PAD_PS1_BUTTONS,	// the buttons that exist on the PlayStation pad
+	PS1PAD_BUTTON_BACK = NUM_PS1PAD_PS1_BUTTONS,	// StepMania menus; in the game: the port menu
+	PS1PAD_BUTTON_OPERATOR,
+	NUM_PS1PAD_BUTTONS,		// leave this at the end
+};
+
 enum	// PumpButtons
 {
 	PUMP_BUTTON_UPLEFT,

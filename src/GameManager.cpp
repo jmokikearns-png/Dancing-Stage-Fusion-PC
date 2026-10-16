@@ -49,6 +49,7 @@ enum
 	GAME_TECHNO,	// TechnoMotion
 	GAME_PNM,		// pop n music
 	GAME_LIGHTS,	// cabinet lights (not really a game)
+	GAME_PS1PAD,	// DSF PC: PlayStation digital pad for the original game
 	NUM_GAMES,		// leave this at the end
 	GAME_INVALID,
 };
@@ -1001,6 +1002,99 @@ Game g_Games[NUM_GAMES] =
 			},
 		},
 		TNS_MARVELOUS,	// m_mapMarvelousTo
+		TNS_PERFECT,	// m_mapPerfectTo
+		TNS_GREAT,		// m_mapGreatTo
+		TNS_GOOD,		// m_mapGoodTo
+		TNS_BOO,		// m_mapBooTo
+	},
+	{	// GAME_PS1PAD
+		"ps1pad",					// m_szName
+		"PlayStation pad",			// m_szDescription
+		2,							// m_iNumControllers
+		false,						// m_bCountNotesSeparately
+		NUM_PS1PAD_BUTTONS,			// m_iButtonsPerController
+		{	// m_szButtonNames
+			"Up",
+			"Down",
+			"Left",
+			"Right",
+			"Cross",
+			"Circle",
+			"Square",
+			"Triangle",
+			"L1",
+			"L2",
+			"R1",
+			"R2",
+			"Start",
+			"Select",
+			"Back",
+			"Operator",
+		},
+		/* There are no menu-only buttons: the pad itself drives StepMania's
+		 * menus, so a dance pad works everywhere.  Cross also confirms and
+		 * Triangle also goes back, as in the PS1 game's own menus. */
+		{	// m_DedicatedMenuButton
+			PS1PAD_BUTTON_LEFT,		// MENU_BUTTON_LEFT
+			PS1PAD_BUTTON_RIGHT,	// MENU_BUTTON_RIGHT
+			PS1PAD_BUTTON_UP,		// MENU_BUTTON_UP
+			PS1PAD_BUTTON_DOWN,		// MENU_BUTTON_DOWN
+			PS1PAD_BUTTON_START,	// MENU_BUTTON_START
+			PS1PAD_BUTTON_SELECT,	// MENU_BUTTON_SELECT
+			PS1PAD_BUTTON_BACK,		// MENU_BUTTON_BACK
+			PS1PAD_BUTTON_BACK,		// MENU_BUTTON_COIN (no coins on PC)
+			PS1PAD_BUTTON_OPERATOR	// MENU_BUTTON_OPERATOR
+		},
+		{	// m_SecondaryMenuButton
+			PS1PAD_BUTTON_LEFT,		// MENU_BUTTON_LEFT
+			PS1PAD_BUTTON_RIGHT,	// MENU_BUTTON_RIGHT
+			PS1PAD_BUTTON_UP,		// MENU_BUTTON_UP
+			PS1PAD_BUTTON_DOWN,		// MENU_BUTTON_DOWN
+			PS1PAD_BUTTON_CROSS,	// MENU_BUTTON_START
+			PS1PAD_BUTTON_SELECT,	// MENU_BUTTON_SELECT
+			PS1PAD_BUTTON_TRIANGLE,	// MENU_BUTTON_BACK
+			PS1PAD_BUTTON_BACK,		// MENU_BUTTON_COIN
+			PS1PAD_BUTTON_OPERATOR,	// MENU_BUTTON_OPERATOR
+		},
+		{	// m_iDefaultKeyboardKey
+			{	// PLAYER_1
+				KEY_UP,				// PS1PAD_BUTTON_UP
+				KEY_DOWN,			// PS1PAD_BUTTON_DOWN
+				KEY_LEFT,			// PS1PAD_BUTTON_LEFT
+				KEY_RIGHT,			// PS1PAD_BUTTON_RIGHT
+				KEY_Cx,				// PS1PAD_BUTTON_CROSS
+				KEY_Cc,				// PS1PAD_BUTTON_CIRCLE
+				KEY_Cz,				// PS1PAD_BUTTON_SQUARE
+				KEY_Cs,				// PS1PAD_BUTTON_TRIANGLE
+				KEY_Cq,				// PS1PAD_BUTTON_L1
+				KEY_C1,				// PS1PAD_BUTTON_L2
+				KEY_Ce,				// PS1PAD_BUTTON_R1
+				KEY_C3,				// PS1PAD_BUTTON_R2
+				KEY_ENTER,			// PS1PAD_BUTTON_START
+				KEY_BACK,			// PS1PAD_BUTTON_SELECT
+				KEY_ESC,			// PS1PAD_BUTTON_BACK
+				KEY_SCRLLOCK		// PS1PAD_BUTTON_OPERATOR
+			},
+			{	// PLAYER_2
+				KEY_KP_C8,			// PS1PAD_BUTTON_UP
+				KEY_KP_C2,			// PS1PAD_BUTTON_DOWN
+				KEY_KP_C4,			// PS1PAD_BUTTON_LEFT
+				KEY_KP_C6,			// PS1PAD_BUTTON_RIGHT
+				KEY_KP_C0,			// PS1PAD_BUTTON_CROSS
+				KEY_KP_PERIOD,		// PS1PAD_BUTTON_CIRCLE
+				KEY_KP_C1,			// PS1PAD_BUTTON_SQUARE
+				KEY_KP_C3,			// PS1PAD_BUTTON_TRIANGLE
+				KEY_KP_C7,			// PS1PAD_BUTTON_L1
+				KEY_KP_SLASH,		// PS1PAD_BUTTON_L2
+				KEY_KP_C9,			// PS1PAD_BUTTON_R1
+				KEY_KP_ASTERISK,	// PS1PAD_BUTTON_R2
+				KEY_KP_ENTER,		// PS1PAD_BUTTON_START
+				KEY_KP_PLUS,		// PS1PAD_BUTTON_SELECT
+				NO_DEFAULT_KEY,		// PS1PAD_BUTTON_BACK
+				NO_DEFAULT_KEY		// PS1PAD_BUTTON_OPERATOR
+			},
+		},
+		TNS_MARVELOUS,	// m_mapMarvelousTo (no StepMania gameplay for this game)
 		TNS_PERFECT,	// m_mapPerfectTo
 		TNS_GREAT,		// m_mapGreatTo
 		TNS_GOOD,		// m_mapGoodTo
@@ -2652,7 +2746,7 @@ void GameManager::GetEnabledGames( vector<const Game*>& aGamesOut ) const
 
 const Game* GameManager::GetDefaultGame() const
 {
-	return &g_Games[0];
+	return &g_Games[GAME_PS1PAD];	/* DSF PC */
 }
 
 int GameManager::GetIndexFromGame( const Game* pGame ) const

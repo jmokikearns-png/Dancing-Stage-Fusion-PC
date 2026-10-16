@@ -296,7 +296,8 @@ PrefsManager::PrefsManager() :
 	m_sMachineName					( "MachineName",				"" ),
 	/* DSF PC: a missing or broken theme file is logged as a warning (and falls
 	 * back to "_missing") instead of stopping the player with a dialog. */
-	m_sIgnoredMessageWindows		( "IgnoredMessageWindows",		"MissingThemeElement,MissingThemeMetric,DuplicateThemeElement,MissingNoteSkinElement,MissingSpriteTexture" ),
+	m_sIgnoredMessageWindows		( "IgnoredMessageWindows",		"MissingThemeElement,MissingThemeMetric,DuplicateThemeElement,MissingNoteSkinElement,MissingSpriteTexture,COMMAND_DEFINED_TWICE" ),
+	m_bShowWarningDialogs			( "ShowWarningDialogs",			false ),
 	m_sCoursesToShowRanking			( "CoursesToShowRanking",		"" ),
 
 	/* Debug: */

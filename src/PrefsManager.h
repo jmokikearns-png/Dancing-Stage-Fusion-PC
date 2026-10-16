@@ -308,6 +308,7 @@ public:
 	Preference<bool>	m_bMonkeyInput;
 	Preference<CString>	m_sMachineName;
 	Preference<CString>	m_sIgnoredMessageWindows;
+	Preference<bool>	m_bShowWarningDialogs;	// DSF PC: theme/content warnings as pop-ups (developers)
 	Preference<CString>	m_sCoursesToShowRanking;
 
 	/* Debug: */
