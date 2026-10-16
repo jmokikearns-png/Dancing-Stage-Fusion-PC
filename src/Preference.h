@@ -11,6 +11,10 @@ class IPreference
 {
 public:
 	IPreference( const CString& sName );
+	/* Copies register themselves too, so a copy's destructor can unsubscribe.
+	 * (GCC copies objects passed through "..."; never pass a Preference to a
+	 * printf-style function -- pass .Get().) */
+	IPreference( const IPreference &cpy );
 	virtual ~IPreference();
 
 	virtual void LoadDefault() = 0;
@@ -35,8 +39,9 @@ template <class T>
 class Preference : public IPreference
 {
 private:
-	// Make currentValue first in the list so that we can pass this object
-	// as an argument in a var_arg function as in printf.
+	// Historically currentValue came first so that this object could be passed
+	// to printf-style functions on 32-bit MSVC.  That does not work on x64
+	// (large objects go through "..." by reference) or with GCC; use Get().
 	T			m_currentValue;
 	T			m_defaultValue;
 	

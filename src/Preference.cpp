@@ -13,6 +13,12 @@ IPreference::IPreference( const CString& sName ):
 	PrefsManager::Subscribe( this );
 }
 
+IPreference::IPreference( const IPreference &cpy ):
+	m_sName( cpy.m_sName )
+{
+	PrefsManager::Subscribe( this );
+}
+
 IPreference::~IPreference()
 {
 	PrefsManager::Unsubscribe( this );

@@ -26,7 +26,7 @@ static LONG GetRegKey(HKEY key, CString subkey, LPTSTR retdata)
 bool GotoURL(CString url)
 {
 	// First try ShellExecute()
-	int result = (int) ShellExecute(NULL, "open", url, NULL,NULL, SW_SHOWDEFAULT);
+	int result = (int) (INT_PTR) ShellExecute(NULL, "open", url, NULL,NULL, SW_SHOWDEFAULT);
 
 	// If it failed, get the .htm regkey and lookup the program
 	if (result > 32)

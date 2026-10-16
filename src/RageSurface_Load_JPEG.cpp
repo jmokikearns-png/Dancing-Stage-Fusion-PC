@@ -12,7 +12,7 @@
 #  define HAVE_BOOLEAN
 #endif
 
-#if defined(WIN32)
+#if defined(WIN32) && !defined(__MINGW32__)
 /* work around namespace bugs in win32/libjpeg: */
 #define XMD_H
 #undef FAR
@@ -29,6 +29,11 @@
 
 #pragma warning(disable: 4611) /* interaction between '_setjmp' and C++ object destruction is non-portable */
 #else
+/* MinGW builds link a static libjpeg(-turbo); the bundled headers above declare
+ * everything __declspec(dllimport) for the 2005 jpeg.dll. */
+#if defined(WIN32)
+#define XMD_H
+#endif
 extern "C" {
 #include <jpeglib.h>
 #include <jerror.h>

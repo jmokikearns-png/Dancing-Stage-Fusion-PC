@@ -226,7 +226,7 @@ try_again:
 			GetNoteSkinDir(GAME_BASE_NOTESKIN_NAME).c_str(),
 			GLOBAL_BASE_NOTESKIN_DIR.c_str() );
 
-		if( Dialog::AbortRetryIgnore(message) == Dialog::retry )
+		if( Dialog::AbortRetryIgnore(message, "MissingNoteSkinElement") == Dialog::retry )
 		{
 			FlushDirCache();
 			g_PathCache.clear();
@@ -256,7 +256,7 @@ try_again:
 					"Verify that this redirect is correct.",
 					sPath.c_str(), sNewFileName.c_str());
 
-			if( Dialog::AbortRetryIgnore(message) == Dialog::retry )
+			if( Dialog::AbortRetryIgnore(message, "BrokenNoteSkinRedirect") == Dialog::retry )
 			{
 				FlushDirCache();
 				g_PathCache.clear();

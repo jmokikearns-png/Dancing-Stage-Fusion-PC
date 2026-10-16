@@ -264,13 +264,13 @@ void GraphicsWindow::ConfigureGraphicsWindow( const RageDisplay::VideoModeParams
 	/* Update the window icon. */
 	if( g_hIcon != NULL )
 	{
-		SetClassLong( g_hWndMain, GCL_HICON, (LONG) NULL );
+		SetClassLongPtr( g_hWndMain, GCLP_HICON, (LONG_PTR) NULL );
 		DestroyIcon( g_hIcon );
 		g_hIcon = NULL;
 	}
 	g_hIcon = IconFromFile( p.sIconFile );
 	if( g_hIcon != NULL )
-		SetClassLong( g_hWndMain, GCL_HICON, (LONG) g_hIcon );
+		SetClassLongPtr( g_hWndMain, GCLP_HICON, (LONG_PTR) g_hIcon );
 
 	ShowWindow( g_hWndMain, SW_SHOW );
 

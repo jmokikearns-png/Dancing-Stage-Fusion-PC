@@ -24,7 +24,7 @@ void DestroyGraphicsWindowAndOpenGLContext()
 
 void *LowLevelWindow_Win32::GetProcAddress( CString s )
 {
-	void *pRet = wglGetProcAddress( s );
+	void *pRet = (void *) wglGetProcAddress( s );
 	if( pRet != NULL )
 		return pRet;
 

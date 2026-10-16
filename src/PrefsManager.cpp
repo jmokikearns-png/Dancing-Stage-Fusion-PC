@@ -57,12 +57,14 @@ bool g_bAutoRestart = false;
 #endif
 
 PrefsManager::PrefsManager() :
-	m_bWindowed				( "Windowed",				TRUE_IF_DEBUG),
-	m_iDisplayWidth			( "DisplayWidth",			640 ),
-	m_iDisplayHeight		( "DisplayHeight",			480 ),
-	m_iDisplayColorDepth	( "DisplayColorDepth",		16 ),
-	m_iTextureColorDepth	( "TextureColorDepth",		16 ),
-	m_iMovieColorDepth		( "MovieColorDepth",		16 ),
+	/* DSF PC defaults for current PCs: a 4:3 window at 1.5x, 32-bit colour.
+	 * Fullscreen is in Graphic Options and on Alt+Enter. */
+	m_bWindowed				( "Windowed",				true ),
+	m_iDisplayWidth			( "DisplayWidth",			960 ),
+	m_iDisplayHeight		( "DisplayHeight",			720 ),
+	m_iDisplayColorDepth	( "DisplayColorDepth",		32 ),
+	m_iTextureColorDepth	( "TextureColorDepth",		32 ),
+	m_iMovieColorDepth		( "MovieColorDepth",		32 ),
 	m_iMaxTextureResolution	( "MaxTextureResolution",	2048 ),
 	m_iRefreshRate			( "RefreshRate",			REFRESH_DEFAULT ),
 	m_fDisplayAspectRatio	( "DisplayAspectRatio",		4/3.0f ),
@@ -292,7 +294,9 @@ PrefsManager::PrefsManager() :
 	m_bDebugLights					( "DebugLights",				false ),
 	m_bMonkeyInput					( "MonkeyInput",				false ),
 	m_sMachineName					( "MachineName",				"" ),
-	m_sIgnoredMessageWindows		( "IgnoredMessageWindows",		"" ),
+	/* DSF PC: a missing or broken theme file is logged as a warning (and falls
+	 * back to "_missing") instead of stopping the player with a dialog. */
+	m_sIgnoredMessageWindows		( "IgnoredMessageWindows",		"MissingThemeElement,MissingThemeMetric,DuplicateThemeElement,MissingNoteSkinElement,MissingSpriteTexture" ),
 	m_sCoursesToShowRanking			( "CoursesToShowRanking",		"" ),
 
 	/* Debug: */

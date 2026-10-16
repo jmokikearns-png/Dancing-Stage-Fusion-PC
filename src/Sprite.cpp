@@ -118,7 +118,7 @@ retry:
 		if( asElementPaths.size() == 0 )
 		{
 			CString sMessage = ssprintf( "The sprite file '%s' points to a texture '%s' which doesn't exist.", m_sSpritePath.c_str(), sPath.c_str() );
-			switch( Dialog::AbortRetryIgnore(sMessage) )
+			switch( Dialog::AbortRetryIgnore(sMessage, "MissingSpriteTexture") )
 			{
 			case Dialog::abort:	
 				RageException::Throw( "Error reading value 'Texture' from %s.", m_sSpritePath.c_str() );

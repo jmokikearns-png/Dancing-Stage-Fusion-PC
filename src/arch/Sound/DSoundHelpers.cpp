@@ -100,6 +100,7 @@ void DSound::SetPrimaryBufferMode()
 
 DSound::DSound()
 {
+	m_pDS = NULL;
 	HRESULT hr;
 	if( FAILED( hr = CoInitialize(NULL) ) )
 		RageException::Throw( hr_ssprintf(hr, "CoInitialize") );
@@ -143,7 +144,9 @@ CString DSound::Init()
 
 DSound::~DSound()
 {
-	m_pDS->Release();
+	/* NULL when DirectSoundCreate failed (e.g. no audio device). */
+	if( m_pDS != NULL )
+		m_pDS->Release();
 	CoUninitialize();
 }
 

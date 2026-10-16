@@ -14,7 +14,7 @@ static bool g_bHush;
 static CString g_sMessage;
 static bool g_bAllowHush;
 
-static BOOL CALLBACK OKWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
+static INT_PTR CALLBACK OKWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
 	switch( msg )
 	{
@@ -77,7 +77,7 @@ void DialogDriver_Win32::OK( CString sMessage, CString sID )
 
 static CString g_sErrorString;
 
-static BOOL CALLBACK ErrorWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
+static INT_PTR CALLBACK ErrorWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
 	switch( msg )
 	{

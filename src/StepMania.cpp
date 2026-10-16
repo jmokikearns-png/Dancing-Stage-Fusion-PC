@@ -358,7 +358,7 @@ static void CheckSettings()
 	if( PREFSMAN->m_iLastSeenMemory == Memory )
 		return;
 	
-	LOG->Trace( "Memory changed from %i to %i; settings changed", PREFSMAN->m_iLastSeenMemory, Memory );
+	LOG->Trace( "Memory changed from %i to %i; settings changed", PREFSMAN->m_iLastSeenMemory.Get(), Memory );
 	PREFSMAN->m_iLastSeenMemory.Set( Memory );
 
 	/* Let's consider 128-meg systems low-memory, and 256-meg systems high-memory.
@@ -796,7 +796,7 @@ void ReadGamePrefsFromDisk( bool bSwitchToLastPlayedGame )
 
 	CString sGameName = GAMESTATE->GetCurrentGame()->m_szName;
 	CString sAnnouncer = sGameName;
-	CString sTheme = sGameName;
+	CString sTheme = "DSF PC";	/* the port's own front end, for every game type */
 	CString sNoteSkin = sGameName;
 	CString sDefaultModifiers;
 

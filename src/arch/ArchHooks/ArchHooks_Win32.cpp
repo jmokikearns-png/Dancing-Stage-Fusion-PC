@@ -49,7 +49,7 @@ void ArchHooks_Win32::DumpDebugInfo()
 
 static CString g_sDriverVersion, g_sURL;
 static bool g_Hush;
-static BOOL CALLBACK DriverWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
+static INT_PTR CALLBACK DriverWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
 	switch( msg )
 	{

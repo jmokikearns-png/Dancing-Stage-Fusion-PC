@@ -12,6 +12,15 @@
 #include "archutils/Win32/WindowsResources.h"
 #include "archutils/Win32/GraphicsWindow.h" /* for GraphicsWindow::GetHwnd */
 #include "Crash.h"
+#include <stdint.h>
+/* The crash handler's stack walk was written for 32-bit x86 CONTEXTs. */
+#if defined(_WIN64)
+#define CRASH_CTX_IP(c) ((c)->Rip)
+#define CRASH_CTX_SP(c) ((c)->Rsp)
+#else
+#define CRASH_CTX_IP(c) ((c)->Eip)
+#define CRASH_CTX_SP(c) ((c)->Esp)
+#endif
 #include "ProductInfo.h"
 
 #include "RageLog.h" /* for RageLog::GetAdditionalLog and Flush */
@@ -85,7 +94,7 @@ struct VDDebugInfoContext
 
 static VDDebugInfoContext g_debugInfo;
 
-BOOL APIENTRY CrashDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam);
+INT_PTR APIENTRY CrashDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam);
 
 
 ///////////////////////////////////////////////////////////////////////////
@@ -388,7 +397,7 @@ static bool IsExecutableProtection(DWORD dwProtect) {
 	// and use it to determine if READONLY/READWRITE should be
 	// considered 'executable.'
 
-	VirtualQuery(IsExecutableProtection, &meminfo, sizeof meminfo);
+	VirtualQuery((LPCVOID) IsExecutableProtection, &meminfo, sizeof meminfo);
 
 	switch((unsigned char)dwProtect) {
 	case PAGE_READONLY:				// *sigh* Win9x...
@@ -654,6 +663,46 @@ static bool PointsToValidCall( unsigned long ptr )
 	return IsValidCall(buf+7, len);
 }
 
+#if defined(_WIN64)
+/* x64: walk the stack with the unwind tables (.pdata/.xdata), which both MSVC and
+ * MinGW-w64 emit for every non-leaf function.  The x86 scan below depends on the
+ * FS-based TIB and 4-byte stack slots and does not work here.  This only reads the
+ * current process's memory, which is all the callers need. */
+void do_backtrace( const void **buf, size_t size, 
+						 HANDLE hProcess, HANDLE hThread, const CONTEXT *pContext )
+{
+	CONTEXT ctx = *pContext;
+	size_t i = 0;
+	while( i+1 < size && ctx.Rip != 0 )
+	{
+		buf[i++] = (const void *) ctx.Rip;
+
+		const DWORD64 iOldRip = ctx.Rip, iOldRsp = ctx.Rsp;
+		DWORD64 iImageBase = 0;
+		PRUNTIME_FUNCTION pFunction = RtlLookupFunctionEntry( ctx.Rip, &iImageBase, NULL );
+		if( pFunction == NULL )
+		{
+			/* A leaf function (or a call to a bad address): the return address is at [rsp]. */
+			DWORD64 iReturn = 0;
+			if( !ReadProcessMemory(hProcess, (const void *) ctx.Rsp, &iReturn, sizeof(iReturn), NULL) )
+				break;
+			ctx.Rip = iReturn;
+			ctx.Rsp += 8;
+		}
+		else
+		{
+			PVOID pHandlerData = NULL;
+			DWORD64 iEstablisherFrame = 0;
+			RtlVirtualUnwind( UNW_FLAG_NHANDLER, iImageBase, ctx.Rip, pFunction,
+				&ctx, &pHandlerData, &iEstablisherFrame, NULL );
+		}
+
+		if( ctx.Rip == iOldRip && ctx.Rsp == iOldRsp )
+			break;
+	}
+	buf[i] = NULL;
+}
+#else
 void do_backtrace( const void **buf, size_t size, 
 						 HANDLE hProcess, HANDLE hThread, const CONTEXT *pContext )
 {
@@ -673,9 +722,9 @@ void do_backtrace( const void **buf, size_t size,
 	}
 
 	// Walk up the stack.
-	const char *lpAddr = (const char *)pContext->Esp;
+	const char *lpAddr = (const char *)CRASH_CTX_SP(pContext);
 
-	const void *data = (void *) pContext->Eip;
+	const void *data = (void *) CRASH_CTX_IP(pContext);
 	size_t i = 0;
 	do {
 		if( i+1 >= size )
@@ -693,7 +742,7 @@ void do_backtrace( const void **buf, size_t size,
 			if (!IsExecutableProtection(meminfo.Protect) || meminfo.State!=MEM_COMMIT)
 				fValid = false;
 
-			if ( data != (void *) pContext->Eip && !PointsToValidCall((unsigned long)data) )
+			if ( data != (void *) CRASH_CTX_IP(pContext) && !PointsToValidCall((unsigned long)(uintptr_t)data) )
 				fValid = false;
 		}
 
@@ -708,7 +757,38 @@ void do_backtrace( const void **buf, size_t size,
 
 	buf[i++] = NULL;
 }
+#endif
 
+#if defined(_WIN64)
+/* x64 builds have no .vdi file.  Print module+offset for every frame (resolvable
+ * against the matching build's separate debug-symbol file with addr2line), plus
+ * whatever name dbghelp can find. */
+void SymLookup( const void *ptr, char *buf )
+{
+	MEMORY_BASIC_INFORMATION meminfo;
+	memset( &meminfo, 0, sizeof(meminfo) );
+	VirtualQuery( ptr, &meminfo, sizeof meminfo );
+
+	char szName[MAX_PATH];
+	if( meminfo.AllocationBase == NULL || !CrashGetModuleBaseName((HMODULE)meminfo.AllocationBase, szName) )
+		strcpy( szName, "???" );
+
+	const unsigned __int64 iAddress = (unsigned __int64) (uintptr_t) ptr;
+	const unsigned __int64 iOffset = iAddress - (unsigned __int64) (uintptr_t) meminfo.AllocationBase;
+
+	InitDbghelp();
+	static BYTE buffer[1024];
+	SYMBOL_INFO *pSymbol = (PSYMBOL_INFO)buffer;
+	pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+	pSymbol->MaxNameLen = sizeof(buffer) - sizeof(SYMBOL_INFO) + 1;
+	DWORD64 iDisp = 0;
+	if( SymFromAddr(GetCurrentProcess(), iAddress, &iDisp, pSymbol) )
+		_snprintf( buf, 1024, "%016I64x: %s+0x%I64x (%s+0x%I64x)", iAddress, szName, iOffset, pSymbol->Name, (unsigned __int64) iDisp );
+	else
+		_snprintf( buf, 1024, "%016I64x: %s+0x%I64x", iAddress, szName, iOffset );
+	buf[1023] = 0;
+}
+#else
 void SymLookup( const void *ptr, char *buf )
 {
 	VDDebugInfoInitFromFile( &g_debugInfo );
@@ -722,7 +802,7 @@ void SymLookup( const void *ptr, char *buf )
 	VirtualQuery( ptr, &meminfo, sizeof meminfo );
 
 	char tmp[512];
-	if( VDDebugInfoLookupRVA(&g_debugInfo, (unsigned int)ptr, tmp, sizeof(tmp)) >= 0 )
+	if( VDDebugInfoLookupRVA(&g_debugInfo, (unsigned int)(uintptr_t)ptr, tmp, sizeof(tmp)) >= 0 )
 	{
 		wsprintf( buf, "%08x: %s", ptr, Demangle(tmp) );
 		return;
@@ -733,25 +813,35 @@ void SymLookup( const void *ptr, char *buf )
 		strcpy( szName, "???" );
 
 	DWORD64 disp;
-	SYMBOL_INFO *pSymbol = GetSym( (unsigned int)ptr, disp );
+	SYMBOL_INFO *pSymbol = GetSym( (unsigned int)(uintptr_t)ptr, disp );
 
 	if( pSymbol )
 	{
 		wsprintf( buf, "%08lx: %s!%s [%08lx+%lx+%lx]",
-			(unsigned long) ptr, szName, pSymbol->Name,
-			(unsigned long) meminfo.AllocationBase,
-			(unsigned long) (pSymbol->Address) - (unsigned long) (meminfo.AllocationBase),
+			(unsigned long) (uintptr_t) ptr, szName, pSymbol->Name,
+			(unsigned long) (uintptr_t) meminfo.AllocationBase,
+			(unsigned long) (pSymbol->Address) - (unsigned long) (uintptr_t) (meminfo.AllocationBase),
 			(unsigned long) disp);
 		return;
 	}
 
 	wsprintf( buf, "%08lx: %s!%08lx",
-		(unsigned long) ptr, szName, 
-		(unsigned long) meminfo.AllocationBase );
+		(unsigned long) (uintptr_t) ptr, szName, 
+		(unsigned long) (uintptr_t) meminfo.AllocationBase );
 }
+#endif
 
 static bool ReportCallStack( HWND hwnd, HANDLE hFile, const void **Backtrace )
 {
+#if defined(_WIN64)
+	for( int i = 0; Backtrace[i]; ++i )
+	{
+		char buf[1024];
+		SymLookup( Backtrace[i], buf );
+		Report( hwnd, hFile, "%s", buf );
+	}
+	return Backtrace[0] != NULL;
+#endif
 	VDDebugInfoInitFromFile( &g_debugInfo );
 	if( !g_debugInfo.Loaded() )
 	{
@@ -865,7 +955,7 @@ void ViewWithNotepad(const char *str)
 	);
 }
 
-BOOL APIENTRY CrashDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
+INT_PTR APIENTRY CrashDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	static bool s_bHaveCallstack;
 
@@ -991,7 +1081,7 @@ void ForceCrashHandlerDeadlock( CString reason, uint64_t iID )
 			context.ContextFlags = CONTEXT_FULL;
 			if( !GetThreadContext( hThread, &context ) )
 				wsprintf( g_CrashInfo.m_CrashReason + strlen(g_CrashInfo.m_CrashReason),
-					"; GetThreadContext(%x) failed", (int) hThread );
+					"; GetThreadContext(%x) failed", (int) (INT_PTR) hThread );
 			else
 			{
 				static const void *BacktracePointers[BACKTRACE_MAX_SIZE];

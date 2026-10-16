@@ -9,7 +9,7 @@
 #pragma comment (lib,"winmm.lib")
 
 static HMIDIIN g_device;
-static void CALLBACK midiCallback(HMIDIIN g_device, UINT status, DWORD instancePtr, DWORD data, DWORD timestamp);
+static void CALLBACK midiCallback(HMIDIIN g_device, UINT status, DWORD_PTR instancePtr, DWORD_PTR data, DWORD_PTR timestamp);
 
 static CString GetMidiError( MMRESULT result )
 {
@@ -31,7 +31,7 @@ InputHandler_Win32_MIDI::InputHandler_Win32_MIDI()
     }
 	m_bFoundDevice = true;
 
-	MMRESULT result = midiInOpen( &g_device, device_id, (DWORD) &midiCallback, (DWORD) this, CALLBACK_FUNCTION );
+	MMRESULT result = midiInOpen( &g_device, device_id, (DWORD_PTR) &midiCallback, (DWORD_PTR) this, CALLBACK_FUNCTION );
     if( result != MMSYSERR_NOERROR )
 	{
 		LOG->Warn( "Error with MIDI Opening: %s", GetMidiError(result).c_str() );
@@ -75,7 +75,7 @@ void InputHandler_Win32_MIDI::GetDevicesAndDescriptions( vector<InputDevice>& vD
 	}
 }
 
-static void CALLBACK midiCallback( HMIDIIN device, UINT status, DWORD instancePtr, DWORD data, DWORD timestamp )
+static void CALLBACK midiCallback( HMIDIIN device, UINT status, DWORD_PTR instancePtr, DWORD_PTR data, DWORD_PTR timestamp )
 {
 	if( status == MIM_DATA )
 	{

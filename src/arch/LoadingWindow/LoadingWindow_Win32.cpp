@@ -47,7 +47,7 @@ HBITMAP LoadWin32Surface( CString fn )
 	return bitmap;
 }
 
-BOOL CALLBACK LoadingWindow_Win32::WndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
+INT_PTR CALLBACK LoadingWindow_Win32::WndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
 	switch( msg )
 	{
@@ -78,7 +78,7 @@ void LoadingWindow_Win32::SetIcon( const RageSurface *pIcon )
 
 	m_hIcon = IconFromSurface( pIcon );
 	if( m_hIcon != NULL )
-		SetClassLong( hwnd, GCL_HICON, (LONG) m_hIcon );
+		SetClassLongPtr( hwnd, GCLP_HICON, (LONG_PTR) m_hIcon );
 }
 
 LoadingWindow_Win32::LoadingWindow_Win32()

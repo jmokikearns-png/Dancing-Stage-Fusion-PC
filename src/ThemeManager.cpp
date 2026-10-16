@@ -443,7 +443,7 @@ try_element_again:
 			"'%s/%s/%s'.  Please remove all but one of these matches.",
 			sThemeName.c_str(), sCategory.c_str(), ClassAndElementToFileName(sClassName,sElement).c_str() );
 
-		switch( Dialog::AbortRetryIgnore(message) )
+		switch( Dialog::AbortRetryIgnore(message, "DuplicateThemeElement") )
 		{
 		case Dialog::abort:
 			RageException::Throw( message ); 
@@ -498,7 +498,7 @@ try_element_again:
 					"Verify that this redirect is correct.",
 					sPath.c_str(), sNewFileName.c_str());
 
-			if( Dialog::AbortRetryIgnore(message) == Dialog::retry )
+			if( Dialog::AbortRetryIgnore(message, "BrokenThemeRedirect") == Dialog::retry )
 			{
 				FlushDirCache();
 				ReloadMetrics();
@@ -658,7 +658,7 @@ try_metric_again:
 
 
 	CString sMessage = ssprintf( "The theme metric '%s-%s' is missing.  Correct this and click Retry, or Cancel to break.",sClassName.c_str(),sValueName.c_str() );
-	switch( Dialog::AbortRetryIgnore(sMessage) )
+	switch( Dialog::AbortRetryIgnore(sMessage, "MissingThemeMetric") )
 	{
 	case Dialog::abort:
 		break;	// fall through
