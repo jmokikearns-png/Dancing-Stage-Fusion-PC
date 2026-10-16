@@ -131,6 +131,12 @@ add_library(dsfplatform STATIC
 )
 if(DSF_INPUT_ONLY)
   target_compile_definitions(dsfplatform PUBLIC DSF_INPUT_ONLY)
+  if(DSF_PLATFORM_WIN32)
+    # arch_setup.cpp supplies helpers the input code needs (my_usleep, my_localtime_r)
+    # but also StepMania's own WinMain; the host program has its own entry point.
+    set_source_files_properties("${OVL}/archutils/Win32/arch_setup.cpp" PROPERTIES
+      COMPILE_DEFINITIONS "WinMain=dsf_unused_stepmania_WinMain")
+  endif()
 endif()
 target_include_directories(dsfplatform
   PUBLIC  "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -145,7 +151,7 @@ if(DSF_PLATFORM_LINUX)
 else()
   target_compile_definitions(dsfplatform PRIVATE WIN32 _WINDOWS WINDOWS RELEASE DSF_PLATFORM=1
     SM_NO_D3D SM_NO_FFMPEG SM_NO_DSHOW)
-  target_link_libraries(dsfplatform PUBLIC dinput dxguid opengl32 glu32 winmm gdi32 user32 advapi32 ole32)
+  target_link_libraries(dsfplatform PUBLIC dinput dxguid dxerr8 opengl32 glu32 winmm gdi32 user32 advapi32 ole32)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
