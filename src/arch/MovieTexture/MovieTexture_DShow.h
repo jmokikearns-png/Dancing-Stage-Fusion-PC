@@ -21,7 +21,7 @@ typedef char TCHAR, *PTCHAR;
 #define DEBUG
 #endif
 
-#include "baseclasses/streams.h"
+#include "BaseClasses/streams.h"
 
 #include "RageDisplay.h"
 #include "RageTexture.h"

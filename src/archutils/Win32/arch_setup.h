@@ -1,8 +1,18 @@
 #ifndef ARCH_SETUP_WINDOWS_H
 #define ARCH_SETUP_WINDOWS_H
 
+#if !defined(SM_NO_FFMPEG) /* SM_NO_FFMPEG: CMake SM_WITH_FFMPEG=OFF */
 #define HAVE_FFMPEG
+#endif
 
+/* MinGW (GCC) predefines WIN32/_WIN32 but not _WINDOWS, which the engine uses to
+ * mean "Win32 desktop build" (the VC projects pass /D _WINDOWS).  Define it here so
+ * a MinGW build does not depend on the build system remembering to. */
+#if defined(__MINGW32__) && !defined(_WINDOWS)
+#define _WINDOWS
+#endif
+
+#if defined(_MSC_VER)
 /* Fix VC breakage. */
 #define PATH_MAX _MAX_PATH
 
@@ -14,6 +24,7 @@
 #if _MSC_VER == 1200 
 #define for if(0); else for
 #endif
+#endif /* _MSC_VER */
 
 /* Don't include windows.h everywhere; when we do eventually include it, use these: */
 #define WIN32_LEAN_AND_MEAN
@@ -23,16 +34,21 @@
  * NT calls, but be sure to fall back on 9x if they're not supported. */
 #define _WIN32_WINNT 0x0400
 
+#if defined(_MSC_VER)
 /* If this isn't defined to 0, VC fails to define things like stat and alloca. */
 #define __STDC__ 0
+#endif
 
 #include <direct.h> /* has stuff that should be in unistd.h */
 #include <wchar.h> /* needs to be included before our fixes below */
 
 #define lstat stat
 #define fsync _commit
+#if defined(_MSC_VER)
+/* MinGW's math.h already provides isnan (a macro, needed intact by <cmath>) and finite. */
 #define isnan _isnan
 #define finite _finite
+#endif
 
 /* mkdir is missing the mode arg */
 #define mkdir(p,m) mkdir(p)
@@ -46,6 +62,10 @@ struct tm *my_gmtime_r( const time_t *timep, struct tm *result );
 void my_usleep( unsigned long usec );
 #define usleep my_usleep
 
+#if defined(__MINGW32__)
+/* MinGW has a real <stdint.h>, llabs, truncf, roundf, strtof and lrintf. */
+#include <stdint.h>
+#else
 /* Missing stdint types: */
 typedef signed char int8_t;
 typedef unsigned char uint8_t;
@@ -56,6 +76,7 @@ typedef unsigned int uint32_t;
 typedef __int64 int64_t;
 typedef unsigned __int64 uint64_t;
 static inline int64_t llabs( int64_t i ) { return i >= 0? i: -i; }
+#endif
 
 #if defined(_MSC_VER)
 #pragma warning (disable : 4201) // nonstandard extension used : nameless struct/union (Windows headers do this)
@@ -78,6 +99,7 @@ static inline int64_t llabs( int64_t i ) { return i >= 0? i: -i; }
 #undef max
 #define NOMINMAX /* make sure Windows doesn't try to define this */
 
+#if !defined(__MINGW32__)
 /* Windows is missing some basic math functions: */
 #define NEED_TRUNCF
 #define NEED_ROUNDF
@@ -93,6 +115,7 @@ inline int lrintf( float f )
 
 	return retval;
 }
+#endif
 
 /* For RageLog. */
 #define HAVE_VERSION_INFO
@@ -113,6 +136,12 @@ inline int lrintf( float f )
 
 #define HAVE_BYTE_SWAPS
 
+#if defined(__GNUC__)
+/* GCC/MinGW: use the compiler builtins (bswap on x86, also valid on x86-64). */
+inline uint32_t ArchSwap32( uint32_t n ) { return __builtin_bswap32( n ); }
+inline uint32_t ArchSwap24( uint32_t n ) { return __builtin_bswap32( n ) >> 8; }
+inline uint16_t ArchSwap16( uint16_t n ) { return (uint16_t) ((n >> 8) | (n << 8)); }
+#else
 inline uint32_t ArchSwap32( uint32_t n )
 {
 	__asm
@@ -150,6 +179,7 @@ inline uint16_t ArchSwap16( uint16_t n )
 	};
 	return n;
 }
+#endif /* __GNUC__ */
 
 #endif
 

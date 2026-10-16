@@ -1,7 +1,7 @@
 #include "global.h"
 #include "RageDisplay.h"
 #include "RageDisplay_D3D.h"
-#include "D3D8.h"
+#include <d3d8.h>
 #include "RageUtil.h"
 #include "RageLog.h"
 #include "RageTimer.h"
@@ -14,8 +14,19 @@
 #include "GameConstantsAndTypes.h"
 #include "StepMania.h"
 #include "RageUtil.h"
+
+/* D3DX8 is a static library that only ever shipped with the DirectX 8.x SDKs; it is
+ * not in MinGW-w64 nor in any current Windows SDK.  The renderer only needs it for
+ * error strings and the screenshot format conversion, so without it (any non-MSVC
+ * compiler, or MSVC with SM_NO_D3DX8 defined) DXERR8 and a local conversion are
+ * used instead. */
+#if defined(_MSC_VER) && !defined(SM_NO_D3DX8)
+#define HAVE_D3DX8
 #include "D3dx8math.h"
 #include "D3DX8Core.h"
+#else
+#include <dxerr8.h>
+#endif
 #include "PrefsManager.h"
 #include "RageSurface.h"
 #include "RageSurfaceUtils.h"
@@ -32,7 +43,9 @@
 // Static libraries
 // load Windows D3D8 dynamically
 #if defined(_MSC_VER) && !defined(_XBOX)
+#if defined(HAVE_D3DX8)
 	#pragma comment(lib, "D3dx8.lib")
+#endif
 	#pragma comment(lib, "Dxerr8.lib")
 #endif
 
@@ -42,9 +55,13 @@
 
 CString GetErrorString( HRESULT hr )
 {
+#if defined(HAVE_D3DX8)
 	char szError[1024] = "";
 	D3DXGetErrorString( hr, szError, sizeof(szError) );
 	return szError;
+#else
+	return DXGetErrorString8( hr );
+#endif
 }
 
 
@@ -697,6 +714,7 @@ RageSurface* RageDisplay_D3D::CreateScreenshot()
 	D3DSURFACE_DESC desc;
 	pSurface->GetDesc( &desc );
 
+#if defined(HAVE_D3DX8)
 	/* Copy the back buffer into a surface of a type we support. */
 	IDirect3DSurface8* pCopy;
 	g_pd3dDevice->CreateImageSurface( desc.Width, desc.Height, D3DFMT_A8R8G8B8, &pCopy );
@@ -704,6 +722,36 @@ RageSurface* RageDisplay_D3D::CreateScreenshot()
 	D3DXLoadSurfaceFromSurface( pCopy, NULL, NULL, pSurface, NULL, NULL, D3DX_DEFAULT, 0 );
 
 	pSurface->Release();
+#else
+	/* No D3DX: copy the back buffer as-is into a lockable system-memory surface of
+	 * the same format (CopyRects cannot convert), then convert in software. */
+	struct BackBufferFormat { D3DFORMAT fmt; int bpp; uint32_t r, g, b, a; };
+	static const BackBufferFormat formats[] = {
+		{ D3DFMT_A8R8G8B8, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000 },
+		{ D3DFMT_X8R8G8B8, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0x00000000 },
+		{ D3DFMT_R8G8B8,   24, 0x00FF0000, 0x0000FF00, 0x000000FF, 0x00000000 },
+		{ D3DFMT_R5G6B5,   16, 0xF800,     0x07E0,     0x001F,     0x0000 },
+		{ D3DFMT_X1R5G5B5, 16, 0x7C00,     0x03E0,     0x001F,     0x0000 },
+		{ D3DFMT_A1R5G5B5, 16, 0x7C00,     0x03E0,     0x001F,     0x8000 },
+	};
+	const BackBufferFormat *pFmt = NULL;
+	for( unsigned i = 0; i < ARRAYSIZE(formats); ++i )
+		if( formats[i].fmt == desc.Format )
+			pFmt = &formats[i];
+
+	IDirect3DSurface8* pCopy = NULL;
+	if( pFmt == NULL ||
+		FAILED( g_pd3dDevice->CreateImageSurface(desc.Width, desc.Height, desc.Format, &pCopy) ) ||
+		FAILED( g_pd3dDevice->CopyRects(pSurface, NULL, 0, pCopy, NULL) ) )
+	{
+		LOG->Warn( "CreateScreenshot: can't read back buffer format %i", (int) desc.Format );
+		if( pCopy )
+			pCopy->Release();
+		pSurface->Release();
+		return NULL;
+	}
+	pSurface->Release();
+#endif
 
 	/* Update desc from the copy. */
 	pCopy->GetDesc( &desc );
@@ -719,6 +767,7 @@ RageSurface* RageDisplay_D3D::CreateScreenshot()
 		pCopy->LockRect( &lr, &rect, D3DLOCK_READONLY );
 	}
 
+#if defined(HAVE_D3DX8)
 	RageSurface *surface = CreateSurfaceFromPixfmt( FMT_RGBA8, lr.pBits, desc.Width, desc.Height, lr.Pitch);
 	ASSERT( surface );
 
@@ -728,6 +777,17 @@ RageSurface* RageDisplay_D3D::CreateScreenshot()
 			surface->format->BitsPerPixel,
 			surface->format->Rmask, surface->format->Gmask,
 			surface->format->Bmask, surface->format->Amask );
+#else
+	RageSurface *surface = CreateSurfaceFrom( desc.Width, desc.Height, pFmt->bpp,
+		pFmt->r, pFmt->g, pFmt->b, pFmt->a, (uint8_t *) lr.pBits, lr.Pitch );
+	ASSERT( surface );
+
+	/* Convert to RGBA8 (copying the pixels out before UnlockRect()).  The blit makes
+	 * the result opaque when the source has no alpha mask (X8R8G8B8, R5G6B5, ...). */
+	const RageDisplay::PixelFormatDesc *pfd = GetPixelFormatDesc( FMT_RGBA8 );
+	RageSurface *SurfaceCopy = CreateSurface( surface->w, surface->h, pfd->bpp,
+		pfd->masks[0], pfd->masks[1], pfd->masks[2], pfd->masks[3] );
+#endif
 	RageSurfaceUtils::CopySurface( surface, SurfaceCopy );
 	delete surface;
 

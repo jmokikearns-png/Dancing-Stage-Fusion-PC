@@ -859,7 +859,10 @@ public:
 
 	void FormatV(const CT* szFormat, va_list argList)
 	{
-	#if defined(WIN32)
+	/* The _alloca loop relies on MSVC's _vsnprintf and on MSVC accepting unqualified
+	 * names from the dependent base class; other compilers (incl. MinGW) take the
+	 * portable vsnprintf path below. */
+	#if defined(_MSC_VER)
 		CT* pBuf			= NULL;
 		int nChars			= 1;
 		int nUsed			= 0;

@@ -4,11 +4,11 @@
 #include "CommonMetrics.h"	// for WINDOW_TITLE
 #include "ThemeManager.h"
 
-#include "archutils/win32/AppInstance.h"
-#include "archutils/win32/GotoURL.h"
-#include "archutils/win32/RestartProgram.h"
-#include "archutils/win32/WindowsResources.h"
-#include "archutils/win32/GraphicsWindow.h"
+#include "archutils/Win32/AppInstance.h"
+#include "archutils/Win32/GotoURL.h"
+#include "archutils/Win32/RestartProgram.h"
+#include "archutils/Win32/WindowsResources.h"
+#include "archutils/Win32/GraphicsWindow.h"
 
 static bool g_bHush;
 static CString g_sMessage;

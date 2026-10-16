@@ -15,7 +15,9 @@
 #endif
 #if defined(_WINDOWS)
 #define HAVE_DIRECTX
+#if !defined(SM_NO_FFMPEG) /* SM_NO_FFMPEG: CMake SM_WITH_FFMPEG=OFF */
 #define HAVE_FFMPEG
+#endif
 #define HAVE_WIN32 // XXX: Better name for this API?
 #define HAVE_CRYPTOPP
 #endif

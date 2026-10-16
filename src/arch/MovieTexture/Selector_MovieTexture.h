@@ -4,7 +4,7 @@
 #include "arch/arch_platform.h"
 
 /* MovieTexture driver selector. */
-#if defined(HAVE_DIRECTX) && !defined(XBOX)
+#if defined(HAVE_DIRECTX) && !defined(XBOX) && !defined(SM_NO_DSHOW) /* SM_NO_DSHOW: CMake SM_WITH_DSHOW=OFF */
 #include "MovieTexture_DShow.h"
 #endif
 

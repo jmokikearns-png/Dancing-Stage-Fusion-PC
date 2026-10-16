@@ -31,7 +31,7 @@ static BOOL CALLBACK EnumDevices( const DIDEVICEINSTANCE *pdidInstance, void *pC
 
 	switch( device.type )
 	{
-	case device.JOYSTICK:
+	case DIDevice::JOYSTICK:
 		if( g_NumJoysticks == NUM_JOYSTICKS )
 			return DIENUM_CONTINUE;
 
@@ -39,7 +39,7 @@ static BOOL CALLBACK EnumDevices( const DIDEVICEINSTANCE *pdidInstance, void *pC
 		g_NumJoysticks++;
 		break;
 
-	case device.KEYBOARD:
+	case DIDevice::KEYBOARD:
 		device.dev = InputDevice( DEVICE_KEYBOARD );
 		break;
 	}
@@ -263,14 +263,14 @@ void InputHandler_DInput::UpdatePolled(DIDevice &device, const RageTimer &tm)
 
 		switch(in.type)
 		{
-		case in.BUTTON:
+		case input_t::BUTTON:
 		{
 			DeviceInput di(dev, JOY_1 + in.num, -1, tm);
 			ButtonPressed(di, !!state.rgbButtons[in.ofs - DIJOFS_BUTTON0]);
 			break;
 		}
 
-		case in.AXIS:
+		case input_t::AXIS:
 		{
 			JoystickButton neg = NUM_JOYSTICK_BUTTONS, pos = NUM_JOYSTICK_BUTTONS;
 			int val = 0;
@@ -317,7 +317,7 @@ void InputHandler_DInput::UpdatePolled(DIDevice &device, const RageTimer &tm)
 			break;
 		}
 
-		case in.HAT:
+		case input_t::HAT:
 			if( in.num == 0 )
 			{
 				const int pos = TranslatePOV(state.rgdwPOV[in.ofs - DIJOFS_POV(0)]);
@@ -366,15 +366,15 @@ void InputHandler_DInput::UpdateBuffered(DIDevice &device, const RageTimer &tm)
 		
 			switch(in.type)
 			{
-			case in.KEY:
+			case input_t::KEY:
 				ButtonPressed(DeviceInput(dev, in.num, -1, tm), !!(evtbuf[i].dwData & 0x80));
 				break;
 
-			case in.BUTTON:
+			case input_t::BUTTON:
 				ButtonPressed(DeviceInput(dev, JOY_1 + in.num, -1, tm), !!evtbuf[i].dwData);
 				break;
 
-			case in.AXIS:
+			case input_t::AXIS:
 			{
 				int up = 0, down = 0;
 				switch(in.ofs)
@@ -398,7 +398,7 @@ void InputHandler_DInput::UpdateBuffered(DIDevice &device, const RageTimer &tm)
 				ButtonPressed(DeviceInput(dev, down, max(+l,0), tm), int(evtbuf[i].dwData) > 50);
 				break;
 			}
-			case in.HAT:
+			case input_t::HAT:
 		    {
 				const int pos = TranslatePOV(evtbuf[i].dwData);
 				ButtonPressed(DeviceInput(dev, JOY_HAT_UP, -1, tm), !!(pos & HAT_UP_MASK));

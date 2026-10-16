@@ -6,7 +6,9 @@
 // Put renderers switch here, makes things cleaner
 #if defined(_WINDOWS)
 #define SUPPORT_OPENGL
+#if !defined(SM_NO_D3D) /* build-system switch (CMake SM_WITH_D3D=OFF) */
 #define SUPPORT_D3D
+#endif
 #elif defined(_XBOX)
 #define SUPPORT_D3D
 #else

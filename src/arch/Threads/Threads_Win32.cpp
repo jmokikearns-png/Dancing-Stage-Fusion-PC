@@ -80,10 +80,17 @@ static void SetThreadName( DWORD dwThreadID, LPCTSTR szThreadName )
     info.dwThreadID = dwThreadID;
     info.dwFlags = 0;
 
+#if defined(_MSC_VER)
     __try {
         RaiseException(MS_VC_EXCEPTION, 0, sizeof(info) / sizeof(DWORD), (ULONG_PTR *)&info);
     } __except (EXCEPTION_CONTINUE_EXECUTION) {
     }
+#else
+    /* GCC has no __try/__except.  The exception only exists to name threads in the
+     * Visual C++ debugger; raising it without a handler would kill the process, so
+     * other compilers skip it. */
+    (void) info;
+#endif
 }
 
 static DWORD WINAPI StartThread( LPVOID pData )

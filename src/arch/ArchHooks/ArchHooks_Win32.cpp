@@ -6,13 +6,13 @@
 #include "PrefsManager.h"
 #include "ProductInfo.h"
 
-#include "archutils/win32/AppInstance.h"
-#include "archutils/win32/crash.h"
-#include "archutils/win32/DebugInfoHunt.h"
-#include "archutils/win32/GotoURL.h"
-#include "archutils/win32/RestartProgram.h"
-#include "archutils/win32/VideoDriverInfo.h"
-#include "archutils/win32/WindowsResources.h"
+#include "archutils/Win32/AppInstance.h"
+#include "archutils/Win32/Crash.h"
+#include "archutils/Win32/DebugInfoHunt.h"
+#include "archutils/Win32/GotoURL.h"
+#include "archutils/Win32/RestartProgram.h"
+#include "archutils/Win32/VideoDriverInfo.h"
+#include "archutils/Win32/WindowsResources.h"
 
 #include <mmsystem.h>
 #if defined(_MSC_VER)

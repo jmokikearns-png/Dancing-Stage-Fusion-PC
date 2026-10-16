@@ -9,9 +9,9 @@
 #include <tlhelp32.h>
 
 #include "arch/Threads/Threads_Win32.h"
-#include "archutils/win32/WindowsResources.h"
+#include "archutils/Win32/WindowsResources.h"
 #include "archutils/Win32/GraphicsWindow.h" /* for GraphicsWindow::GetHwnd */
-#include "crash.h"
+#include "Crash.h"
 #include "ProductInfo.h"
 
 #include "RageLog.h" /* for RageLog::GetAdditionalLog and Flush */
@@ -408,7 +408,9 @@ static const char *CrashGetModuleBaseName(HMODULE hmod, char *pszBaseName) {
 	char szPath1[MAX_PATH];
 	char szPath2[MAX_PATH];
 
+#if defined(_MSC_VER)
 	__try {
+#endif
 		DWORD dw;
 		char *pszFile, *period = NULL;
 
@@ -430,9 +432,11 @@ static const char *CrashGetModuleBaseName(HMODULE hmod, char *pszBaseName) {
 
 		if (period)
 			*period = 0;
+#if defined(_MSC_VER)
 	} __except(1) {
 		return NULL;
 	}
+#endif
 
 	return pszBaseName;
 }
@@ -942,6 +946,12 @@ BOOL APIENTRY CrashDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 
 void NORETURN debug_crash()
 {
+#if !defined(_MSC_VER)
+	/* GCC: no __try/__except.  Fault directly; the unhandled-exception filter
+	 * installed by ArchHooks_Win32 (CrashHandler) then produces the crash dump. */
+	*(volatile char *) 0 = 0;
+	while(1);
+#else
 	__try {
 		__asm xor ebx,ebx
 		__asm mov eax,dword ptr [ebx]
@@ -949,6 +959,7 @@ void NORETURN debug_crash()
 //		__asm lock add dword ptr cs:[00000000h], 12345678h
 	} __except(CrashHandler((EXCEPTION_POINTERS*)_exception_info())) {
 	}
+#endif
 }
 
 /* Get a stack trace of the current thread and the specified thread.  If
