@@ -38,6 +38,7 @@ const int kHeaderY = 52, kGridY = 100;
 
 HWND g_wnd;
 int g_sel_pad = 0, g_sel_row = 0, g_sel_slot = 0;
+bool g_ready = false;      /* StepMania input is up; before that, nothing may touch the mapping */
 bool g_capturing = false;
 DWORD g_ignore_keys_until = 0; /* the bound key's own WM_KEYDOWN must not navigate */
 std::string g_status = "Click a box, then press the key or pad button for it.";
@@ -277,7 +278,12 @@ LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
         HDC dc = BeginPaint(h, &ps);
         RECT client;
         GetClientRect(h, &client);
-        paint(dc, client);
+        /* ShowWindow/UpdateWindow paint synchronously on Windows, before
+         * dsf::Init() has created the input mapper. */
+        if (g_ready)
+            paint(dc, client);
+        else
+            FillRect(dc, &client, (HBRUSH) GetStockObject(BLACK_BRUSH));
         EndPaint(h, &ps);
         return 0;
     }
@@ -285,6 +291,8 @@ LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
         return 1;
     case WM_LBUTTONDOWN:
     case WM_RBUTTONDOWN: {
+        if (!g_ready)
+            return 0;
         const int x = short(LOWORD(lp)), y = short(HIWORD(lp));
         int p, r, s;
         if (cell_at(x, y, &p, &r, &s)) {
@@ -309,7 +317,7 @@ LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     }
     case WM_KEYDOWN:
-        if (g_capturing || int(GetTickCount() - g_ignore_keys_until) < 0)
+        if (!g_ready || g_capturing || int(GetTickCount() - g_ignore_keys_until) < 0)
             return 0; /* the capture takes the next DirectInput press instead */
         switch (wp) {
         case VK_UP: g_sel_row = (g_sel_row + kRows - 1) % kRows; break;
@@ -389,6 +397,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE, LPSTR, int show)
     dsf::SaveMapping();
     g_keymaps_path = dsf::KeymapsPath();
     dsf::GetDevices(g_devices);
+    g_ready = true;
     InvalidateRect(g_wnd, nullptr, FALSE);
 
     LARGE_INTEGER freq, last, now;
