@@ -7,9 +7,7 @@
 #include "RageThreads.h"
 
 #include <cerrno>
-#if defined(LINUX)
-#include <sys/stat.h>
-#endif
+#include <sys/stat.h>	/* DSF PC: also on Windows (install folder check) */
 
 #if defined(_WIN32) && !defined(XBOX)
 #include <windows.h>
@@ -218,7 +216,13 @@ static void ChangeToDirOfExecutable( CString argv0 )
 	/* Set the CWD.  Any effects of this is platform-specific; most files are read and
 	 * written through RageFile.  See also RageFileManager::RageFileManager. */
 #if defined(_WINDOWS)
-	chdir( DirOfExecutable + "/.." );
+	/* DSF PC: the program may sit in the install folder itself (next to
+	 * Themes) instead of in a Program subfolder. */
+	struct stat st;
+	if( stat( (DirOfExecutable + "/Themes").c_str(), &st ) == 0 && (st.st_mode & S_IFDIR) )
+		chdir( DirOfExecutable );
+	else
+		chdir( DirOfExecutable + "/.." );
 #elif defined(DARWIN)
 	chdir(DirOfExecutable + "/../../..");
 #endif
@@ -292,9 +296,13 @@ void RageFileManager::MountInitialFilesystems()
 	CHECKPOINT_M( ssprintf( "DOE \"%s\"", DirOfExecutable.c_str()) );
 	CStringArray parts;
 	split( DirOfExecutable, "/", parts );
-	CHECKPOINT_M( ssprintf( "... %i parts", parts.size()) );
+	CHECKPOINT_M( ssprintf( "... %i parts", int(parts.size())) );
 	ASSERT_M( parts.size() > 1, ssprintf("Strange DirOfExecutable: %s", DirOfExecutable.c_str()) );
 	CString Dir = join( "/", parts.begin(), parts.end()-1 );
+	/* DSF PC: or the executable's own directory, when it holds the data. */
+	struct stat st;
+	if( !stat( DirOfExecutable + "/Themes", &st ) && (st.st_mode & S_IFDIR) )
+		Dir = DirOfExecutable;
 	RageFileManager::Mount( "dir", Dir, "/" );
 #elif defined(DARWIN)
 	CHECKPOINT_M( ssprintf("DOE \"%s\"", DirOfExecutable.c_str()) );

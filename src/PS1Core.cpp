@@ -22,7 +22,9 @@ namespace
 	const int SAMPLE_RATE = 44100;
 	const int PAL_AUDIO_FRAMES_PER_VIDEO_FRAME = 882;	/* 44100 / 50: exact for the PS1's PAL timing */
 	const int MAX_QUEUED_FRAMES = 16;	/* ~320 ms of picture, more than any sound latency we use */
-	const int MAX_GRANTS_AHEAD = 2;
+	/* Sound kept queued ahead of the device: two video frames.  The device
+	 * takes it in chunks of up to ~12 ms. */
+	const int64_t AUDIO_QUEUE_TARGET = PAL_AUDIO_FRAMES_PER_VIDEO_FRAME * 2;
 
 	int64_t AtomicLoad( const volatile int64_t &v ) { return __atomic_load_n( &v, __ATOMIC_ACQUIRE ); }
 	void AtomicStore( volatile int64_t &v, int64_t x ) { __atomic_store_n( &v, x, __ATOMIC_RELEASE ); }
@@ -129,8 +131,7 @@ private:
 };
 
 PS1Core::PS1Core():
-	m_FrameLock( "PS1Core frames" ),
-	m_Grants( "PS1Core grants", 0 )
+	m_FrameLock( "PS1Core frames" )
 {
 	m_bStarted = false;
 	m_bRunning = false;
@@ -141,9 +142,17 @@ PS1Core::PS1Core():
 	m_uRShift = m_uGShift = m_uBShift = m_uAShift = 0;
 	m_pTexture = NULL;
 	m_fU = m_fV = 1;
-	m_fClockFrames = 0;
-	m_fSecondsSinceAudioRead = 0;
-	m_iLastAudioRead = 0;
+	m_hRunEvent = CreateEvent( NULL, TRUE, FALSE, NULL );
+	m_hAudioEvent = CreateEvent( NULL, FALSE, FALSE, NULL );
+	LARGE_INTEGER f;
+	QueryPerformanceFrequency( &f );
+	m_iTicksPerSecond = f.QuadPart;
+	m_iLastMixTicks = 0;
+	m_iClockNextTicks = 0;
+	m_bClockPaced = 0;
+	m_iGuestStartTicks = 0;
+	m_iGuestTicks = m_iCaptureTicks = m_iTimedFrames = 0;
+	m_iStatsGuestTicks = m_iStatsCaptureTicks = m_iStatsTimedFrames = 0;
 	m_iRingFrames = 16384;	/* 370 ms */
 	m_Ring.resize( m_iRingFrames * 2 );
 	m_iAudioWritten = m_iAudioRead = 0;
@@ -218,6 +227,18 @@ bool PS1Core::Start( CString &sError )
 	vArgs.push_back( "--game" );		vArgs.push_back( sRoot + "\\game.toml" );
 	vArgs.push_back( "--disc" );		vArgs.push_back( sDisc );
 	vArgs.push_back( "--memcard-dir" );	vArgs.push_back( sRoot + "\\saves" );
+	/* Graphic Options: OpenGL renders on a hidden context of the core's own
+	 * (StepMania's context is untouched) and is read back each frame. */
+	if( PREFSMAN->m_bPS1OpenGL )
+	{
+		vArgs.push_back( "--renderer" );	vArgs.push_back( "opengl" );
+		vArgs.push_back( "--headless-opengl" );
+	}
+	else
+	{
+		vArgs.push_back( "--renderer" );	vArgs.push_back( "software" );
+	}
+	_putenv_s( "PSX_INTERNAL_RESOLUTION", PREFSMAN->m_sPS1InternalResolution.Get().c_str() );
 	if( FileExists(sRoot + "\\bios\\openbios.bin") )
 	{
 		vArgs.push_back( "--bios" );	vArgs.push_back( sRoot + "\\bios\\openbios.bin" );
@@ -260,11 +281,25 @@ int PS1Core::GetExitCode() const
 	return m_pfnExitCode ? ((dsfcore_exit_code_fn) m_pfnExitCode)() : 0;
 }
 
+int64_t PS1Core::Now() const
+{
+	LARGE_INTEGER t;
+	QueryPerformanceCounter( &t );
+	return t.QuadPart;
+}
+
 void PS1Core::SetRunning( bool bRunning )
 {
 	m_bRunning = bRunning;
-	m_fClockFrames = 0;
-	m_fSecondsSinceAudioRead = 0;
+	if( bRunning )
+	{
+		/* Assume the device is alive until it has had time to prove otherwise. */
+		AtomicStore( m_iLastMixTicks, Now() );
+		m_iClockNextTicks = 0;
+		SetEvent( (HANDLE) m_hRunEvent );
+	}
+	else
+		ResetEvent( (HANDLE) m_hRunEvent );
 }
 
 void PS1Core::SetPads( uint16_t iPad1, uint16_t iPad2 )
@@ -272,30 +307,12 @@ void PS1Core::SetPads( uint16_t iPad1, uint16_t iPad2 )
 	__atomic_store_n( &m_iPads, uint32_t(iPad1) | (uint32_t(iPad2) << 16), __ATOMIC_RELEASE );
 }
 
-void PS1Core::Grant( int iFrames )
-{
-	for( int i = 0; i < iFrames; ++i )
-		m_Grants.Post();
-}
-
 void PS1Core::Update( float fDeltaTime )
 {
 	if( !m_bStarted || !m_bRunning )
 		return;
 
-	const int64_t iWritten = AtomicLoad( m_iAudioWritten );
-	const int64_t iRead = AtomicLoad( m_iAudioRead );
-	if( iRead != m_iLastAudioRead )
-	{
-		m_iLastAudioRead = iRead;
-		m_fSecondsSinceAudioRead = 0;
-	}
-	else
-		m_fSecondsSinceAudioRead += fDeltaTime;
-
-	const int iPending = m_Grants.GetValue();
-	const bool bAudioMaster = m_fSecondsSinceAudioRead < 0.25f;
-
+	/* Pacing happens on the core thread (PaceNextFrame); this only reports. */
 	m_fStatsSeconds += fDeltaTime;
 	if( m_fStatsSeconds >= 10 )
 	{
@@ -304,40 +321,20 @@ void PS1Core::Update( float fDeltaTime )
 			LockMut( m_FrameLock );
 			iFrames = m_iFramesProduced;
 		}
-		LOG->Trace( "PS1Core: %.2f guest fps, %.0f audio frames/s, paced by %s; %s",
+		const int64_t iRead = AtomicLoad( m_iAudioRead );
+		const int64_t iTimed = AtomicLoad( m_iTimedFrames ) - m_iStatsTimedFrames;
+		const double fMsPerTick = 1000.0 / m_iTicksPerSecond;
+		const double fGuestMs = iTimed? (AtomicLoad(m_iGuestTicks) - m_iStatsGuestTicks) * fMsPerTick / iTimed: 0;
+		const double fCaptureMs = iTimed? (AtomicLoad(m_iCaptureTicks) - m_iStatsCaptureTicks) * fMsPerTick / iTimed: 0;
+		LOG->Trace( "PS1Core: %.2f guest fps, %.0f audio frames/s, paced by %s; per frame: guest %.1f ms, picture hand-over %.1f ms; %s",
 			(iFrames - m_iStatsFrames) / m_fStatsSeconds, (iRead - m_iStatsAudio) / m_fStatsSeconds,
-			bAudioMaster? "sound device": "clock", GetStats().c_str() );
+			m_bClockPaced? "clock": "sound device", fGuestMs, fCaptureMs, GetStats().c_str() );
 		m_iStatsFrames = iFrames;
 		m_iStatsAudio = iRead;
+		m_iStatsGuestTicks = AtomicLoad( m_iGuestTicks );
+		m_iStatsCaptureTicks = AtomicLoad( m_iCaptureTicks );
+		m_iStatsTimedFrames = AtomicLoad( m_iTimedFrames );
 		m_fStatsSeconds = 0;
-	}
-
-	if( bAudioMaster )
-	{
-		/* Audio master: keep about two video frames of sound queued ahead of
-		 * the device (it pulls in chunks of up to ~12 ms). */
-		const int64_t iTarget = PAL_AUDIO_FRAMES_PER_VIDEO_FRAME * 2;
-		int64_t iQueued = (iWritten - iRead) + int64_t(iPending) * PAL_AUDIO_FRAMES_PER_VIDEO_FRAME;
-		int iGrant = 0;
-		while( iQueued < iTarget && iPending + iGrant < MAX_GRANTS_AHEAD )
-		{
-			++iGrant;
-			iQueued += PAL_AUDIO_FRAMES_PER_VIDEO_FRAME;
-		}
-		Grant( iGrant );
-		m_fClockFrames = 0;
-	}
-	else
-	{
-		/* No sound device consuming audio: run at the PAL rate by the clock. */
-		m_fClockFrames += fDeltaTime * 50.0f;
-		int iGrant = (int) m_fClockFrames;
-		if( iPending + iGrant > MAX_GRANTS_AHEAD )
-			iGrant = max( 0, MAX_GRANTS_AHEAD - iPending );
-		m_fClockFrames -= (int) m_fClockFrames;
-		Grant( iGrant );
-		/* Discard audio nobody will play. */
-		AtomicStore( m_iAudioRead, iWritten );
 	}
 }
 
@@ -438,6 +435,7 @@ CString PS1Core::GetStats() const
 void PS1Core::CoreVideo( void *pUser, const uint32_t *pARGB, int iWidth, int iHeight, int iPitch, int iScale, int iFlags )
 {
 	PS1Core *p = (PS1Core *) pUser;
+	const int64_t iStart = p->Now();
 	const bool bBlank = (iFlags & DSFCORE_FRAME_BLANK) || pARGB == NULL || iWidth <= 0 || iHeight <= 0;
 
 	/* Convert outside the lock into a buffer of our own, then queue it. */
@@ -446,8 +444,20 @@ void PS1Core::CoreVideo( void *pUser, const uint32_t *pARGB, int iWidth, int iHe
 	{
 		buf.resize( size_t(iWidth) * iHeight );
 		const uint32_t rs = p->m_uRShift, gs = p->m_uGShift, bs = p->m_uBShift, as = p->m_uAShift;
+		const bool bRGBA = rs == 0 && gs == 8 && bs == 16 && as == 24;	/* the usual case: swap R and B */
 		for( int y = 0; y < iHeight; ++y )
 		{
+			if( bRGBA )
+			{
+				const uint32_t *in = pARGB + size_t(y) * iPitch;
+				uint32_t *out = &buf[size_t(y) * iWidth];
+				for( int x = 0; x < iWidth; ++x )
+				{
+					const uint32_t c = in[x];
+					out[x] = (c & 0x0000FF00) | ((c >> 16) & 0xFF) | ((c & 0xFF) << 16) | 0xFF000000;
+				}
+				continue;
+			}
 			const uint32_t *in = pARGB + size_t(y) * iPitch;
 			uint32_t *out = &buf[size_t(y) * iWidth];
 			for( int x = 0; x < iWidth; ++x )
@@ -470,6 +480,15 @@ void PS1Core::CoreVideo( void *pUser, const uint32_t *pARGB, int iWidth, int iHe
 	f->iSerial = p->m_iFramesProduced++;
 	p->m_Ready.push_back( f );
 	(void) iScale;
+
+	/* Timing: guest (incl. the runtime's own rendering) since the last frame
+	 * was released, and this hand-over. */
+	if( p->m_iGuestStartTicks != 0 )
+	{
+		AtomicStore( p->m_iGuestTicks, AtomicLoad(p->m_iGuestTicks) + (iStart - p->m_iGuestStartTicks) );
+		AtomicStore( p->m_iCaptureTicks, AtomicLoad(p->m_iCaptureTicks) + (p->Now() - iStart) );
+		AtomicStore( p->m_iTimedFrames, AtomicLoad(p->m_iTimedFrames) + 1 );
+	}
 }
 
 void PS1Core::CoreAudio( void *pUser, const int16_t *pStereo, int iFrames )
@@ -495,10 +514,48 @@ void PS1Core::CoreAudio( void *pUser, const int16_t *pStereo, int iFrames )
 void PS1Core::CoreFrameDone( void *pUser, uint16_t aPadsOut[2] )
 {
 	PS1Core *p = (PS1Core *) pUser;
-	p->m_Grants.Wait( false );	/* parked here while menus are open */
+	p->PaceNextFrame();
 	const uint32_t iPads = __atomic_load_n( &p->m_iPads, __ATOMIC_ACQUIRE );
 	aPadsOut[0] = uint16_t( iPads & 0xFFFF );
 	aPadsOut[1] = uint16_t( iPads >> 16 );
+	p->m_iGuestStartTicks = p->Now();
+}
+
+/* Return when the next guest frame should run. */
+void PS1Core::PaceNextFrame()
+{
+	for(;;)
+	{
+		/* Parked here while StepMania's menus are open. */
+		WaitForSingleObject( (HANDLE) m_hRunEvent, INFINITE );
+
+		const int64_t iNow = Now();
+		const bool bDeviceAlive = iNow - AtomicLoad(m_iLastMixTicks) < m_iTicksPerSecond / 4;
+		if( bDeviceAlive )
+		{
+			/* Audio master: run as soon as the queued sound drops below target. */
+			m_bClockPaced = 0;
+			if( AtomicLoad(m_iAudioWritten) - AtomicLoad(m_iAudioRead) < AUDIO_QUEUE_TARGET )
+				return;
+			WaitForSingleObject( (HANDLE) m_hAudioEvent, 20 );
+			continue;
+		}
+
+		/* No sound device asking for sound: 50 Hz by the clock, and drop the
+		 * sound nobody plays. */
+		m_bClockPaced = 1;
+		AtomicStore( m_iAudioRead, AtomicLoad(m_iAudioWritten) );
+		const int64_t iPeriod = m_iTicksPerSecond / 50;
+		if( m_iClockNextTicks == 0 || iNow - m_iClockNextTicks > m_iTicksPerSecond / 5 )
+			m_iClockNextTicks = iNow;	/* start, or resync after a stall */
+		if( iNow >= m_iClockNextTicks )
+		{
+			m_iClockNextTicks += iPeriod;
+			return;
+		}
+		const DWORD iMs = DWORD( (m_iClockNextTicks - iNow) * 1000 / m_iTicksPerSecond );
+		WaitForSingleObject( (HANDLE) m_hAudioEvent, max(iMs, DWORD(1)) );
+	}
 }
 
 /* ---- sound mixer thread ---- */
@@ -507,6 +564,7 @@ int PS1Core::MixAudio( int16_t *pBuf, int iFrames )
 {
 	if( !m_bStarted || !m_bRunning )
 		return 0;
+	AtomicStore( m_iLastMixTicks, Now() );
 	const int64_t iWritten = AtomicLoad( m_iAudioWritten );
 	const int64_t iRead = AtomicLoad( m_iAudioRead );
 	int iGot = (int) min( int64_t(iFrames), iWritten - iRead );
@@ -519,6 +577,7 @@ int PS1Core::MixAudio( int16_t *pBuf, int iFrames )
 		pBuf[i*2+1] = m_Ring[iPos*2+1];
 	}
 	AtomicStore( m_iAudioRead, iRead + iGot );
+	SetEvent( (HANDLE) m_hAudioEvent );
 	return iGot;
 }
 

@@ -9,7 +9,9 @@
  *    decode-ahead buffering.
  *  - Pacing: the guest only runs as fast as the sound device plays its audio
  *    ("audio master"), so game time can never drift away from the music.
- *    Without a working sound device it is paced by the clock at 50 Hz.
+ *    The core thread does this itself (it waits whenever enough sound is
+ *    queued), so StepMania's own frame rate doesn't matter.  Without a
+ *    working sound device it is paced by the clock at 50 Hz.
  *  - Picture: each guest frame is queued with the position of its audio.  By
  *    default the frame shown is the one whose sound is being heard now, so
  *    arrows and music stay in sync whatever the audio latency; the player
@@ -79,7 +81,8 @@ private:
 	const Frame *PickFrameToShow();	/* m_FrameLock held */
 	void Upload( const Frame &f );
 	int64_t HeardAudioPosition() const;
-	void Grant( int iFrames );
+	void PaceNextFrame();		/* core thread */
+	int64_t Now() const;		/* QueryPerformanceCounter ticks */
 
 	bool m_bStarted;
 	bool m_bRunning;
@@ -97,11 +100,16 @@ private:
 	PS1FrameTexture *m_pTexture;
 	float m_fU, m_fV;
 
-	/* Pacing: one semaphore count lets the guest run one frame. */
-	RageSemaphore m_Grants;
-	float m_fClockFrames;		/* clock-paced fallback accumulator */
-	float m_fSecondsSinceAudioRead;
-	int64_t m_iLastAudioRead;
+	/* Pacing (core thread).  Run: set while the game screen is up. */
+	void *m_hRunEvent;		/* manual-reset: the guest may run */
+	void *m_hAudioEvent;		/* auto-reset: the mixer took some sound */
+	int64_t m_iTicksPerSecond;
+	volatile int64_t m_iLastMixTicks;	/* when the sound device last asked for sound */
+	int64_t m_iClockNextTicks;	/* clock pacing: when the next frame is due */
+	volatile int m_bClockPaced;
+	/* Where the core thread's time goes (stats). */
+	int64_t m_iGuestStartTicks;
+	volatile int64_t m_iGuestTicks, m_iCaptureTicks, m_iTimedFrames;
 
 	/* SPU output ring: written by the core thread, read by the mixer. */
 	vector<int16_t> m_Ring;		/* interleaved stereo */
@@ -111,6 +119,7 @@ private:
 	int64_t m_iUnderruns, m_iOverruns;
 	float m_fStatsSeconds;		/* log a pacing summary every few seconds */
 	int64_t m_iStatsFrames, m_iStatsAudio;
+	int64_t m_iStatsGuestTicks, m_iStatsCaptureTicks, m_iStatsTimedFrames;
 
 	volatile uint32_t m_iPads;	/* port 1 in the low half, port 2 in the high half */
 };

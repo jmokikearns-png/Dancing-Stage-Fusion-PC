@@ -527,6 +527,20 @@ static void PS1SyncOffset( int &sel, bool ToSel, const ConfOption *pConfOption )
 		PREFSMAN->m_iPS1SyncOffsetMs.Set( PS1_SYNC_OFFSET_MIN + sel*PS1_SYNC_OFFSET_STEP );
 }
 
+static void PS1InternalResolution( int &sel, bool ToSel, const ConfOption *pConfOption )
+{
+	static const char *mapping[] = { "native", "720p", "1080p", "1440p" };
+	if( ToSel )
+	{
+		sel = 2;
+		for( unsigned i = 0; i < ARRAYSIZE(mapping); ++i )
+			if( !PREFSMAN->m_sPS1InternalResolution.Get().CompareNoCase(mapping[i]) )
+				sel = i;
+	}
+	else
+		PREFSMAN->m_sPS1InternalResolution.Set( mapping[clamp(sel, 0, (int) ARRAYSIZE(mapping)-1)] );
+}
+
 static void SoundVolume( int &sel, bool ToSel, const ConfOption *pConfOption )
 {
 	const float mapping[] = { 0.0f,0.1f,0.2f,0.3f,0.4f,0.5f,0.6f,0.7f,0.8f,0.9f,1.0f };
@@ -649,6 +663,9 @@ static void InitializeConfOptions()
 	ADD( ConfOption( "SoundWriteAhead",				SoundWriteAhead,	"12 ms","17 ms","23 ms","35 ms","46 ms","70 ms","93 ms" ) );
 	ADD( ConfOption( "PS1MatchPictureToSound",		MovePref,			"OFF","ON" ) );
 	ADD( ConfOption( "PS1SyncOffset",				PS1SyncOffset,		PS1SyncOffsetChoices ) );
+	/* These two take effect the next time the program starts. */
+	ADD( ConfOption( "PS1OpenGL",					MovePref,			"SOFTWARE","OPENGL" ) );
+	ADD( ConfOption( "PS1InternalResolution",		PS1InternalResolution,	"NATIVE","720p","1080p","1440p" ) );
 	g_ConfOptions.back().m_iEffects = OPT_APPLY_SOUND;
 }
 

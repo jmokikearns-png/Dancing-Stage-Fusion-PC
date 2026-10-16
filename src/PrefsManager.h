@@ -294,6 +294,8 @@ public:
 	/* DSF PC: the PS1 game's picture/sound sync (PS1Core). */
 	Preference<bool>	m_bPS1MatchPictureToSound;
 	Preference<int>		m_iPS1SyncOffsetMs;	/* > 0 shows the picture later */
+	Preference<bool>	m_bPS1OpenGL;		/* else the software renderer (max 4x) */
+	Preference<CString>	m_sPS1InternalResolution;	/* native, 720p, 1080p, 1440p */
 	Preference<CString>	m_iSoundDevice;	
 	Preference<RageSoundReader_Resample::ResampleQuality>	m_SoundResampleQuality;
 private:

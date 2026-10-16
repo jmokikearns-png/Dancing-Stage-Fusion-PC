@@ -108,7 +108,8 @@ ScreenTitleMenu::~ScreenTitleMenu()
 
 void ScreenTitleMenu::Input( const DeviceInput& DeviceI, const InputEventType type, const GameInput &GameI, const MenuInput &MenuI, const StyleInput &StyleI )
 {
-	LOG->Trace( "ScreenTitleMenu::Input( %d-%d )", DeviceI.device, DeviceI.button );	// debugging gameport joystick problem
+	/* DSF PC: no per-event trace; at startup every button of every device
+	 * reports a release here (thousands of log lines). */
 
 	if( type == IET_FIRST_PRESS )
 	{
