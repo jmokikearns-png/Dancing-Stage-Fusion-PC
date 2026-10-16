@@ -72,6 +72,16 @@ set(SM_WIN32
   arch/Threads/Threads_Win32.cpp
 )
 
+# Input-only variant for the game: the runtime owns the window and renderer, so
+# StepMania's display/window code is left out (src/dsf_hostwindow.cpp supplies the
+# one window accessor DirectInput needs).
+option(DSF_INPUT_ONLY "Build only the input stack (host owns the window)" OFF)
+if(DSF_INPUT_ONLY)
+  list(FILTER SM_CORE EXCLUDE REGEX "^(RageDisplay|RageSurface|RageTexture)")
+  list(FILTER SM_WIN32 EXCLUDE REGEX "^(arch/LowLevelWindow/|archutils/Win32/(GraphicsWindow|WindowIcon)\\.cpp)")
+  list(FILTER SM_LINUX EXCLUDE REGEX "^(arch/LowLevelWindow/|archutils/Unix/X11Helper)")
+endif()
+
 set(SM_SOURCES ${SM_CORE} ${SM_PCRE})
 if(DSF_PLATFORM_LINUX)
   list(APPEND SM_SOURCES ${SM_LINUX})
@@ -117,7 +127,11 @@ add_library(dsfplatform STATIC
   src/dsf_arch.cpp
   src/dsf_ps1game.cpp
   src/dsfplatform.cpp
+  src/dsf_hostwindow.cpp
 )
+if(DSF_INPUT_ONLY)
+  target_compile_definitions(dsfplatform PUBLIC DSF_INPUT_ONLY)
+endif()
 target_include_directories(dsfplatform
   PUBLIC  "${CMAKE_CURRENT_SOURCE_DIR}/include"
   PRIVATE "${OVL}")
@@ -144,6 +158,7 @@ endif()
 # ---------------------------------------------------------------------------
 # Test harness.
 # ---------------------------------------------------------------------------
+if(NOT DSF_INPUT_ONLY)
 add_executable(dsfplatform-test test/dsfplatform-test.cpp)
 target_link_libraries(dsfplatform-test PRIVATE dsfplatform)
 # The harness also draws its button overlay with RageDisplay, so it sees the engine
@@ -156,4 +171,5 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   if(WIN32)
     target_link_options(dsfplatform-test PRIVATE -static-libgcc -static-libstdc++ -static)
   endif()
+endif()
 endif()

@@ -447,7 +447,11 @@ inline void	ssadd(std::string& sDst, PCSTR pA)
 // -----------------------------------------------------------------------------
 	inline int ssvsprintf(PSTR pA, size_t nCount, PCSTR pFmtA, va_list vl)
 	{
-#if defined(WIN32)
+		/* MinGW takes FormatV's portable path, which probes snprintf for C99
+		 * "return the size needed" semantics and then formats through this
+		 * function; MSVCRT's _vsnprintf returns -1 instead, so every formatted
+		 * string came out empty.  Use the C99 vsnprintf there. */
+#if defined(WIN32) && !defined(__MINGW32__)
 		return _vsnprintf(pA, nCount, pFmtA, vl);
 #else
 		return vsnprintf(pA, nCount, pFmtA, vl);
@@ -1130,6 +1134,16 @@ public:
 	}
        
 	const CT& operator[](long unsigned int nIdx) const {
+	  return MYBASE::operator[](static_cast<MYSIZE>(nIdx));
+	}
+
+	// LLP64 (64-bit Windows): size_t is unsigned long long, which matches none
+	// of the overloads above and makes str[size_t] ambiguous.
+	CT& operator[](unsigned long long nIdx) {
+	  return MYBASE::operator[](static_cast<MYSIZE>(nIdx));
+	}
+
+	const CT& operator[](unsigned long long nIdx) const {
 	  return MYBASE::operator[](static_cast<MYSIZE>(nIdx));
 	}
 #ifndef SS_NO_IMPLICIT_CASTS

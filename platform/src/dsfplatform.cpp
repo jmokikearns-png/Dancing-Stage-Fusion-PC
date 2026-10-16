@@ -17,8 +17,10 @@
 #include "GameState.h"
 #include "GameManager.h"
 #include "Game.h"
+#if !defined(DSF_INPUT_ONLY)
 #include "RageDisplay.h"
 #include "RageDisplay_OGL.h"
+#endif
 #include "StepMania.h"
 
 #if defined(_WINDOWS)
@@ -103,6 +105,7 @@ namespace dsf
 		INPUTFILTER = new InputFilter;
 		INPUTMAPPER = new InputMapper;	/* reads Data/Keymaps.ini, adds keyboard defaults */
 
+#if !defined(DSF_INPUT_ONLY)
 		if( cfg.bOpenWindow )
 		{
 			RageDisplay::VideoModeParams params(
@@ -120,6 +123,7 @@ namespace dsf
 			}
 			DISPLAY = pDisplay;
 		}
+#endif
 
 		CString sDrivers = cfg.sInputDrivers.c_str();
 		if( sDrivers == "" )
@@ -143,7 +147,9 @@ namespace dsf
 		SAFE_DELETE( INPUTMAN );
 		SAFE_DELETE( INPUTMAPPER );	/* note: ~InputMapper() saves Keymaps.ini (StepMania behaviour) */
 		SAFE_DELETE( INPUTFILTER );
+#if !defined(DSF_INPUT_ONLY)
 		SAFE_DELETE( DISPLAY );
+#endif
 		SAFE_DELETE( GAMESTATE );
 		SAFE_DELETE( GAMEMAN );
 		SAFE_DELETE( PREFSMAN );
@@ -158,8 +164,10 @@ namespace dsf
 
 	void Update( float fDeltaSeconds )
 	{
+#if !defined(DSF_INPUT_ONLY)
 		if( DISPLAY )
 			DISPLAY->Update( fDeltaSeconds );	/* window messages (Win32), screensaver */
+#endif	/* window messages (Win32), screensaver */
 		INPUTFILTER->Update( fDeltaSeconds );	/* polls INPUTMAN, generates repeats */
 
 		InputEventArray events;
@@ -256,7 +264,11 @@ namespace dsf
 			vOut.push_back( std::string( InputDeviceToString( vDevices[i] ).c_str() ) + ": " + vDescriptions[i].c_str() );
 	}
 
+#if !defined(DSF_INPUT_ONLY)
 	RageDisplay *Display() { return DISPLAY; }
+#else
+	RageDisplay *Display() { return NULL; }
+#endif
 	bool QuitRequested() { return g_bQuitRequested; }
 	bool HasFocus() { return g_bHasFocus; }
 }

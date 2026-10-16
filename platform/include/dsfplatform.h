@@ -77,6 +77,12 @@ namespace dsf
 		std::string sDeviceInput;
 	};
 
+	/* Input-only builds (DSF_INPUT_ONLY): the host owns the window.  On Windows,
+	 * DirectInput needs that top-level window (HWND) for its cooperative level and
+	 * only accepts keyboard input while it is the foreground window.  Call before
+	 * Init(); a no-op on other platforms. */
+	void SetHostWindow( void *pNativeWindow );
+
 	bool Init( int argc, char **argv, const Config &cfg, std::string &sErrorOut );
 	void Shutdown();	/* note: also saves the mapping (~InputMapper does, as in StepMania) */
 

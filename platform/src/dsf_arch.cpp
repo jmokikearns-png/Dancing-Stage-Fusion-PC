@@ -13,8 +13,10 @@
 
 #if defined(HAVE_WIN32)
 #include "arch/InputHandler/InputHandler_DirectInput.h"
+#if !defined(DSF_INPUT_ONLY)
 #include "arch/LowLevelWindow/LowLevelWindow_Win32.h"
 #define DSF_LOW_LEVEL_WINDOW LowLevelWindow_Win32
+#endif
 #else
 #include "arch/InputHandler/InputHandler_X11.h"
 #include "arch/InputHandler/InputHandler_Linux_Joystick.h"
@@ -44,7 +46,9 @@ void MakeInputHandlers( CString drivers, vector<InputHandler *> &Add )
 	}
 }
 
+#if !defined(DSF_INPUT_ONLY)
 LowLevelWindow *MakeLowLevelWindow()
 {
 	return new DSF_LOW_LEVEL_WINDOW;
 }
+#endif
