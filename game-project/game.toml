@@ -1,0 +1,59 @@
+# Autofilled by tools/new_project_layout/probe_disc.py from your legal dump.
+# Review before shipping. Runtime quirks / overlay seeds still need hand work.
+
+[game]
+name = "Dancing Stage Fusion"
+id = "SLES-04163"
+players = 2
+exe = "disc_exe/SLES_041.63"
+disc = "/home/user/work/original/disc/Dancing Stage Fusion (Europe) (En,Fr,De,Es,It).cue"
+load_address = "0x8001A000"
+entry_pc = "0x8002397C"
+text_size = "0x0009B000"
+stack_base = "0x801FFFF0"
+
+# Digests are for data Track 01 (first BINARY FILE / TRACK 01).
+[prepare_disc]
+out_dir = "disc"
+bin_name = "Dancing Stage Fusion (Europe) (En,Fr,De,Es,It).bin"
+cue_name = "Dancing Stage Fusion (Europe) (En,Fr,De,Es,It).cue"
+boot_exe = "SLES_041.63"
+known_sizes = [248103072]
+known_md5 = [
+  "9cdceb1ee8e0748835b41c66af5565f1",
+]
+known_sha1 = [
+  "1cd6d58620f8d1825126740b14e11612fb1628d3",
+]
+known_crc32 = [
+  "78592e6b",
+]
+
+[recompiler]
+seeds = "seeds/ghidra_funcs.txt"
+out_dir = "generated"
+strict = true
+
+[runtime]
+window_title = "Dancing Stage Fusion Recompiled"
+memcard_dir = "saves"
+overlay_cache = true
+
+[video]
+renderer = "opengl"
+aspect_ratio = "4:3"
+
+[controller]
+default_mode = "digital"
+
+# Online mount gate: digests + track count + optional TOC fingerprint
+# (see docs/NETPLAY.md).
+[netplay]
+require_cue = true
+required_tracks = 1
+required_disc_fp = "3fd751ac50155177c6e702b2311ff887a393174fe00dcfd73e424317f2071584"
+
+[audio]
+# Host playback cushion. Rhythm game: keep it low (default 180 ms put the music ~0.2 s behind the arrows).
+# 30..500; raise to 60-80 only if you hear crackling.
+buffer_ms = 50
