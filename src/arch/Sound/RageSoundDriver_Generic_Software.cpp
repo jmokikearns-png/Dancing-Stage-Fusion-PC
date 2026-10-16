@@ -52,9 +52,34 @@ int RageSound_Generic_Software::DecodeThread_start( void *p )
 static int g_TotalAhead = 0;
 static int g_TotalAheadCount = 0;
 
+static RageMutex *g_pDirectStreamLock = NULL;
+static RageSound_Generic_Software::DirectStreamFn g_pDirectStream = NULL;
+static void *g_pDirectStreamUser = NULL;
+static bool g_bGenericSoftwareActive = false;
+
+static RageMutex &DirectStreamLock()
+{
+	if( g_pDirectStreamLock == NULL )
+		g_pDirectStreamLock = new RageMutex( "DirectStream" );
+	return *g_pDirectStreamLock;
+}
+
+void RageSound_Generic_Software::SetDirectStream( DirectStreamFn pfn, void *pUser )
+{
+	LockMut( DirectStreamLock() );
+	g_pDirectStream = pfn;
+	g_pDirectStreamUser = pUser;
+}
+
+bool RageSound_Generic_Software::DirectStreamSupported()
+{
+	return g_bGenericSoftwareActive;
+}
+
 void RageSound_Generic_Software::Mix( int16_t *buf, int frames, int64_t frameno, int64_t current_frameno )
 {
 	ASSERT_M( m_DecodeThread.IsCreated(), "RageSound_Generic_Software::StartDecodeThread() was never called" );
+	g_bGenericSoftwareActive = true;
 
 	if( frameno - current_frameno + frames > 0 )
 	{
@@ -153,6 +178,23 @@ void RageSound_Generic_Software::Mix( int16_t *buf, int frames, int64_t frameno,
 		/* If we don't have enough to fill the buffer, we've underrun. */
 		if( got_frames < frames && s.state == sound::PLAYING )
 			++underruns;
+	}
+
+	/* The direct stream, at the master volume. */
+	{
+		LockMut( DirectStreamLock() );
+		if( g_pDirectStream != NULL )
+		{
+			static vector<int16_t> direct;
+			direct.resize( frames*channels );
+			const int got = g_pDirectStream( g_pDirectStreamUser, &direct[0], frames );
+			if( got > 0 )
+			{
+				mix.SetVolume( SOUNDMAN->GetMixVolume() );
+				mix.SetWriteOffset( 0 );
+				mix.write( &direct[0], got*channels );
+			}
+		}
 	}
 
 	memset( buf, 0, frames*bytes_per_frame );

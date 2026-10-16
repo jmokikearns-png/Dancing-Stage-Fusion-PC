@@ -445,8 +445,14 @@ static void DisplayResolution( int &sel, bool ToSel, const ConfOption *pConfOpti
 		res_t(640, 480),
 		res_t(800, 600),
 		res_t(1024, 768),
+		res_t(960, 720),
 		res_t(1280, 960),
-		res_t(1280, 1024)
+		res_t(1280, 1024),
+		res_t(1440, 1080),
+		res_t(1280, 720),
+		res_t(1920, 1080),
+		res_t(2560, 1440),
+		res_t(3840, 2160)
 	};
 	res_t sel_res( PREFSMAN->m_iDisplayWidth, PREFSMAN->m_iDisplayHeight );
 	MoveMap( sel, sel_res, ToSel, mapping, ARRAYSIZE(mapping) );
@@ -496,6 +502,30 @@ static void AspectRatio( int &sel, bool ToSel, const ConfOption *pConfOption )
 /* Sound options */
 MOVE( ResamplingQuality,	PREFSMAN->m_SoundResampleQuality );
 MOVE( AttractSoundFrequency,PREFSMAN->m_AttractSoundFrequency );
+
+/* DSF PC */
+static void SoundWriteAhead( int &sel, bool ToSel, const ConfOption *pConfOption )
+{
+	const int mapping[] = { 512, 768, 1024, 1536, 2048, 3072, 4096 };
+	MoveMap( sel, PREFSMAN->m_iSoundWriteAhead, ToSel, mapping, ARRAYSIZE(mapping) );
+}
+
+static const int PS1_SYNC_OFFSET_MIN = -150, PS1_SYNC_OFFSET_STEP = 5, PS1_SYNC_OFFSET_COUNT = 61;
+static void PS1SyncOffsetChoices( CStringArray &out )
+{
+	for( int i = 0; i < PS1_SYNC_OFFSET_COUNT; ++i )
+	{
+		const int ms = PS1_SYNC_OFFSET_MIN + i*PS1_SYNC_OFFSET_STEP;
+		out.push_back( ms == 0? CString("0 ms"): ssprintf("%+d ms", ms) );
+	}
+}
+static void PS1SyncOffset( int &sel, bool ToSel, const ConfOption *pConfOption )
+{
+	if( ToSel )
+		sel = clamp( (PREFSMAN->m_iPS1SyncOffsetMs - PS1_SYNC_OFFSET_MIN + PS1_SYNC_OFFSET_STEP/2) / PS1_SYNC_OFFSET_STEP, 0, PS1_SYNC_OFFSET_COUNT-1 );
+	else
+		PREFSMAN->m_iPS1SyncOffsetMs.Set( PS1_SYNC_OFFSET_MIN + sel*PS1_SYNC_OFFSET_STEP );
+}
 
 static void SoundVolume( int &sel, bool ToSel, const ConfOption *pConfOption )
 {
@@ -588,7 +618,7 @@ static void InitializeConfOptions()
 	/* Graphic options */
 	ADD( ConfOption( "Windowed",					MovePref,			"FULLSCREEN", "WINDOWED" ) );
 	g_ConfOptions.back().m_iEffects = OPT_APPLY_GRAPHICS;
-	ADD( ConfOption( "DisplayResolution",			DisplayResolution,	"320","400","512","640","800","1024","1280x960","1280x1024" ) );
+	ADD( ConfOption( "DisplayResolution",			DisplayResolution,	"320","400","512","640","800","1024","960x720","1280x960","1280x1024","1440x1080","1280x720","1920x1080","2560x1440","3840x2160" ) );
 	g_ConfOptions.back().m_iEffects = OPT_APPLY_GRAPHICS;
 	ADD( ConfOption( "DisplayColor",				DisplayColor,		"16BIT","32BIT" ) );
 	g_ConfOptions.back().m_iEffects = OPT_APPLY_GRAPHICS;
@@ -615,6 +645,10 @@ static void InitializeConfOptions()
 	ADD( ConfOption( "ResamplingQuality",			ResamplingQuality,	"FAST","NORMAL","HIGH QUALITY" ) );
 	ADD( ConfOption( "AttractSoundFrequency",		AttractSoundFrequency,	"NEVER","ALWAYS","2 TIMES","3 TIMES","4 TIMES","5 TIMES" ) );
 	ADD( ConfOption( "SoundVolume",					SoundVolume,		"SILENT","10%","20%","30%","40%","50%","60%","70%","80%","90%","100%" ) );
+	/* DSF PC.  The buffer takes effect at the next start. */
+	ADD( ConfOption( "SoundWriteAhead",				SoundWriteAhead,	"12 ms","17 ms","23 ms","35 ms","46 ms","70 ms","93 ms" ) );
+	ADD( ConfOption( "PS1MatchPictureToSound",		MovePref,			"OFF","ON" ) );
+	ADD( ConfOption( "PS1SyncOffset",				PS1SyncOffset,		PS1SyncOffsetChoices ) );
 	g_ConfOptions.back().m_iEffects = OPT_APPLY_SOUND;
 }
 

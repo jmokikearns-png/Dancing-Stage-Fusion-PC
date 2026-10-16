@@ -290,7 +290,10 @@ private:
 	Preference<CString>	m_sSoundDrivers;	// "" == default
 public:
 	Preference<float>	m_fSoundVolume;	// -1 == default
-	Preference<int>		m_iSoundWriteAhead;
+	Preference<int>		m_iSoundWriteAhead;	/* frames; 0 = the driver's own default */
+	/* DSF PC: the PS1 game's picture/sound sync (PS1Core). */
+	Preference<bool>	m_bPS1MatchPictureToSound;
+	Preference<int>		m_iPS1SyncOffsetMs;	/* > 0 shows the picture later */
 	Preference<CString>	m_iSoundDevice;	
 	Preference<RageSoundReader_Resample::ResampleQuality>	m_SoundResampleQuality;
 private:

@@ -27,7 +27,13 @@
 #define DEFAULT_MOVIE_DRIVER_LIST "FFMpeg,DShow,Null"
 
 /* RageSoundDrivers */
+#if defined(_WINDOWS)
+/* DSF PC: software mixing first.  The PS1 game's sound is a direct stream of
+ * RageSound_Generic_Software, which the hardware DirectSound driver lacks. */
+#define DEFAULT_SOUND_DRIVER_LIST "DirectSound-sw,WaveOut,Null"
+#else
 #define DEFAULT_SOUND_DRIVER_LIST "ALSA,DirectSound,ALSA-sw,DirectSound-sw,CoreAudio,OSS,QT1,WaveOut,Null"
+#endif
 
 #endif
 

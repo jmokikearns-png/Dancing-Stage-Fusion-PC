@@ -332,7 +332,8 @@ void ScreenMapControllers::HandleScreenMessage( const ScreenMessage SM )
 	switch( SM )
 	{
 	case SM_GoToNextScreen:
-		SCREENMAN->SetNewScreen( "ScreenOptionsMenu" );
+		/* DSF PC: themed, so the in-game menu can use this screen too. */
+		SCREENMAN->SetNewScreen( THEME->GetMetric(m_sName,"NextScreen") );
 		break;
 	}
 }

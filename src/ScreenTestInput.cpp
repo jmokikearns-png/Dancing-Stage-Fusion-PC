@@ -132,7 +132,8 @@ void ScreenTestInput::HandleScreenMessage( const ScreenMessage SM )
 	{
 	case SM_GoToNextScreen:
 	case SM_GoToPrevScreen:
-		SCREENMAN->SetNewScreen( "ScreenOptionsMenu" );
+		/* DSF PC: themed, so the in-game menu can use this screen too. */
+		SCREENMAN->SetNewScreen( THEME->GetMetric(m_sName,"NextScreen") );
 		break;
 	}
 }

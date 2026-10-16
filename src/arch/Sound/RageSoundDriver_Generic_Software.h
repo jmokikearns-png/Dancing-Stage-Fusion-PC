@@ -12,6 +12,16 @@ class RageSound_Generic_Software: public RageSoundDriver
 public:
 	virtual void Update(float delta);
 
+	/* DSF PC: one stream mixed straight into each device buffer as the device
+	 * asks for it, without the decode-ahead buffering of regular sounds, for
+	 * the lowest latency (the PS1 game's sound).  pfn writes up to iFrames
+	 * 16-bit stereo frames and returns how many it wrote; it runs on the
+	 * mixing thread.  SetDirectStream(NULL, NULL) waits for a Mix in progress. */
+	typedef int (*DirectStreamFn)( void *pUser, int16_t *pBuf, int iFrames );
+	static void SetDirectStream( DirectStreamFn pfn, void *pUser );
+	/* True once the active sound driver mixes through this class. */
+	static bool DirectStreamSupported();
+
 	void StartMixing( RageSoundBase *snd );		/* used by RageSound */
 	void StopMixing( RageSoundBase *snd );		/* used by RageSound */
 	bool PauseMixing( RageSoundBase *snd, bool bStop );

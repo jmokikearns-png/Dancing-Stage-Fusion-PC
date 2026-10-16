@@ -401,6 +401,9 @@ set(SM_SOURCES_WIN32
   archutils/Win32/USB.cpp
   archutils/Win32/VideoDriverInfo.cpp
   archutils/Win32/WindowIcon.cpp
+  # DSF PC: the original game, run from dsfcore.dll (Windows only)
+  PS1Core.cpp
+  ScreenPS1Game.cpp
 )
 
 set(SM_SOURCES_WIN32_D3D

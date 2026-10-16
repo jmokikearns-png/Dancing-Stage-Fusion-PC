@@ -279,7 +279,11 @@ PrefsManager::PrefsManager() :
 	m_bSmoothLines					( "SmoothLines",				false ),
 	m_sSoundDrivers					( "SoundDrivers",				"" ),
 	m_fSoundVolume					( "SoundVolume",				-1 ),	// default
-	m_iSoundWriteAhead				( "SoundWriteAhead",			0 ),
+	/* DSF PC: 46 ms of device buffer (the 2005 default was 93 ms); the PS1
+	 * game's music latency depends on it.  Sound Options > Audio Buffer. */
+	m_iSoundWriteAhead				( "SoundWriteAhead",			2048 ),
+	m_bPS1MatchPictureToSound		( "PS1MatchPictureToSound",		true ),
+	m_iPS1SyncOffsetMs				( "PS1SyncOffsetMs",			0 ),
 	m_iSoundDevice					( "SoundDevice",				"" ),
 	m_SoundResampleQuality			( "SoundResampleQuality",		RageSoundReader_Resample::RESAMP_NORMAL ),
 	m_sInputDrivers					( "InputDrivers",				"" ),

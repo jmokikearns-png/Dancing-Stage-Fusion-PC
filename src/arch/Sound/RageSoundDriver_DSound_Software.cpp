@@ -70,10 +70,11 @@ CString RageSound_DSound_Software::Init()
 	if( sError != "" )
 		return sError;
 
-	/* If we're emulated, we're better off with the WaveOut driver; DS
-	 * emulation tends to be desynced. */
+	/* DSF PC: on Vista and later DirectSound always runs on top of WASAPI;
+	 * the 2005 "emulated device" rejection would leave only WaveOut, whose
+	 * buffer is 186 ms.  Just note it. */
 	if( ds.IsEmulated() )
-		return "Driver unusable (emulated device)";
+		LOG->Info( "DirectSound reports an emulated device" );
 
 	max_writeahead = safe_writeahead;
 	if( PREFSMAN->m_iSoundWriteAhead )
