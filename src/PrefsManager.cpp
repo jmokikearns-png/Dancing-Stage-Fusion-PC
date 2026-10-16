@@ -279,10 +279,11 @@ PrefsManager::PrefsManager() :
 	m_bSmoothLines					( "SmoothLines",				false ),
 	m_sSoundDrivers					( "SoundDrivers",				"" ),
 	m_fSoundVolume					( "SoundVolume",				-1 ),	// default
-	/* DSF PC: 46 ms of device buffer (the 2005 default was 93 ms); the PS1
-	 * game's music latency depends on it.  Sound Options > Audio Buffer. */
-	m_iSoundWriteAhead				( "SoundWriteAhead",			2048 ),
-	m_bPS1MatchPictureToSound		( "PS1MatchPictureToSound",		true ),
+	/* 0 = the driver's default (DSF PC: WASAPI 1024 frames = 23 ms,
+	 * DirectSound 2048 = 46 ms; the 2005 default was 93 ms).  The PS1 game's
+	 * sound latency depends on it.  Sound Options > Audio Buffer. */
+	m_iSoundWriteAhead				( "SoundWriteAhead",			0 ),
+	m_bPS1MatchPictureToSound		( "PS1MatchPictureToSound",		false ),
 	m_iPS1SyncOffsetMs				( "PS1SyncOffsetMs",			0 ),
 	m_bPS1OpenGL					( "PS1OpenGL",					true ),
 	m_sPS1InternalResolution		( "PS1InternalResolution",		"1080p" ),

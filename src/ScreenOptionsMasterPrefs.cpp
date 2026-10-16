@@ -506,7 +506,7 @@ MOVE( AttractSoundFrequency,PREFSMAN->m_AttractSoundFrequency );
 /* DSF PC */
 static void SoundWriteAhead( int &sel, bool ToSel, const ConfOption *pConfOption )
 {
-	const int mapping[] = { 512, 768, 1024, 1536, 2048, 3072, 4096 };
+	const int mapping[] = { 0, 512, 768, 1024, 1536, 2048, 3072, 4096 };
 	MoveMap( sel, PREFSMAN->m_iSoundWriteAhead, ToSel, mapping, ARRAYSIZE(mapping) );
 }
 
@@ -660,7 +660,7 @@ static void InitializeConfOptions()
 	ADD( ConfOption( "AttractSoundFrequency",		AttractSoundFrequency,	"NEVER","ALWAYS","2 TIMES","3 TIMES","4 TIMES","5 TIMES" ) );
 	ADD( ConfOption( "SoundVolume",					SoundVolume,		"SILENT","10%","20%","30%","40%","50%","60%","70%","80%","90%","100%" ) );
 	/* DSF PC.  The buffer takes effect at the next start. */
-	ADD( ConfOption( "SoundWriteAhead",				SoundWriteAhead,	"12 ms","17 ms","23 ms","35 ms","46 ms","70 ms","93 ms" ) );
+	ADD( ConfOption( "SoundWriteAhead",				SoundWriteAhead,	"AUTO","12 ms","17 ms","23 ms","35 ms","46 ms","70 ms","93 ms" ) );
 	ADD( ConfOption( "PS1MatchPictureToSound",		MovePref,			"OFF","ON" ) );
 	ADD( ConfOption( "PS1SyncOffset",				PS1SyncOffset,		PS1SyncOffsetChoices ) );
 	/* These two take effect the next time the program starts. */

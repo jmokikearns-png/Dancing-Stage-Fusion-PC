@@ -22,9 +22,9 @@ namespace
 	const int SAMPLE_RATE = 44100;
 	const int PAL_AUDIO_FRAMES_PER_VIDEO_FRAME = 882;	/* 44100 / 50: exact for the PS1's PAL timing */
 	const int MAX_QUEUED_FRAMES = 16;	/* ~320 ms of picture, more than any sound latency we use */
-	/* Sound kept queued ahead of the device: two video frames.  The device
-	 * takes it in chunks of up to ~12 ms. */
-	const int64_t AUDIO_QUEUE_TARGET = PAL_AUDIO_FRAMES_PER_VIDEO_FRAME * 2;
+	/* Sound kept queued ahead of the device: one video frame (the guest
+	 * produces it a frame at a time) plus the device's chunk of ~12 ms. */
+	const int64_t AUDIO_QUEUE_TARGET = PAL_AUDIO_FRAMES_PER_VIDEO_FRAME + 512;
 
 	int64_t AtomicLoad( const volatile int64_t &v ) { return __atomic_load_n( &v, __ATOMIC_ACQUIRE ); }
 	void AtomicStore( volatile int64_t &v, int64_t x ) { __atomic_store_n( &v, x, __ATOMIC_RELEASE ); }
@@ -367,12 +367,16 @@ const PS1Core::Frame *PS1Core::PickFrameToShow()
 
 	if( !PREFSMAN->m_bPS1MatchPictureToSound )
 	{
-		while( m_Ready.size() > 1 )
+		/* Lowest lag (default): the newest frame, or one Picture Offset
+		 * older when the offset is positive. */
+		const int64_t iLimit = m_Ready.back()->iAudioEnd -
+			int64_t( max(0, PREFSMAN->m_iPS1SyncOffsetMs.Get()) * (SAMPLE_RATE / 1000) );
+		while( m_Ready.size() > 1 && m_Ready[1]->iAudioEnd <= iLimit )
 		{
 			m_Free.push_back( m_Ready.front() );
 			m_Ready.pop_front();
 		}
-		return m_Ready.back();
+		return m_Ready.front();
 	}
 
 	/* The newest frame whose sound has started playing (plus the player's

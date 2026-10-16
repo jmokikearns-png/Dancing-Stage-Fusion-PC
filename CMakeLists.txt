@@ -33,6 +33,9 @@ endif()
 option(SM_WITH_D3D            "Direct3D 8 renderer (RageDisplay_D3D)" ON)
 option(SM_WITH_DSHOW          "DirectShow movie driver (needs src/BaseClasses built for this compiler)" OFF)
 option(SM_WITH_FFMPEG         "FFmpeg movie driver, linked against the 2005 prebuilt avcodec/avformat DLLs" ON)
+# DSF PC: off.  MP3 decoding is libmad, which is GPL; the port plays no MP3s,
+# and without it the program stays under StepMania's MIT licence.
+option(SM_WITH_MP3            "MP3 decoding (libmad, GPL)" ON)
 option(SM_STATIC_RUNTIME      "Link libgcc/libstdc++ statically (MinGW) so no compiler DLLs need shipping" ON)
 
 # ---------------------------------------------------------------------------
@@ -111,6 +114,9 @@ endif()
 if(NOT SM_WITH_FFMPEG)
   list(REMOVE_ITEM SM_SOURCES arch/MovieTexture/MovieTexture_FFMpeg.cpp)
 endif()
+if(NOT SM_WITH_MP3)
+  list(REMOVE_ITEM SM_SOURCES RageSoundReader_MP3.cpp)
+endif()
 list(TRANSFORM SM_SOURCES PREPEND ${SM_SRC}/)
 
 add_executable(StepMania WIN32 ${SM_SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/verstub.cpp)
@@ -130,8 +136,12 @@ if(NOT SM_WITH_FFMPEG)
   target_compile_definitions(StepMania PRIVATE SM_NO_FFMPEG)
 endif()
 
+if(NOT SM_WITH_MP3)
+  target_compile_definitions(StepMania PRIVATE NO_MP3_SUPPORT)
+endif()
+
 target_link_libraries(StepMania PRIVATE
-  sm_lua sm_mad sm_resample
+  sm_lua $<$<BOOL:${SM_WITH_MP3}>:sm_mad> sm_resample
   ${SM_PNG_LIBRARY} ${JPEG_LIBRARIES}
   ${SM_VORBISFILE_LIBRARY} ${SM_VORBIS_LIBRARY} ${SM_OGG_LIBRARY}
   ZLIB::ZLIB

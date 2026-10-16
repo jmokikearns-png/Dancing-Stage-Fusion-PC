@@ -12,7 +12,7 @@
 static const int channels = 2;
 static const int bytes_per_frame = channels*2; /* 16-bit */
 static const int samplerate = 44100;
-static const int safe_writeahead = 1024*4; /* in frames */
+static const int safe_writeahead = 1024*2; /* in frames (DSF PC: was 4096 = 93 ms) */
 static int max_writeahead;
 
 /* We'll fill the buffer in chunks this big. */

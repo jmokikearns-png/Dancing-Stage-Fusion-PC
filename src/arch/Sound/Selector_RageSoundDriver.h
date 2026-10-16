@@ -26,6 +26,7 @@
 
 #ifdef HAVE_WIN32
 #include "RageSoundDriver_WaveOut.h"
+#include "RageSoundDriver_WASAPI.h"	/* DSF PC */
 #endif
 
 #endif

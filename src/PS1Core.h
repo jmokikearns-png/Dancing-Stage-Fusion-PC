@@ -13,9 +13,11 @@
  *    queued), so StepMania's own frame rate doesn't matter.  Without a
  *    working sound device it is paced by the clock at 50 Hz.
  *  - Picture: each guest frame is queued with the position of its audio.  By
- *    default the frame shown is the one whose sound is being heard now, so
- *    arrows and music stay in sync whatever the audio latency; the player
- *    can add a fine offset.
+ *    default the newest frame is shown (lowest lag: steps are judged by the
+ *    game against what the player sees).  "Match Picture to Sound" instead
+ *    shows the frame whose sound is being heard, which syncs arrows with the
+ *    music but delays the picture by the sound latency; Picture Offset
+ *    delays (or, when matching, shifts) the picture by a few milliseconds.
  *  - Input: pad words built from StepMania's InputMapper ("ps1pad" game).
  *
  * The core is started once per program run.  Leaving the game screen parks

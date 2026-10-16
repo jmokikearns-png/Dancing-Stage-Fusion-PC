@@ -264,6 +264,9 @@ RageSoundDriver *MakeRageSoundDriver(CString drivers)
 #ifdef USE_RAGE_SOUND_WAVE_OUT
 		if(!DriversToTry[i].CompareNoCase("WaveOut"))		ret = new RageSound_WaveOut;
 #endif
+#ifdef USE_RAGE_SOUND_WASAPI
+		if(!DriversToTry[i].CompareNoCase("WASAPI"))		ret = new RageSound_WASAPI;
+#endif
 
 		if( ret == NULL )
 		{

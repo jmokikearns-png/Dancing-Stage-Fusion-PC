@@ -388,6 +388,7 @@ set(SM_SOURCES_WIN32
   arch/Sound/RageSoundDriver_DSound.cpp
   arch/Sound/RageSoundDriver_DSound_Software.cpp
   arch/Sound/RageSoundDriver_WaveOut.cpp
+  arch/Sound/RageSoundDriver_WASAPI.cpp
   arch/Threads/Threads_Win32.cpp
   archutils/Win32/AppInstance.cpp
   archutils/Win32/arch_setup.cpp
