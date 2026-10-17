@@ -3,8 +3,8 @@
 Fusion's own song list (port/core/dsfcore_extrasong.cpp does the in-RAM
 part).
 
-  build_extrasong.py SONG_DIR DISC.cue OUT_PACKAGE_DIR --plate PLATE.png
-                     [--master-id 0x8030]
+  build_extrasong.py SONG_DIR DISC.cue OUT_PACKAGE_DIR
+                     [--title T] [--artist A] [--plate PLATE.png] [--master-id 0x8030]
 
 SONG_DIR holds NAME.sm, NAME.ogg (or .mp3/.wav), NAME.png (256x80 banner)
 and NAME-bg.png (320x240 background).  Everything is converted to the
@@ -17,7 +17,8 @@ Formats (notes/dsf-extra-songs.md):
   LZ(background TIM 320x240 8bpp), language UI set (copied) }.
 * Chart: u32 size, u32 kind (style | difficulty<<8 | 1<<16), 14 x 0, then
   one u32 per beat, one byte per 16th, one bit per panel; beat 0 is
-  measure 2, the last beat ends at the tempo map's last measure.
+  played at measure 3 of the tempo map (measured in the game: at 196 and
+  at 98 BPM the steps came exactly one measure late with beat 0 at 2).
 * Tempo map: u32 size, (u32 pos in 1/4096 measure, u32 time in 1/75 s).
 * Stream (STR.BIN layout): SPU ADPCM, 0x4000-byte blocks alternating L/R,
   ending in a pair of silent flag-1 blocks (psxaudio.c).
@@ -29,6 +30,7 @@ from PIL import Image
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import konami_lz
+import plate_font
 
 # ---- the disc (SLES-04163, Redump) ----------------------------------------
 EXE_LBA, EXE_SIZE = 24, 636928
@@ -173,6 +175,14 @@ def plate_tim(plate_png, stock_plate_tim):
 	return make_tim(idx, 360, 40, 4, clut, clut_wide)
 
 
+def lettered_plate_tim(indices, stock_plate_tim):
+	"""Plate indices from plate_font on the stock plates' own palette."""
+	t = stock_plate_tim
+	clut_wide = struct.unpack_from('<IHHHH', t, 8)[3]
+	clut = list(struct.unpack_from('<%dH' % clut_wide, t, 20))
+	return make_tim(indices, 360, 40, 4, clut, clut_wide)
+
+
 # ---- simfile ----------------------------------------------------------------
 def parse_sm(path):
 	s = open(path, encoding='utf-8', errors='replace').read()
@@ -202,8 +212,10 @@ SM_DIFF = {'Beginner': 4, 'Easy': 0, 'Medium': 1, 'Hard': 2}
 PANEL_BITS = {0: 0, 1: 3, 2: 2, 3: 1}	# simfile column (L, D, U, R) -> bit
 
 
+CHART_START = 3		# tempo-map measure of the chart's first beat
+
 def chart_words(chart, lead_measures, last_measure):
-	beats = 4 * last_measure - 8
+	beats = 4 * last_measure - 8	# the stock charts' length
 	words = [0] * beats
 	cols = 4 if chart['style'] == 'dance-single' else 8
 	for m, rows in enumerate(chart['measures']):
@@ -221,7 +233,7 @@ def chart_words(chart, lead_measures, last_measure):
 				continue
 			if cols == 4:
 				mask |= mask << 4
-			sixteenth = (m + lead_measures - 2) * 16 + (r * 16) // n
+			sixteenth = (m + lead_measures - CHART_START) * 16 + (r * 16) // n
 			if sixteenth < 0 or sixteenth // 4 >= beats:
 				sys.exit('a step outside the song (measure %d)' % m)
 			words[sixteenth // 4] |= mask << (8 * (sixteenth % 4))
@@ -279,7 +291,10 @@ def raw_sector(lba, sub, data, form2):
 def main():
 	ap = argparse.ArgumentParser()
 	ap.add_argument('song_dir'); ap.add_argument('cue'); ap.add_argument('out')
-	ap.add_argument('--plate', help='title plate PNG, scaled to 360x40 (text on transparent)')
+	ap.add_argument('--plate', help='a title plate PNG (text on transparent, scaled to 360x40) instead of '
+	                'the title and artist set in the game\'s own lettering')
+	ap.add_argument('--title', help='plate title (default: the simfile\'s #TITLE)')
+	ap.add_argument('--artist', help='plate artist (default: the simfile\'s #ARTIST)')
 	ap.add_argument('--master-id', type=lambda x: int(x, 0), default=0x8030)
 	a = ap.parse_args()
 
@@ -308,7 +323,7 @@ def main():
 		                                     '-of', 'default=nw=1:nk=1', audio]))
 		ms = 4 * 60.0 / sm['bpm']
 		first = min(m for c in sm['charts'] for m, rows in enumerate(c['measures']) if any(any(x in '124' for x in r) for r in rows))
-		lead = max(0, 2 - first)
+		lead = max(0, CHART_START - first)
 		last = int((dur + lead * ms + sm['offset']) / ms)	# measure at the end of the (padded) music
 		# ---- song entry (5 language copies) ----
 		charts = []
@@ -328,7 +343,16 @@ def main():
 		banner = konami_lz.encode(banner_tim(Image.open(base + '.png')))
 		mini = konami_lz.encode(mini_tim(Image.open(base + '.png')))
 		stock_plate = konami_lz.decode(pack_items(entry(201))[30])
-		plate = konami_lz.encode(plate_tim(a.plate, stock_plate))
+		if a.plate:
+			plate = konami_lz.encode(plate_tim(a.plate, stock_plate))
+		else:
+			font = plate_font.PlateFont(disc, exe, toc, pack_items)
+			title, artist = a.title or sm['title'], a.artist or sm['artist']
+			lost = font.missing(title + artist)
+			if lost:
+				sys.exit('the game\'s lettering has no %s: change --title/--artist or give --plate'
+				         % ' '.join(lost))
+			plate = konami_lz.encode(lettered_plate_tim(font.plate(title, artist), stock_plate))
 		music, results, records = {}, {}, {}
 		for e in MUSIC_PACKS:
 			it = pack_items(entry(e))
