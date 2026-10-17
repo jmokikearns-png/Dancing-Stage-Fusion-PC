@@ -24,6 +24,13 @@
  * made by port/tools/extrasong/build_extrasong.py from the player's own
  * files and disc (never part of this project); it writes the data into
  * free space of the disc image with disc overlays and selects this plugin.
+ *
+ * Workout results show each song's 176x55 banner (READ_DT e181, item idx+1)
+ * from a VRAM grid: x = 640 + 64*(idx/4), y = 256 + 55*(idx%4), CLUT at
+ * (640, 476+idx), computed by 0x8008CE50 for drawing and inline by the
+ * loader at 0x8008A9A0.  Index 20 would land on the font page at x = 960,
+ * so both go to WORKOUT_SLOT, a plugin-defined guest function that keeps the
+ * stock grid for the 20 songs and gives extra songs free VRAM of that screen.
  */
 #include "mod_plugins.h"
 #include "cpu_state.h"
@@ -42,6 +49,7 @@ void wr32( uint32_t a, uint32_t v ) { psx_mod_write_word( a, v ); }
 void wr8( uint32_t a, uint8_t v ) { psx_mod_write_byte( a, v ); }
 
 const uint32_t SONGTAB = 0x800AFE38, SONG_SIZE = 44, NUM_STOCK = 20;
+const int32_t NUM_STOCK_INT = 20;
 const uint32_t STRTAB = 0x800932B8, STR_SIZE = 16, NUM_STOCK_STR = 23;
 const uint32_t GFXTAB = 0x800AA154, GFX_SIZE = 12;
 const uint32_t XATAB = 0x800934E4, XA_SIZE = 12, NUM_STOCK_XA = 26;	/* ids 24..49 */
@@ -67,6 +75,17 @@ const Pair XA_PAIRS[] = { { 0x80028E50, 0x80028E58 }, { 0x8002E26C, 0x8002E27C }
 /* The sound driver takes music ids 1..49 only: sltiu v0,(id-1),0x31. */
 const uint32_t MUSIC_ID_LIMIT = 0x800296E0, MUSIC_ID_LIMIT_STOCK = 0x2C420031;
 
+/* Workout results banner slots (see the header). */
+const uint32_t WORKOUT_SLOT_FN = 0x8008CE50, WORKOUT_LOADER = 0x8008A9A0, WORKOUT_SLOT = 0x8F000010;
+/* Free on that screen (VRAM map of the workout results, 2026-10-17); each
+ * keeps the 176-pixel banner inside one texture page (x%64 <= 20). */
+const uint16_t EXTRA_WORKOUT_SLOTS[][2] = {
+	{ 768, 0 }, { 768, 55 }, { 768, 110 }, { 768, 165 },
+	{ 847, 156 }, { 896, 50 }, { 896, 105 }, { 896, 160 },
+};
+inline uint32_t jal( uint32_t target ) { return 0x0C000000u | ((target >> 2) & 0x03FFFFFFu); }
+void patch_workout_slots();
+
 /* Stock words that tell the executable is in RAM and not yet patched.  The
  * executable arrives from the disc over several frames in address order, so
  * the last three (the last TOC entry, the last song record, the image's last
@@ -77,6 +96,7 @@ const uint32_t STOCK_CHECK[][2] = {
 	{ 0x8002CA48, 0x244232A8 }, { 0x80028E58, 0x24C634E4 }, { 0x8002E27C, 0x248434E4 },
 	{ 0x80050C24, 0x2CA20014 }, { MUSIC_ID_LIMIT, MUSIC_ID_LIMIT_STOCK },
 	{ 0x800932A4, 0x00006F91 }, { 0x800B017C, 0x00008015 }, { 0x800B4C68, 0x80023944 },
+	{ WORKOUT_SLOT_FN, 0x04810002 }, { WORKOUT_LOADER, 0x06010002 }, { 0x8008A9F0, 0xAFA20034 },
 };
 
 struct Song
@@ -292,7 +312,48 @@ void install()
 		if( s.record[3] > max_id )
 			max_id = s.record[3];
 	psx_mod_write_code_word( MUSIC_ID_LIMIT, (MUSIC_ID_LIMIT_STOCK & 0xFFFF0000u) | max_id );
+	patch_workout_slots();
 	psx_mod_counter_add( "dsf.extrasong.installed", 1 );
+}
+
+/* WORKOUT_SLOT(idx, &x, &y, &clut_x, &clut_y): 0x8008CE50's contract. */
+void on_workout_slot( CPUState *cpu, uint32_t )
+{
+	const int32_t i = int32_t( cpu->gpr[4] );
+	uint32_t x = 640 + 64 * uint32_t(i / 4), y = 256 + 55 * uint32_t(i % 4);
+	const int n = int( sizeof(EXTRA_WORKOUT_SLOTS) / sizeof(EXTRA_WORKOUT_SLOTS[0]) );
+	if( i >= NUM_STOCK_INT && i - NUM_STOCK_INT < n )
+	{
+		x = EXTRA_WORKOUT_SLOTS[i - NUM_STOCK_INT][0];
+		y = EXTRA_WORKOUT_SLOTS[i - NUM_STOCK_INT][1];
+	}
+	wr32( cpu->gpr[5], x );
+	wr32( cpu->gpr[6], y );
+	wr32( cpu->gpr[7], 640 );
+	wr32( rd32(cpu->gpr[29] + 0x10), uint32_t(476 + i) );
+}
+
+uint32_t i_addiu( int rt, int rs, int imm ) { return (9u << 26) | (uint32_t(rs) << 21) | (uint32_t(rt) << 16) | (uint32_t(imm) & 0xFFFF); }
+uint32_t i_sw( int rt, int off, int base ) { return (0x2Bu << 26) | (uint32_t(base) << 21) | (uint32_t(rt) << 16) | (uint32_t(off) & 0xFFFF); }
+
+void patch_workout_slots()
+{
+	enum { V0 = 2, A0 = 4, A1 = 5, A2 = 6, A3 = 7, S0 = 16, SP = 29 };
+	/* the slot function: j WORKOUT_SLOT; nop */
+	psx_mod_write_code_word( WORKOUT_SLOT_FN, 0x08000000u | ((WORKOUT_SLOT >> 2) & 0x03FFFFFFu) );
+	psx_mod_write_code_word( WORKOUT_SLOT_FN + 4, 0 );
+	/* the loader's inline formula (x, y, clut x, clut y to 0x28..0x34(sp)) */
+	const uint32_t code[] = {
+		i_addiu( V0, SP, 0x34 ), i_sw( V0, 0x10, SP ),
+		(uint32_t(S0) << 21) | (uint32_t(A0) << 11) | 0x21,	/* move a0, s0 */
+		i_addiu( A1, SP, 0x28 ), i_addiu( A2, SP, 0x2C ),
+		jal( WORKOUT_SLOT ), i_addiu( A3, SP, 0x30 ),
+		(0x0Fu << 26) | (uint32_t(A1) << 16) | 0x8018,		/* lui a1, 0x8018 */
+		(0x0Du << 26) | (uint32_t(A1) << 21) | (uint32_t(A1) << 16) | 0xC000,	/* ori a1, a1, 0xc000 */
+	};
+	uint32_t a = WORKOUT_LOADER;
+	for( uint32_t w : code ) { psx_mod_write_code_word( a, w ); a += 4; }
+	for( ; a <= 0x8008A9F0; a += 4 ) psx_mod_write_code_word( a, 0 );
 }
 
 void on_vblank()
@@ -306,4 +367,5 @@ void on_vblank()
 PSX_MOD_CONSTRUCTOR( dsf_register_extrasong )
 {
 	(void) psx_mod_register_vblank_plugin( "dsf.extrasong", on_vblank );
+	(void) psx_mod_register_guest_function_plugin( "dsf.extrasong", WORKOUT_SLOT, on_workout_slot );
 }

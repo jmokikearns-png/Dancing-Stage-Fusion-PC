@@ -47,6 +47,7 @@ LANG_ENTRIES = 5			# en, fr, de, it, es copies
 MUSIC_PACKS = range(201, 206)		# music select: items 10-29 banners, 30-49 plates
 RESULT_PACKS = range(206, 211)		# results: items 17-36 plates
 RECORD_PACKS = range(28, 33)		# records: slot 1 = SONGTAB {id, mini, plate}
+WORKOUT_PACK = 181			# workout results: items 1-20 banners 176x55, slot 21 = 0
 UI_DONOR = 14				# song group whose language UI sets are copied (AM-3P)
 EVENT_DONOR = 12			# song group whose event list is copied (ORION.78, 200 BPM)
 
@@ -143,6 +144,14 @@ def banner_tim(img):
 	idx, pal = quantize(img.resize((256, 80), Image.LANCZOS), 16)
 	clut = [max(1, rgb15(*c)) for c in pal]
 	return make_tim(idx, 256, 80, 4, clut, 16)
+
+
+def workout_tim(img):
+	"""176x55 4bpp workout-results banner: as the music select's, 16
+	colours, no 0x0000 and no STP bit."""
+	idx, pal = quantize(img.resize((176, 55), Image.LANCZOS), 16)
+	clut = [max(1, rgb15(*c)) for c in pal]
+	return make_tim(idx, 176, 55, 4, clut, 16)
 
 
 def mini_tim(img):
@@ -355,7 +364,11 @@ def main():
 				sys.exit('the game\'s lettering has no %s: change --title/--artist or give --plate'
 				         % ' '.join(lost))
 			plate = konami_lz.encode(lettered_plate_tim(font.plate(title, artist), stock_plate))
+		workout_banner = konami_lz.encode(workout_tim(Image.open(base + '.png')))
 		music, results, records = {}, {}, {}
+		it = pack_items(entry(WORKOUT_PACK))
+		assert len(it) == 22 and it[21] is None
+		records[WORKOUT_PACK] = build_pack(it[:21] + [workout_banner, None])
 		for e in MUSIC_PACKS:
 			it = pack_items(entry(e))
 			assert len(it) == 51 and it[50] is None
