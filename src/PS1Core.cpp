@@ -255,6 +255,7 @@ bool PS1Core::Start( CString &sError )
 	host.video = CoreVideo;
 	host.audio = CoreAudio;
 	host.frame_done = CoreFrameDone;
+	host.read_pads = CoreReadPads;
 
 	RageSound_Generic_Software::SetDirectStream( MixThunk, this );
 	if( !RageSound_Generic_Software::DirectStreamSupported() )
@@ -523,6 +524,15 @@ void PS1Core::CoreFrameDone( void *pUser, uint16_t aPadsOut[2] )
 	aPadsOut[0] = uint16_t( iPads & 0xFFFF );
 	aPadsOut[1] = uint16_t( iPads >> 16 );
 	p->m_iGuestStartTicks = p->Now();
+}
+
+/* Called from inside the game's own pad-read routine (dsfcore_hooks.cpp). */
+void PS1Core::CoreReadPads( void *pUser, uint16_t aPadsOut[2] )
+{
+	PS1Core *p = (PS1Core *) pUser;
+	const uint32_t iPads = __atomic_load_n( &p->m_iPads, __ATOMIC_ACQUIRE );
+	aPadsOut[0] = uint16_t( iPads & 0xFFFF );
+	aPadsOut[1] = uint16_t( iPads >> 16 );
 }
 
 /* Return when the next guest frame should run. */

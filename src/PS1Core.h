@@ -19,6 +19,9 @@
  *    music but delays the picture by the sound latency; Picture Offset
  *    delays (or, when matching, shifts) the picture by a few milliseconds.
  *  - Input: pad words built from StepMania's InputMapper ("ps1pad" game).
+ *    The game's own pad-read routine is hooked (port/core/dsfcore_hooks.cpp)
+ *    and takes them from here when it runs, instead of from the emulated
+ *    controller port.
  *
  * The core is started once per program run.  Leaving the game screen parks
  * the guest at its next VBlank; coming back resumes it.
@@ -70,6 +73,7 @@ private:
 	static void CoreVideo( void *pUser, const uint32_t *pARGB, int iWidth, int iHeight, int iPitch, int iScale, int iFlags );
 	static void CoreAudio( void *pUser, const int16_t *pStereo, int iFrames );
 	static void CoreFrameDone( void *pUser, uint16_t aPadsOut[2] );
+	static void CoreReadPads( void *pUser, uint16_t aPadsOut[2] );
 
 	struct Frame
 	{
