@@ -20,3 +20,14 @@ default_enabled = true
 [[plugin]]
 feature = "stepmania-pads"
 id = "dsf.stepmania.pads"
+
+[[feature]]
+id = "stepmania-menus"
+name = "PC settings in the game's OPTIONS"
+description = "StepMania's sound, display and controller settings as extra rows in the game's own SOUND / GRAPHIC / CONTROLLER option screens."
+group = "Controls"
+default_enabled = true
+
+[[plugin]]
+feature = "stepmania-menus"
+id = "dsf.stepmania.menus"

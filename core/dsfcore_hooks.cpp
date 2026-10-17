@@ -17,12 +17,11 @@
  *   reply, so the game's own decode runs on StepMania's input instead of
  *   on what LIBPAD received over the emulated controller port.
  */
+#include "dsfcore_host.h"
 #include "mod_plugins.h"
 
 #include <cstdint>
 #include <cstdio>
-
-extern "C" void dsfcore_host_read_pads( uint16_t pads_out[2] );	/* dsfcore_embed.cpp */
 
 namespace {
 
@@ -33,13 +32,14 @@ bool g_bLoggedPads = false;
 
 void on_game_pad_read( struct CPUState *, uint32_t )
 {
+	uint16_t pads[2] = { 0xFFFF, 0xFFFF };	/* active-low: nothing pressed */
+	if( !dsfcore_host_read_pads(pads) )
+		return;
 	if( !g_bLoggedPads )
 	{
 		g_bLoggedPads = true;
 		std::fprintf( stdout, "[dsf.stepmania] pad read hook active: the game reads StepMania's input\n" );
 	}
-	uint16_t pads[2] = { 0xFFFF, 0xFFFF };	/* active-low: nothing pressed */
-	dsfcore_host_read_pads( pads );
 	for( int i = 0; i < 2; ++i )
 	{
 		/* A digital pad's reply: status ok, ID 0x41, button bytes as sent. */

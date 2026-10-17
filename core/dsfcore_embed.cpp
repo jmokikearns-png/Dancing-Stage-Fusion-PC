@@ -5,6 +5,7 @@
  * runtime's executable links with) and forwards the runtime's embed hooks to
  * the host's callbacks. */
 #include "dsfcore_api.h"
+#include "dsfcore_host.h"
 #include "psx_embed.h"
 
 #include <windows.h>
@@ -59,16 +60,34 @@ void psx_embed_frame_done( uint16_t pads_out[2] )
 	g_frame_pads[1] = pads_out[1];
 }
 
-/* For dsfcore_hooks.cpp; core thread. */
-void dsfcore_host_read_pads( uint16_t pads_out[2] )
+/* dsfcore_host.h; core thread. */
+int dsfcore_host_read_pads( uint16_t pads_out[2] )
 {
 	if( g_host.read_pads )
 	{
 		g_host.read_pads( g_host.user, pads_out );
-		return;
+		return 1;
 	}
 	pads_out[0] = g_frame_pads[0];
 	pads_out[1] = g_frame_pads[1];
+	return 1;
+}
+
+int dsfcore_host_get_setting( int id, DsfCoreSetting *out )
+{
+	return g_host.get_setting? g_host.get_setting( g_host.user, id, out ): 0;
+}
+
+void dsfcore_host_set_setting( int id, int choice )
+{
+	if( g_host.set_setting )
+		g_host.set_setting( g_host.user, id, choice );
+}
+
+void dsfcore_host_commit_settings( void )
+{
+	if( g_host.commit_settings )
+		g_host.commit_settings( g_host.user );
 }
 
 __declspec(dllexport) int dsfcore_start( const DsfCoreHost *host, int argc, const char *const *argv, const char *log_path )

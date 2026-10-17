@@ -22,7 +22,8 @@ if(DSF_EMBED)
 elseif(WIN32)
     set(PSX_PRELOADED_MODS "${DSF_PORT_DIR}/mods/preloaded")
 else()
-    set(PSX_PRELOADED_MODS "NONE")
+    # Linux test build: the same hooks, with dsfcore_host_stub.cpp as the host.
+    set(PSX_PRELOADED_MODS "${DSF_PORT_DIR}/mods/embedded")
 endif()
 psxrecomp_add_game_runtime(psx-runtime
     PRELOADED_MODS_DIR "${PSX_PRELOADED_MODS}"
@@ -39,7 +40,8 @@ endforeach()
 
 if(DSF_EMBED)
     target_sources(psx-runtime PRIVATE "${DSF_PORT_DIR}/core/dsfcore_embed.cpp"
-                                       "${DSF_PORT_DIR}/core/dsfcore_hooks.cpp")
+                                       "${DSF_PORT_DIR}/core/dsfcore_hooks.cpp"
+                                       "${DSF_PORT_DIR}/core/dsfcore_menus.cpp")
     target_include_directories(psx-runtime PRIVATE "${DSF_PORT_DIR}/core")
     set_target_properties(psx-runtime PROPERTIES OUTPUT_NAME dsfcore PREFIX "")
 elseif(WIN32)
@@ -50,4 +52,10 @@ elseif(WIN32)
     target_link_libraries(psx-runtime PRIVATE dsfplatform)
     add_custom_command(TARGET psx-runtime POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${DSF_PORT_DIR}/config/config.ini" "$<TARGET_FILE_DIR:psx-runtime>/config.ini" VERBATIM)
+endif()
+if(NOT WIN32)
+    target_sources(psx-runtime PRIVATE "${DSF_PORT_DIR}/core/dsfcore_host_stub.cpp"
+                                       "${DSF_PORT_DIR}/core/dsfcore_hooks.cpp"
+                                       "${DSF_PORT_DIR}/core/dsfcore_menus.cpp")
+    target_include_directories(psx-runtime PRIVATE "${DSF_PORT_DIR}/core")
 endif()
