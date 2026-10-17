@@ -105,7 +105,7 @@ static RageDisplay::VideoModeParams GetCurVideoModeParams()
 	);
 }
 
-static void StoreActualGraphicOptions( bool initial )
+static void StoreActualGraphicOptions( bool initial, bool bQuiet = false )
 {
 	// find out what we actually have
 	PREFSMAN->m_bWindowed.Set( DISPLAY->GetVideoModeParams().windowed );
@@ -124,7 +124,7 @@ static void StoreActualGraphicOptions( bool initial )
 		(int)PREFSMAN->m_iRefreshRate,
 		PREFSMAN->m_bVsync ? "Vsync" : "NoVsync",
 		PREFSMAN->m_bSmoothLines? "AA" : "NoAA" );
-	if( initial )
+	if( initial || bQuiet )
 		LOG->Info( "%s", log.c_str() );
 	else
 		SCREENMAN->SystemMessage( log );
@@ -166,7 +166,7 @@ static void StartDisplay()
 		);
 }
 
-void ApplyGraphicOptions()
+void ApplyGraphicOptions( bool bQuiet )
 { 
 	bool bNeedReload = false;
 
@@ -199,7 +199,7 @@ void ApplyGraphicOptions()
 	if( bNeedReload )
 		TEXTUREMAN->ReloadAll();
 
-	StoreActualGraphicOptions( false );
+	StoreActualGraphicOptions( false, bQuiet );
 
 	/* Give the input handlers a chance to re-open devices as necessary. */
 	INPUTMAN->WindowReset();
@@ -639,12 +639,9 @@ static void CheckVideoDefaultSettings()
 	if( SetDefaultVideoParams )
 	{
 		PREFSMAN->m_sVideoRenderers.Set( pDefaults->szVideoRenderers );
-		PREFSMAN->m_iDisplayWidth.Set( pDefaults->iWidth );
-		PREFSMAN->m_iDisplayHeight.Set( pDefaults->iHeight );
-		PREFSMAN->m_iDisplayColorDepth.Set( pDefaults->iDisplayColor );
-		PREFSMAN->m_iTextureColorDepth.Set( pDefaults->iTextureColor );
-		PREFSMAN->m_iMovieColorDepth.Set( pDefaults->iMovieColor );
-		PREFSMAN->m_iMaxTextureResolution.Set( pDefaults->iTextureSize );
+		/* DSF PC: the table's sizes and colour depths (640x480, 16-bit) are
+		 * for the cards of 2005; every card now handles the port's own
+		 * defaults (PrefsManager), so only the renderer comes from here. */
 		PREFSMAN->m_bSmoothLines.Set( pDefaults->bSmoothLines );
 
 		// Update last seen video card

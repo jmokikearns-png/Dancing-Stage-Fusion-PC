@@ -8,7 +8,9 @@ void __cdecl main();
 #else
 int main( int argc, char* argv[] );
 #endif
-void ApplyGraphicOptions();
+/* bQuiet: log the new mode instead of showing it on screen (DSF PC: changes
+ * made from inside the game's own menus). */
+void ApplyGraphicOptions( bool bQuiet = false );
 void NORETURN HandleException( CString error );
 void ExitGame();
 void ResetGame();

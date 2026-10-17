@@ -22,6 +22,9 @@
  *    The game's own pad-read routine is hooked (port/core/dsfcore_hooks.cpp)
  *    and takes them from here when it runs, instead of from the emulated
  *    controller port.
+ *  - Settings: the game's own OPTIONS screens get rows for StepMania's
+ *    sound and display settings (port/core/dsfcore_menus.cpp), answered by
+ *    PS1Settings with StepMania's option rows.
  *
  * The core is started once per program run.  Leaving the game screen parks
  * the guest at its next VBlank; coming back resumes it.
@@ -31,6 +34,7 @@
 #define PS1_CORE_H
 
 #include "RageThreads.h"
+#include "PS1Settings.h"
 #include <deque>
 
 class RageTexture;
@@ -74,6 +78,9 @@ private:
 	static void CoreAudio( void *pUser, const int16_t *pStereo, int iFrames );
 	static void CoreFrameDone( void *pUser, uint16_t aPadsOut[2] );
 	static void CoreReadPads( void *pUser, uint16_t aPadsOut[2] );
+	static int CoreGetSetting( void *pUser, int id, DsfCoreSetting *pOut );
+	static void CoreSetSetting( void *pUser, int id, int iChoice );
+	static void CoreCommitSettings( void *pUser );
 
 	struct Frame
 	{
@@ -128,6 +135,9 @@ private:
 	int64_t m_iStatsGuestTicks, m_iStatsCaptureTicks, m_iStatsTimedFrames;
 
 	volatile uint32_t m_iPads;	/* port 1 in the low half, port 2 in the high half */
+
+	/* The PC settings rows in the game's OPTIONS screens. */
+	PS1Settings m_Settings;
 };
 
 extern PS1Core *PS1CORE;	/* created on first use by ScreenPS1Game */

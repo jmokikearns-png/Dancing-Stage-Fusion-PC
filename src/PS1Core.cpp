@@ -256,6 +256,9 @@ bool PS1Core::Start( CString &sError )
 	host.audio = CoreAudio;
 	host.frame_done = CoreFrameDone;
 	host.read_pads = CoreReadPads;
+	host.get_setting = CoreGetSetting;
+	host.set_setting = CoreSetSetting;
+	host.commit_settings = CoreCommitSettings;
 
 	RageSound_Generic_Software::SetDirectStream( MixThunk, this );
 	if( !RageSound_Generic_Software::DirectStreamSupported() )
@@ -312,6 +315,8 @@ void PS1Core::Update( float fDeltaTime )
 {
 	if( !m_bStarted || !m_bRunning )
 		return;
+
+	m_Settings.Update( fDeltaTime );
 
 	/* Pacing happens on the core thread (PaceNextFrame); this only reports. */
 	m_fStatsSeconds += fDeltaTime;
@@ -533,6 +538,21 @@ void PS1Core::CoreReadPads( void *pUser, uint16_t aPadsOut[2] )
 	const uint32_t iPads = __atomic_load_n( &p->m_iPads, __ATOMIC_ACQUIRE );
 	aPadsOut[0] = uint16_t( iPads & 0xFFFF );
 	aPadsOut[1] = uint16_t( iPads >> 16 );
+}
+
+int PS1Core::CoreGetSetting( void *pUser, int id, DsfCoreSetting *pOut )
+{
+	return ((PS1Core *) pUser)->m_Settings.Get( id, *pOut );
+}
+
+void PS1Core::CoreSetSetting( void *pUser, int id, int iChoice )
+{
+	((PS1Core *) pUser)->m_Settings.Set( id, iChoice );
+}
+
+void PS1Core::CoreCommitSettings( void *pUser )
+{
+	((PS1Core *) pUser)->m_Settings.Commit();
 }
 
 /* Return when the next guest frame should run. */
