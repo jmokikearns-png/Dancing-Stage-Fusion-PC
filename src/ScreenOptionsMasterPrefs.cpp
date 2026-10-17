@@ -489,7 +489,9 @@ static void MovieColor( int &sel, bool ToSel, const ConfOption *pConfOption )
 
 static void RefreshRate( int &sel, bool ToSel, const ConfOption *pConfOption )
 {
-	const int mapping[] = { (int) REFRESH_DEFAULT,60,70,72,75,80,85,90,100,120,150 };
+	/* 50: the game is PAL, 50 frames a second; at 50 (or 100, 150) Hz every
+	 * frame is shown for the same time, so the arrows scroll without judder. */
+	const int mapping[] = { (int) REFRESH_DEFAULT,50,60,70,72,75,80,85,90,100,120,150 };
 	MoveMap( sel, PREFSMAN->m_iRefreshRate, ToSel, mapping, ARRAYSIZE(mapping) );
 }
 
@@ -646,7 +648,7 @@ static void InitializeConfOptions()
 	ADD( ConfOption( "CelShadeModels",				CelShadeModels,		"OFF","ON" ) );
 	ADD( ConfOption( "SmoothLines",					SmoothLines,		"OFF","ON" ) );
 	g_ConfOptions.back().m_iEffects = OPT_APPLY_GRAPHICS;
-	ADD( ConfOption( "RefreshRate",					RefreshRate,		"DEFAULT","60","70","72","75","80","85","90","100","120","150" ) );
+	ADD( ConfOption( "RefreshRate",					RefreshRate,		"DEFAULT","50","60","70","72","75","80","85","90","100","120","150" ) );
 	g_ConfOptions.back().m_iEffects = OPT_APPLY_GRAPHICS;
 	ADD( ConfOption( "AspectRatio",					AspectRatio,		"3:4","1:1","4:3","16:10","16:9","8:3" ) );
 	g_ConfOptions.back().m_iEffects = OPT_APPLY_ASPECT_RATIO;
