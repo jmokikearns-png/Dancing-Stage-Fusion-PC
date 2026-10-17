@@ -7,12 +7,27 @@
     "render": "remotion render"
   },
   "dependencies": {
+    "@fontsource/bangers": "^5.3.0",
+    "@fontsource/caprasimo": "^5.3.0",
+    "@fontsource/chewy": "^5.3.0",
     "@fontsource/exo-2": "5.2.8",
     "@fontsource/inter": "5.2.8",
+    "@fontsource/kaushan-script": "^5.3.0",
+    "@fontsource/knewave": "^5.3.0",
+    "@fontsource/leckerli-one": "^5.3.0",
+    "@fontsource/lobster": "^5.3.0",
+    "@fontsource/luckiest-guy": "^5.3.0",
+    "@fontsource/racing-sans-one": "^5.3.0",
+    "@fontsource/rubik": "^5.3.0",
+    "@fontsource/shrikhand": "^5.3.0",
+    "@fontsource/sigmar-one": "^5.3.0",
+    "@fontsource/sriracha": "^5.3.0",
+    "@fontsource/titan-one": "^5.3.0",
+    "@fontsource/yellowtail": "^5.3.0",
     "@remotion/cli": "4.0.536",
-    "remotion": "4.0.536",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "remotion": "4.0.536"
   },
   "devDependencies": {
     "@types/react": "18.3.12",

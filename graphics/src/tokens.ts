@@ -12,6 +12,13 @@ export const colors = {
 	maroonDark: '#2A0606',
 	valueGreen: '#3BE04F',
 	labelBlue: '#2F55E8',
+	/* the game's logo (sampled from it; used for the "PC" next to it) */
+	logoFillTop: '#EEF7A0',
+	logoFillMid: '#9BD43C',
+	logoFillBottom: '#1F8C2C',
+	logoInk: '#003C40',
+	logoRim: '#FFF000',
+	logoGreen: '#4CBD00',
 	/* the DSF PC StepMania theme */
 	titleYellow: '#F5C842',
 	ink: '#0B0B0F',
@@ -22,6 +29,7 @@ export const colors = {
 export const fonts = {
 	heading: "'Exo 2'",	/* 800 italic: close to the game's italic header lettering */
 	body: "'Inter'",
+	logo: "'Lobster'",	/* nearest free font to the game logo's drawn lettering (src/FontMatch.tsx) */
 };
 
 export const sizes = {

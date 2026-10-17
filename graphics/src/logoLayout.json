@@ -1,0 +1,8 @@
+{
+	"_": "The title logo built from the player's own copy of the game's logo (ThemeArt.tsx ThemeTitleLogoDSF, theme/build_theme_art.sh). Units: the logo's own pixels (400x175 art) = the theme's 640x480 units.",
+	"logoW": 400, "logoH": 175,
+	"cropX": 62, "cropW": 274, "padR": 100,
+	"pcX": 306, "pcY": 93, "pcSize": 64,
+	"pcBoxW": 126, "pcBoxH": 104,
+	"scale": 3
+}
