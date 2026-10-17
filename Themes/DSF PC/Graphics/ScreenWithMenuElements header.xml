@@ -1,1 +1,5 @@
-<BitmapText Font="Common Normal" Text="" />
+<ActorFrame>
+<children>
+	<Layer1 Class="Sprite" Texture="_shared menu header (res 640x44).png" />
+</children>
+</ActorFrame>

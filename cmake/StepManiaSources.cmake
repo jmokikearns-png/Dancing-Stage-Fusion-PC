@@ -285,6 +285,7 @@ set(SM_SOURCES_CORE
   ScreenTest.cpp
   ScreenTestFonts.cpp
   ScreenTestInput.cpp
+  ScreenPS1Info.cpp
   ScreenTestLights.cpp
   ScreenTestSound.cpp
   ScreenTextEntry.cpp
