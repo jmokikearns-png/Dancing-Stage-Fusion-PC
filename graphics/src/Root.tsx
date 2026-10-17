@@ -6,6 +6,7 @@ import {DsfLogoProps, LOGO_DEFAULTS, logoCanvas, PC_BOX, ThemeBackground, ThemeF
 import {FPS, ShowOff, totalFrames} from './ShowOff';
 import {sizes} from './tokens';
 import {FontMatch} from './FontMatch';
+import {SongPlate, SongPlateProps} from './SongPlate';
 
 export const Root: React.FC = () => (
 	<>
@@ -35,6 +36,9 @@ export const Root: React.FC = () => (
 		<Still id="FontMatchPC" component={FontMatch} width={1860} height={600}
 			defaultProps={{text: 'PC', withLogo: true, ids: ['lobster', 'kaushan-script', 'leckerli-one', 'knewave', 'sriracha']}} />
 		<Still id="ThemeInfoCursor" component={ThemeInfoCursor} width={320} height={56} />
+		{/* an extra song's title plate (port/tools/extrasong) */}
+		<Still id="SongPlate" component={SongPlate as React.FC<Record<string, unknown>>} width={720} height={80}
+			defaultProps={{title: 'Title', artist: 'Artist'} satisfies SongPlateProps} />
 		<Still id="ThemeSplash" component={ThemeSplash} width={468} height={62} />
 	</>
 );

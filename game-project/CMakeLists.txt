@@ -41,7 +41,8 @@ endforeach()
 if(DSF_EMBED)
     target_sources(psx-runtime PRIVATE "${DSF_PORT_DIR}/core/dsfcore_embed.cpp"
                                        "${DSF_PORT_DIR}/core/dsfcore_hooks.cpp"
-                                       "${DSF_PORT_DIR}/core/dsfcore_menus.cpp")
+                                       "${DSF_PORT_DIR}/core/dsfcore_menus.cpp"
+                                       "${DSF_PORT_DIR}/core/dsfcore_extrasong.cpp")
     target_include_directories(psx-runtime PRIVATE "${DSF_PORT_DIR}/core")
     set_target_properties(psx-runtime PROPERTIES OUTPUT_NAME dsfcore PREFIX "")
 elseif(WIN32)
@@ -56,6 +57,7 @@ endif()
 if(NOT WIN32)
     target_sources(psx-runtime PRIVATE "${DSF_PORT_DIR}/core/dsfcore_host_stub.cpp"
                                        "${DSF_PORT_DIR}/core/dsfcore_hooks.cpp"
-                                       "${DSF_PORT_DIR}/core/dsfcore_menus.cpp")
+                                       "${DSF_PORT_DIR}/core/dsfcore_menus.cpp"
+                                       "${DSF_PORT_DIR}/core/dsfcore_extrasong.cpp")
     target_include_directories(psx-runtime PRIVATE "${DSF_PORT_DIR}/core")
 endif()

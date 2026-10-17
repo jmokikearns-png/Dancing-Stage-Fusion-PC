@@ -11,6 +11,7 @@
 #include <windows.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -131,6 +132,13 @@ __declspec(dllexport) int dsfcore_start( const DsfCoreHost *host, int argc, cons
 	g_args.push_back( "dsfcore" );
 	for( int i = 1; i < argc; ++i )
 		g_args.push_back( argv[i] );
+	/* Development: DSFCORE_DEBUG_PORT=4370 starts the runtime's TCP debug
+	 * server (localhost only). */
+	if( const char *port = std::getenv("DSFCORE_DEBUG_PORT") )
+	{
+		g_args.push_back( "--debug-port" );
+		g_args.push_back( port );
+	}
 	g_argv.clear();
 	for( size_t i = 0; i < g_args.size(); ++i )
 		g_argv.push_back( &g_args[i][0] );
