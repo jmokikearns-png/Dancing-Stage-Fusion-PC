@@ -7,7 +7,9 @@
     "render": "remotion render"
   },
   "dependencies": {
+    "@fontsource/anton": "^5.3.0",
     "@fontsource/bangers": "^5.3.0",
+    "@fontsource/black-ops-one": "^5.3.0",
     "@fontsource/caprasimo": "^5.3.0",
     "@fontsource/chewy": "^5.3.0",
     "@fontsource/exo-2": "5.2.8",

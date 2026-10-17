@@ -7,6 +7,7 @@ import {FPS, ShowOff, totalFrames} from './ShowOff';
 import {sizes} from './tokens';
 import {FontMatch} from './FontMatch';
 import {SongPlate, SongPlateProps} from './SongPlate';
+import {SongBackground, SongBackgroundProps} from './SongBackground';
 
 export const Root: React.FC = () => (
 	<>
@@ -39,6 +40,10 @@ export const Root: React.FC = () => (
 		{/* an extra song's title plate (port/tools/extrasong) */}
 		<Still id="SongPlate" component={SongPlate as React.FC<Record<string, unknown>>} width={720} height={80}
 			defaultProps={{title: 'Title', artist: 'Artist'} satisfies SongPlateProps} />
+		{/* an extra song's gameplay background, PS1-version style; the photo is the player's, in the public dir */}
+		<Still id="SongBackground" component={SongBackground as React.FC<Record<string, unknown>>} width={1280} height={960}
+			defaultProps={{photo: 'photo.png', photoCrop: {x: -190, y: 92, w: 470, h: 352}, titleLines: ['TOUGH', 'ENOUGH'],
+				artist: 'Vanilla Ninja'} satisfies SongBackgroundProps} />
 		<Still id="ThemeSplash" component={ThemeSplash} width={468} height={62} />
 	</>
 );

@@ -4,7 +4,8 @@ Fusion's own song list (port/core/dsfcore_extrasong.cpp does the in-RAM
 part).
 
   build_extrasong.py SONG_DIR DISC.cue OUT_PACKAGE_DIR
-                     [--title T] [--artist A] [--plate PLATE.png] [--master-id 0x8030]
+                     [--title T] [--artist A] [--plate PLATE.png] [--background BG.png]
+                     [--master-id 0x8030]
 
 SONG_DIR holds NAME.sm, NAME.ogg (or .mp3/.wav), NAME.png (256x80 banner)
 and NAME-bg.png (320x240 background).  Everything is converted to the
@@ -293,6 +294,7 @@ def main():
 	ap.add_argument('song_dir'); ap.add_argument('cue'); ap.add_argument('out')
 	ap.add_argument('--plate', help='a title plate PNG (text on transparent, scaled to 360x40) instead of '
 	                'the title and artist set in the game\'s own lettering')
+	ap.add_argument('--background', help='gameplay background PNG (any 4:3 size) instead of NAME-bg.png')
 	ap.add_argument('--title', help='plate title (default: the simfile\'s #TITLE)')
 	ap.add_argument('--artist', help='plate artist (default: the simfile\'s #ARTIST)')
 	ap.add_argument('--master-id', type=lambda x: int(x, 0), default=0x8030)
@@ -335,7 +337,7 @@ def main():
 				charts.append(chart_words(c, lead, last))
 		slot0 = build_pack([tempo_map(lead, last, sm['bpm'], sm['offset'])] + charts)
 		events = pack_items(entry(68 + 5 * EVENT_DONOR))[1]
-		bg = konami_lz.encode(background_tim(Image.open(base + '-bg.png')))
+		bg = konami_lz.encode(background_tim(Image.open(a.background or base + '-bg.png')))
 		song_entries = [build_pack([slot0, events, bg, pack_items(entry(68 + 5 * UI_DONOR + k))[3]])
 		                for k in range(LANG_ENTRIES)]
 
