@@ -1,0 +1,21 @@
+{
+  "name": "dsfpc-graphics",
+  "private": true,
+  "description": "Dancing Stage Fusion PC: new graphics and video captions rendered with Remotion from one set of design tokens",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render"
+  },
+  "dependencies": {
+    "@fontsource/exo-2": "5.2.8",
+    "@fontsource/inter": "5.2.8",
+    "@remotion/cli": "4.0.536",
+    "remotion": "4.0.536",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "typescript": "5.6.3"
+  }
+}
