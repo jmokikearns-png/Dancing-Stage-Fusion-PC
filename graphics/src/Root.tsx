@@ -44,6 +44,10 @@ export const Root: React.FC = () => (
 		<Still id="SongBackground" component={SongBackground as React.FC<Record<string, unknown>>} width={1280} height={960}
 			defaultProps={{photo: 'photo.png', photoCrop: {x: -190, y: 92, w: 470, h: 352}, titleLines: ['TOUGH', 'ENOUGH'],
 				artist: 'Vanilla Ninja'} satisfies SongBackgroundProps} />
+		<Still id="SongBackgroundLogos" component={SongBackground as React.FC<Record<string, unknown>>} width={1280} height={960}
+			defaultProps={{photo: 'photo.png', photoCrop: {x: -190, y: 92, w: 470, h: 352}, titleLines: ['TOUGH', 'ENOUGH'],
+				artist: 'Vanilla Ninja', titleLogo: {src: 'logo_stamp.png', w: 520, h: 292},
+				artistLogo: {src: 'logo_script.png', w: 820, h: 190}} satisfies SongBackgroundProps} />
 		<Still id="ThemeSplash" component={ThemeSplash} width={468} height={62} />
 	</>
 );

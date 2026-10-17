@@ -8,7 +8,9 @@ import anton from '@fontsource/anton/files/anton-latin-400-normal.woff2';
  * the-game poster art instead of a video still.  This one is a fight poster
  * for a band in a boxing ring: spotlight rays on deep red, the player's own
  * photo of the band as a four-tone screen print, padded ring ropes, a knockout
- * starburst behind a stencil title, the artist on a slanted ribbon.
+ * starburst behind the title, the artist on a slanted ribbon.  Title and
+ * artist are the band's own logos when given (as on the song's banner),
+ * else stencil and condensed lettering.
  *
  * 1280x960, four times the game's 320x240; build_extrasong.py --background
  * scales it down and puts it on 256 colours.  The photo comes from the
@@ -20,6 +22,10 @@ export type SongBackgroundProps = {
 	photoCrop: {x: number; y: number; w: number; h: number};	/* of the photo, fills the frame */
 	titleLines: string[];
 	artist: string;
+	/* the band's own logos, as white-on-transparent mattes in the public dir
+	 * (port/tools/extrasong/logo_matte.py): used instead of the text */
+	titleLogo?: {src: string; w: number; h: number};
+	artistLogo?: {src: string; w: number; h: number};
 };
 
 const W = 1280, H = 960;
@@ -107,16 +113,49 @@ const starburst = (cx: number, cy: number, r0: number, r1: number, n: number, ro
 	return pts.join(' ');
 };
 
+/* A matte filled with a colour: the logo recoloured, at any size. */
+const Matte: React.FC<{src: string; w: number; h: number; fill: string; style?: React.CSSProperties}> = ({src, w, h, fill, style}) => {
+	const m = `url(${staticFile(src)})`;
+	return <div style={{width: w, height: h, background: fill, maskImage: m, WebkitMaskImage: m,
+		maskSize: '100% 100%', WebkitMaskSize: '100% 100%', ...style}} />;
+};
+
+/* Exact outlines for the logos (chained CSS drop-shadows grow with every
+ * step): rings dilated from the logo's alpha, inner colour over outer. */
+const OutlineFilters: React.FC = () => {
+	const ring = (id: string, rings: Array<[number, string]>) => (
+		<filter id={id} x="-20%" y="-20%" width="140%" height="140%">
+			{rings.map(([r, c], i) => (
+				<React.Fragment key={i}>
+					<feMorphology in="SourceAlpha" operator="dilate" radius={r} result={`d${i}`} />
+					<feFlood floodColor={c} result={`c${i}`} />
+					<feComposite in={`c${i}`} in2={`d${i}`} operator="in" result={`r${i}`} />
+				</React.Fragment>
+			))}
+			<feMerge>
+				{rings.map((_, i) => <feMergeNode key={i} in={`r${i}`} />)}
+				<feMergeNode in="SourceGraphic" />
+			</feMerge>
+		</filter>
+	);
+	return (
+		<svg width={0} height={0} style={{position: 'absolute'}}>
+			{ring('scriptEdge', [[6, INK]])}
+		</svg>
+	);
+};
+
 const sparkle = (x: number, y: number, s: number) =>
 	`M ${x} ${y - s} Q ${x + s * 0.12} ${y - s * 0.12} ${x + s} ${y} Q ${x + s * 0.12} ${y + s * 0.12} ${x} ${y + s} ` +
 	`Q ${x - s * 0.12} ${y + s * 0.12} ${x - s} ${y} Q ${x - s * 0.12} ${y - s * 0.12} ${x} ${y - s} Z`;
 
-export const SongBackground: React.FC<SongBackgroundProps> = ({photo, photoCrop, titleLines, artist}) => {
+export const SongBackground: React.FC<SongBackgroundProps> = ({photo, photoCrop, titleLines, artist, titleLogo, artistLogo}) => {
 	useFonts();
-	const BX = 400, BY = 300;	/* the starburst's centre: behind the title */
+	const BX = 390, BY = 268;	/* the starburst's centre: behind the title */
 	return (
 		<AbsoluteFill style={{background: `radial-gradient(ellipse 80% 75% at 50% 30%, #ff3b4e 0%, ${RED} 38%, ${DEEP} 78%, ${INK} 100%)`}}>
 			<ScreenPrintPhoto photo={photo} photoCrop={photoCrop} />
+			<OutlineFilters />
 			{/* spotlight rays from above */}
 			<AbsoluteFill style={{mixBlendMode: 'screen', background: 'repeating-conic-gradient(from -6deg at 50% -8%, rgba(255,190,140,0.22) 0deg 5deg, rgba(255,214,150,0) 5deg 15deg)',
 				maskImage: 'radial-gradient(ellipse 90% 95% at 50% 0%, #000 30%, transparent 85%)',
@@ -124,7 +163,7 @@ export const SongBackground: React.FC<SongBackgroundProps> = ({photo, photoCrop,
 			<svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{position: 'absolute', inset: 0}}>
 				<defs>
 					<radialGradient id="burst" cx="0.5" cy="0.45" r="0.6">
-						<stop offset="0" stopColor="#fff6c0" />
+						<stop offset="0" stopColor="#fff07a" />
 						<stop offset="0.35" stopColor={GOLD} />
 						<stop offset="1" stopColor={ORANGE} />
 					</radialGradient>
@@ -137,9 +176,9 @@ export const SongBackground: React.FC<SongBackgroundProps> = ({photo, photoCrop,
 						x2={BX + Math.cos(a) * r1} y2={BY + Math.sin(a) * r1 * 0.8}
 						stroke="#fff3c8" strokeWidth={i % 2 ? 5 : 9} strokeLinecap="round" opacity={0.5} />;
 				})}
-				<polygon points={starburst(BX + 10, BY + 14, 200, 320, 14, -0.2)} fill={INK} />
-				<polygon points={starburst(BX, BY, 190, 300, 14, -0.2)} fill="url(#burst)" stroke={INK} strokeWidth={10} strokeLinejoin="round" />
-				<polygon points={starburst(BX, BY, 150, 236, 14, -0.2)} fill="none" stroke="#fff" strokeWidth={5} opacity={0.65} strokeLinejoin="round" />
+				<polygon points={starburst(BX + 10, BY + 14, 230, 372, 14, -0.2)} fill={INK} />
+				<polygon points={starburst(BX, BY, 220, 352, 14, -0.2)} fill="url(#burst)" stroke={INK} strokeWidth={10} strokeLinejoin="round" />
+				<polygon points={starburst(BX, BY, 176, 280, 14, -0.2)} fill="none" stroke="#fff" strokeWidth={5} opacity={0.65} strokeLinejoin="round" />
 				{/* the ring: the near rope lies over the video still's own rope */}
 				<Rope id="ropeBack" y0={452} y1={486} sag={22} t={40} fill="#f2f2f2" light="#ffffff" />
 				<Rope id="ropeMid" y0={600} y1={690} sag={34} t={108} fill={RED} light="#ff8a8a" />
@@ -148,7 +187,17 @@ export const SongBackground: React.FC<SongBackgroundProps> = ({photo, photoCrop,
 					<path key={i} d={sparkle(x, y, s)} fill="#fff" opacity={0.95} />
 				))}
 			</svg>
-			{/* title: stencil letters, gold to white, inked outline, red block shadow */}
+			{titleLogo ? (
+				/* the band's stamp, red on a cream paper label pinned on the starburst */
+				<div style={{position: 'absolute', left: BX - titleLogo.w / 2, top: BY - titleLogo.h / 2 - 10, width: titleLogo.w, height: titleLogo.h,
+					transform: 'rotate(-7deg)'}}>
+					<div style={{position: 'absolute', inset: -22, borderRadius: 12, border: `9px solid ${INK}`,
+						background: 'linear-gradient(165deg, #fff8e6 0%, #f6e3b8 60%, #e9c98e 100%)', boxShadow: '14px 16px 0 rgba(10,0,4,0.55)'}} />
+					<Matte src={titleLogo.src} w={titleLogo.w} h={titleLogo.h} style={{position: 'absolute', left: 0, top: 0}}
+						fill="linear-gradient(170deg, #ff3a2e 0%, #d80c1a 50%, #a8000c 100%)" />
+				</div>
+			) : (
+				/* title: stencil letters, gold to white, inked outline, red block shadow */
 			<div style={{position: 'absolute', left: BX - 420, top: BY - 190, width: 840, textAlign: 'center',
 				transform: 'rotate(-7deg) skewX(-9deg)', fontFamily: 'BgTitle', lineHeight: 0.92}}>
 				{titleLines.map((l, i) => (
@@ -164,13 +213,24 @@ export const SongBackground: React.FC<SongBackgroundProps> = ({photo, photoCrop,
 					</div>
 				))}
 			</div>
+			)}
 			{/* the artist on a slanted ribbon */}
-			<div style={{position: 'absolute', left: 60, top: 520, width: 660, height: 96, transform: 'rotate(-7deg) skewX(-14deg)',
+			<div style={{position: 'absolute', left: 40, top: 500, width: artistLogo ? 800 : 660, height: artistLogo ? 110 : 96, transform: 'rotate(-7deg) skewX(-14deg)',
 				background: `linear-gradient(180deg, #2a0710 0%, ${INK} 100%)`, borderTop: `8px solid ${GOLD}`, borderBottom: `8px solid ${RED}`,
 				boxShadow: '10px 12px 0 rgba(0,0,0,0.5)'}}>
-				<div style={{fontFamily: 'BgArtist', fontSize: 74, color: '#fff', letterSpacing: 6, textAlign: 'center', lineHeight: '80px',
-					transform: 'skewX(4deg)', textShadow: `4px 4px 0 ${RED}`}}>{artist.toUpperCase()}</div>
+				{artistLogo ? null : (
+					<div style={{fontFamily: 'BgArtist', fontSize: 74, color: '#fff', letterSpacing: 6, textAlign: 'center', lineHeight: '80px',
+						transform: 'skewX(4deg)', textShadow: `4px 4px 0 ${RED}`}}>{artist.toUpperCase()}</div>
+				)}
 			</div>
+			{artistLogo && (
+				/* the band's script, white and silver as on the banner, over the ribbon */
+				<div style={{position: 'absolute', left: 430 - artistLogo.w / 2, top: 540 - artistLogo.h / 2, transform: 'rotate(-6deg)',
+					filter: `url(#scriptEdge) drop-shadow(6px 7px 0 ${RED})`}}>
+					<Matte src={artistLogo.src} w={artistLogo.w} h={artistLogo.h}
+						fill="linear-gradient(180deg, #ffffff 0%, #f2f4ff 45%, #b9c2dc 70%, #ffffff 100%)" />
+				</div>
+			)}
 			<AbsoluteFill style={{background: 'radial-gradient(ellipse 85% 85% at 50% 45%, transparent 60%, rgba(10,0,4,0.65) 100%)'}} />
 		</AbsoluteFill>
 	);
