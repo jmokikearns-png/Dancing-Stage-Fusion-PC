@@ -9,7 +9,17 @@ set(DSF_PORT_DIR "/home/user/work/port" CACHE PATH "Dancing Stage Fusion PC port
 # StepMania 2005 input layer (branch wip/sm-platform of the engine repo).
 set(DSF_PLATFORM_DIR "/home/user/work/wt/sm-platform/platform" CACHE PATH "dsfplatform sources")
 
-if(WIN32)
+# DSF_EMBED: build the game as dsfcore.dll for the port's StepMania, which
+# provides window, sound, input and pacing (port/core/dsfcore_api.h).
+option(DSF_EMBED "Build dsfcore.dll for the StepMania-hosted port" OFF)
+if(DSF_EMBED)
+    set(PSX_EMBED ON CACHE BOOL "runtime as a host-driven shared library" FORCE)
+endif()
+
+if(DSF_EMBED)
+    # StepMania integration hooks (port/core/dsfcore_hooks.cpp).
+    set(PSX_PRELOADED_MODS "${DSF_PORT_DIR}/mods/embedded")
+elseif(WIN32)
     set(PSX_PRELOADED_MODS "${DSF_PORT_DIR}/mods/preloaded")
 else()
     set(PSX_PRELOADED_MODS "NONE")
@@ -27,7 +37,12 @@ foreach(_c game.toml)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/${_c}" "$<TARGET_FILE_DIR:psx-runtime>/${_c}" VERBATIM)
 endforeach()
 
-if(WIN32)
+if(DSF_EMBED)
+    target_sources(psx-runtime PRIVATE "${DSF_PORT_DIR}/core/dsfcore_embed.cpp"
+                                       "${DSF_PORT_DIR}/core/dsfcore_hooks.cpp")
+    target_include_directories(psx-runtime PRIVATE "${DSF_PORT_DIR}/core")
+    set_target_properties(psx-runtime PROPERTIES OUTPUT_NAME dsfcore PREFIX "")
+elseif(WIN32)
     # Controls through StepMania's input code (keyboard, dance pads, joysticks via DirectInput).
     set(DSF_INPUT_ONLY ON CACHE BOOL "dsfplatform: input stack only" FORCE)
     add_subdirectory("${DSF_PLATFORM_DIR}" dsfplatform)

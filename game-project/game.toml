@@ -33,6 +33,10 @@ known_crc32 = [
 seeds = "seeds/ghidra_funcs.txt"
 out_dir = "generated"
 strict = true
+# Dancing Stage Fusion PC: functions the port's StepMania integration hooks
+# (port/core/dsfcore_hooks.cpp).  0x800243FC = the game's per-frame pad read
+# (decodes the two LIBPAD receive buffers at 0x800B4DB8 / 0x800B4DEC).
+mod_function_entry_funcs = ["0x800243FC"]
 
 [runtime]
 window_title = "Dancing Stage Fusion Recompiled"

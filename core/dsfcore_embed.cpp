@@ -23,6 +23,7 @@ std::vector<std::string> g_args;
 std::vector<char *> g_argv;
 volatile LONG g_state = DSFCORE_STATE_NOT_STARTED;
 volatile LONG g_exit_code = 0;
+uint16_t g_frame_pads[2] = { 0xFFFF, 0xFFFF };	/* from the last frame_done */
 
 DWORD WINAPI core_thread( void * )
 {
@@ -54,6 +55,20 @@ void psx_embed_frame_done( uint16_t pads_out[2] )
 {
 	if( g_host.frame_done )
 		g_host.frame_done( g_host.user, pads_out );
+	g_frame_pads[0] = pads_out[0];
+	g_frame_pads[1] = pads_out[1];
+}
+
+/* For dsfcore_hooks.cpp; core thread. */
+void dsfcore_host_read_pads( uint16_t pads_out[2] )
+{
+	if( g_host.read_pads )
+	{
+		g_host.read_pads( g_host.user, pads_out );
+		return;
+	}
+	pads_out[0] = g_frame_pads[0];
+	pads_out[1] = g_frame_pads[1];
 }
 
 __declspec(dllexport) int dsfcore_start( const DsfCoreHost *host, int argc, const char *const *argv, const char *log_path )

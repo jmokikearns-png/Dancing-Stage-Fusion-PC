@@ -1,0 +1,22 @@
+format_version = 5
+id = "dsf.stepmania"
+version = "1.0.0"
+name = "StepMania integration"
+author = "Dancing Stage Fusion PC"
+description = "Hooks that make Dancing Stage Fusion's own code use the host StepMania 2005: the game's per-frame pad read takes both players' buttons from StepMania's input mapping instead of the emulated controller port."
+resolver = "declarative"
+save_compatibility = "shared"
+
+[[target]]
+game_id = "SLES-04163"
+
+[[feature]]
+id = "stepmania-pads"
+name = "Buttons from StepMania"
+description = "The game's pad-read routine (0x800243FC) gets the buttons straight from StepMania's key/joy mappings."
+group = "Controls"
+default_enabled = true
+
+[[plugin]]
+feature = "stepmania-pads"
+id = "dsf.stepmania.pads"

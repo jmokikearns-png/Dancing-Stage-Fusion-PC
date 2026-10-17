@@ -10,6 +10,9 @@
  *     and returns the pad words to use for it.
  *   - audio() receives the SPU's output (44.1 kHz, signed 16-bit, stereo) as
  *     it is produced: 882 frames per PAL video frame.
+ *   - read_pads() is called from inside the game's own pad-read routine (a
+ *     hook, dsfcore_hooks.cpp): the game takes its buttons straight from the
+ *     host's input mapping at the moment it reads them.
  *
  * All callbacks run on the core's thread.  The host loads the DLL at run time
  * (LoadLibrary + GetProcAddress("dsfcore_start")), so the StepMania program
@@ -24,7 +27,7 @@
 extern "C" {
 #endif
 
-#define DSFCORE_API_VERSION 1
+#define DSFCORE_API_VERSION 2
 
 enum {
 	DSFCORE_FRAME_BLANK = 1,	/* display disabled: show black */
@@ -47,6 +50,8 @@ typedef struct DsfCoreHost
 	void (*audio)( void *user, const int16_t *stereo, int frames );
 	/* Block until the next frame may run; fill pads[0..1] (active-low PS1 pad words). */
 	void (*frame_done)( void *user, uint16_t pads_out[2] );
+	/* The buttons right now, for the game's own pad read (active-low). */
+	void (*read_pads)( void *user, uint16_t pads_out[2] );
 } DsfCoreHost;
 
 /* argv[0] is ignored; the rest are runtime options (--game, --disc, --bios,
