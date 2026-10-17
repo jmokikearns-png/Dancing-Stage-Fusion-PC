@@ -1,6 +1,8 @@
 /* dsfcore_host_stub.cpp -- dsfcore_host.h without a host, for the stand-alone
- * Linux test build (the debug server drives it): no buttons from a host, and
- * PC settings kept in memory with StepMania's choice lists. */
+ * Linux test build (the debug server drives it): no buttons from a host, PC
+ * settings kept in memory with StepMania's choice lists, and key mappings
+ * with the port's default keys.  A key capture can't see real keys here: it
+ * completes by itself after about a second with a made-up pad button. */
 #include "dsfcore_host.h"
 
 #include <cstdio>
@@ -83,4 +85,68 @@ extern "C" void dsfcore_host_set_setting( int id, int choice )
 
 extern "C" void dsfcore_host_commit_settings( void )
 {
+}
+
+namespace {
+
+DsfCoreMapping g_mappings[2][DSFCORE_BUTTON_COUNT];
+int g_capture_state = DSFCORE_CAPTURE_IDLE, g_capture_player, g_capture_button, g_capture_polls;
+
+void init_mappings()
+{
+	static bool done = false;
+	if( done )
+		return;
+	done = true;
+	const char *keys[2][DSFCORE_BUTTON_COUNT] = {
+		{ "KEY UP", "KEY DOWN", "KEY LEFT", "KEY RIGHT", "KEY X", "KEY C", "KEY Z", "KEY S",
+		  "KEY Q", "KEY 1", "KEY E", "KEY 3", "KEY ENTER", "KEY BACKSPACE", "KEY ESCAPE" },
+		{ "KEY KP 8", "KEY KP 2", "KEY KP 4", "KEY KP 6", "KEY KP 0", "KEY KP .", "KEY KP 1", "KEY KP 3",
+		  "KEY KP 7", "KEY KP /", "KEY KP 9", "KEY KP *", "KEY KP ENTER", "KEY KP +", "" } };
+	for( int p = 0; p < 2; ++p )
+		for( int b = 0; b < DSFCORE_BUTTON_COUNT; ++b )
+			std::snprintf( g_mappings[p][b].slot[2], sizeof(g_mappings[p][b].slot[2]), "%s", keys[p][b] );
+}
+
+} // namespace
+
+extern "C" int dsfcore_host_get_mapping( int player, int button, DsfCoreMapping *out )
+{
+	init_mappings();
+	if( player < 0 || player > 1 || button < 0 || button >= DSFCORE_BUTTON_COUNT )
+		return 0;
+	*out = g_mappings[player][button];
+	return 1;
+}
+
+extern "C" void dsfcore_host_begin_mapping( int player, int button )
+{
+	init_mappings();
+	g_capture_state = DSFCORE_CAPTURE_WAITING;
+	g_capture_player = player;
+	g_capture_button = button;
+	g_capture_polls = 0;
+}
+
+extern "C" int dsfcore_host_mapping_state( void )
+{
+	if( g_capture_state == DSFCORE_CAPTURE_WAITING && ++g_capture_polls >= 50 )
+	{
+		DsfCoreMapping &m = g_mappings[g_capture_player][g_capture_button];
+		const int slot = m.slot[0][0] == 0? 0: 1;
+		char t[32];
+		std::snprintf( t, sizeof(t), "JOY%d B%d", g_capture_player + 1, g_capture_button + 1 );
+		std::snprintf( m.slot[slot], sizeof(m.slot[slot]), "%s", t );
+		g_capture_state = DSFCORE_CAPTURE_DONE;
+	}
+	return g_capture_state;
+}
+
+extern "C" void dsfcore_host_clear_mapping( int player, int button )
+{
+	init_mappings();
+	if( player < 0 || player > 1 || button < 0 || button >= DSFCORE_BUTTON_COUNT )
+		return;
+	g_mappings[player][button].slot[0][0] = 0;
+	g_mappings[player][button].slot[1][0] = 0;
 }

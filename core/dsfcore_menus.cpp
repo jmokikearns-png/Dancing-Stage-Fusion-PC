@@ -20,6 +20,10 @@
  * Help lines for the new rows are string ids >= VIRTUAL_STRING, which the
  * hook on the game's string lookup (0x800E8EF4) answers, so the game's own
  * help panel types them out.  All text is in the game's five languages.
+ *
+ * SOUND OPTIONS gets the PC sound rows, GRAPHIC OPTIONS a DISPLAY SETTINGS
+ * page, CONTROLLER SETTINGS a KEY CONFIG page per player (the host's key /
+ * pad mapping; a page longer than the screen scrolls).
  */
 #include "dsfcore_host.h"
 #include "mod_plugins.h"
@@ -102,7 +106,7 @@ const uint32_t STR_ON = 205, STR_OFF = 206, STR_EXIT = 204, STR_BACK_HELP = 203;
 
 /* Pad bits as the game stores them. */
 const uint32_t PAD_UP = 0x1000, PAD_DOWN = 0x4000, PAD_LEFT = 0x8000, PAD_RIGHT = 0x2000;
-const uint32_t PAD_CONFIRM = 0x60, PAD_BACK = 0x110;
+const uint32_t PAD_CONFIRM = 0x60, PAD_BACK = 0x110, PAD_SQUARE = 0x80;
 
 /* Cursor byte values no original row uses. */
 const uint8_t CURSOR_ROW = 0x40;	/* + new row */
@@ -165,6 +169,10 @@ const char *tr( const Text &x ) { const char *s = x.t[language()]; return s? s: 
 #define u2 "\xFC"	/* ü */
 #define a3 "\xE4"	/* ä */
 #define o3 "\xF6"	/* ö */
+#define LU2 "\xDC"	/* Ü */
+#define LU3 "\xD9"	/* Ù */
+#define LI "\xCD"	/* Í */
+#define LA2 "\xC1"	/* Á */
 
 const Text T_SILENT = {{ "SILENT", "MUET", "STUMM", "MUTO", "SILENCIO" }};
 const Text T_AUTO = {{ "AUTO", "AUTO", "AUTO", "AUTO", "AUTO" }};
@@ -173,15 +181,16 @@ const Text T_FULLSCREEN = {{ "FULL SCREEN", "PLEIN " LE "CRAN", "VOLLBILD", "SCH
 const Text T_WINDOW = {{ "WINDOW", "FEN" "\xCA" "TRE", "FENSTER", "FINESTRA", "VENTANA" }};
 const Text T_NATIVE = {{ "NATIVE", "NATIVE", "NATIV", "NATIVA", "NATIVA" }};
 const Text T_SOFTWARE = {{ "SOFTWARE", "LOGICIEL", "SOFTWARE", "SOFTWARE", "SOFTWARE" }};
+const Text T_PRESS = {{ "PRESS A KEY / BUTTON", "APPUIE SUR UNE TOUCHE", "TASTE DR" LU2 "CKEN", "PREMI UN TASTO", "PULSA UNA TECLA" }};
 
 /* ---- rows ------------------------------------------------------------- */
 
-enum RowKind { ROW_SETTING, ROW_PAGE };
+enum RowKind { ROW_SETTING, ROW_PAGE, ROW_KEY };
 
 struct Row
 {
 	RowKind kind;
-	int id;		/* DSFCORE_SETTING_*, or a page index */
+	int id;		/* DSFCORE_SETTING_*, a page index, or DSFCORE_BUTTON_* */
 	Text label, help;
 	bool clamp;	/* stop at the ends instead of wrapping (scales) */
 };
@@ -217,7 +226,7 @@ const Row SOUND_ROWS[] = {
 	     "Retrasa la imagen esta cantidad. Prueba de +10\na +40 ms si las flechas van adelantadas." }}, true },
 };
 
-enum { PAGE_DISPLAY, NUM_PAGES };
+enum { PAGE_DISPLAY, PAGE_KEYS_1P, PAGE_KEYS_2P, NUM_PAGES };
 
 const Row GRAPHIC_ROWS[] = {
 	{ ROW_PAGE, PAGE_DISPLAY,
@@ -274,13 +283,66 @@ const Row DISPLAY_ROWS[] = {
 	     "OPENGL usa la tarjeta gr" "\xE1" "fica (recomendado).\n(Al pr" o1 "ximo inicio.)" }}, false },
 };
 
+const Row CONTROLLER_ROWS[] = {
+	{ ROW_PAGE, PAGE_KEYS_1P,
+	  {{ "KEY CONFIG 1P", "CONFIG. TOUCHES 1P", "TASTENBELEGUNG 1P", "CONFIG. TASTI 1P", "CONFIG. TECLAS 1P" }},
+	  {{ "Keys, dance mat and joystick buttons for 1P\n(StepMania's input mapping).",
+	     "Touches, tapis de danse et manette pour 1P\n(configuration des entr" e1 "es de StepMania).",
+	     "Tasten, Tanzmatte und Joystick f" u2 "r 1P\n(Eingabebelegung von StepMania).",
+	     "Tasti, tappetino e joystick per 1P\n(mappatura dei comandi di StepMania).",
+	     "Teclas, alfombra de baile y mando para 1P\n(asignaci" o1 "n de controles de StepMania)." }}, false },
+	{ ROW_PAGE, PAGE_KEYS_2P,
+	  {{ "KEY CONFIG 2P", "CONFIG. TOUCHES 2P", "TASTENBELEGUNG 2P", "CONFIG. TASTI 2P", "CONFIG. TECLAS 2P" }},
+	  {{ "Keys, dance mat and joystick buttons for 2P\n(StepMania's input mapping).",
+	     "Touches, tapis de danse et manette pour 2P\n(configuration des entr" e1 "es de StepMania).",
+	     "Tasten, Tanzmatte und Joystick f" u2 "r 2P\n(Eingabebelegung von StepMania).",
+	     "Tasti, tappetino e joystick per 2P\n(mappatura dei comandi di StepMania).",
+	     "Teclas, alfombra de baile y mando para 2P\n(asignaci" o1 "n de controles de StepMania)." }}, false },
+};
+
+#define KEY_HELP {{ \
+	"Cross: set a key or pad button.  Square: clear\nyour own (the default stays).", \
+	"Croix : choisir une touche ou un bouton. Carr" e1 " :\neffacer les tiens (celle par d" e1 "faut reste).", \
+	"Kreuz: Taste oder Knopf w" a3 "hlen.  Quadrat: eigene\nl" o3 "schen (die Standardtaste bleibt).", \
+	"Croce: scegli un tasto o un pulsante.  Quadrato:\ncancella i tuoi (resta quello predefinito).", \
+	"Equis: elegir una tecla o bot" o1 "n.  Cuadrado: borrar\nlos tuyos (el predeterminado se queda)." }}
+#define KEY_ROW( b, en, fr, de, it, es )	{ ROW_KEY, b, {{ en, fr, de, it, es }}, KEY_HELP, false }
+const Row KEY_ROWS[] = {
+	KEY_ROW( DSFCORE_BUTTON_UP, "UP", "HAUT", "OBEN", "SU", "ARRIBA" ),
+	KEY_ROW( DSFCORE_BUTTON_DOWN, "DOWN", "BAS", "UNTEN", "GI" LU3, "ABAJO" ),
+	KEY_ROW( DSFCORE_BUTTON_LEFT, "LEFT", "GAUCHE", "LINKS", "SINISTRA", "IZQUIERDA" ),
+	KEY_ROW( DSFCORE_BUTTON_RIGHT, "RIGHT", "DROITE", "RECHTS", "DESTRA", "DERECHA" ),
+	KEY_ROW( DSFCORE_BUTTON_CROSS, "CROSS", "CROIX", "KREUZ", "CROCE", "EQUIS" ),
+	KEY_ROW( DSFCORE_BUTTON_CIRCLE, "CIRCLE", "ROND", "KREIS", "CERCHIO", "C" LI "RCULO" ),
+	KEY_ROW( DSFCORE_BUTTON_SQUARE, "SQUARE", "CARR" LE, "QUADRAT", "QUADRATO", "CUADRADO" ),
+	KEY_ROW( DSFCORE_BUTTON_TRIANGLE, "TRIANGLE", "TRIANGLE", "DREIECK", "TRIANGOLO", "TRI" LA2 "NGULO" ),
+	KEY_ROW( DSFCORE_BUTTON_L1, "L1", "L1", "L1", "L1", "L1" ),
+	KEY_ROW( DSFCORE_BUTTON_L2, "L2", "L2", "L2", "L2", "L2" ),
+	KEY_ROW( DSFCORE_BUTTON_R1, "R1", "R1", "R1", "R1", "R1" ),
+	KEY_ROW( DSFCORE_BUTTON_R2, "R2", "R2", "R2", "R2", "R2" ),
+	KEY_ROW( DSFCORE_BUTTON_START, "START", "START", "START", "START", "START" ),
+	KEY_ROW( DSFCORE_BUTTON_SELECT, "SELECT", "SELECT", "SELECT", "SELECT", "SELECT" ),
+	KEY_ROW( DSFCORE_BUTTON_PC_MENU, "PC MENU", "MENU PC", "PC-MEN" LU2, "MENU PC", "MEN" LU " PC" ),
+};
+
+/* The help line while a key capture waits. */
+const Row CAPTURE_HELP = { ROW_KEY, -1, {{ "", "", "", "", "" }},
+	{{ "Press the key, dance mat or joystick button for\nthis button now.  Esc: cancel.",
+	   "Appuie maintenant sur la touche, le tapis ou le\nbouton de manette voulu.  " LE "chap : annuler.",
+	   "Jetzt die Taste, Tanzmatte oder den Joystick-Knopf\ndr" u2 "cken.  Esc: abbrechen.",
+	   "Premi ora il tasto, il tappetino o il pulsante\ndel joystick.  Esc: annulla.",
+	   "Pulsa ahora la tecla, la alfombra o el bot" o1 "n\ndel mando.  Esc: cancelar." }}, false };
+
 struct Page
 {
 	const Row *rows;
 	int nrows;	/* without EXIT */
+	int player;	/* key pages: 0/1 */
 };
 const Page PAGES[NUM_PAGES] = {
-	{ DISPLAY_ROWS, int(sizeof(DISPLAY_ROWS)/sizeof(DISPLAY_ROWS[0])) },
+	{ DISPLAY_ROWS, int(sizeof(DISPLAY_ROWS)/sizeof(DISPLAY_ROWS[0])), -1 },
+	{ KEY_ROWS, int(sizeof(KEY_ROWS)/sizeof(KEY_ROWS[0])), 0 },
+	{ KEY_ROWS, int(sizeof(KEY_ROWS)/sizeof(KEY_ROWS[0])), 1 },
 };
 
 /* An original list screen that gets new rows before its EXIT. */
@@ -307,6 +369,10 @@ const ListScreen SCREENS[] = {
 	{ 0x800E9A48u, 0x27BDFFE0u, 0x800E9E90u, 0x3C03800Fu, 1, 4, 0x800F122Cu, true,
 	  {{ 0x800EA2F0u, 0x02A3A821u }, { 0x800EA2F4u, 0x26D60022u }},	/* addu s5, s5, v1; addiu s6, s6, 0x22 */
 	  GRAPHIC_ROWS, int(sizeof(GRAPHIC_ROWS)/sizeof(GRAPHIC_ROWS[0])) },
+	/* CONTROLLER SETTINGS: DOUBLE MODE SETTINGS, DANCE PLAY SETTINGS 1/2, (gap), EXIT */
+	{ 0x800EA4E4u, 0x27BDFFE0u, 0x800EA804u, 0x27BDFEA0u, 1, 3, 0x800F1324u, true,
+	  {{ 0x800EAB64u, 0x26940022u }, { 0, 0 }},	/* addiu s4, s4, 0x22 */
+	  CONTROLLER_ROWS, int(sizeof(CONTROLLER_ROWS)/sizeof(CONTROLLER_ROWS[0])) },
 };
 const int NUM_SCREENS = int(sizeof(SCREENS)/sizeof(SCREENS[0]));
 
@@ -410,7 +476,7 @@ void set_help( uint32_t id )
 
 /* ---- input, as the original screens read it ---------------------------- */
 
-enum Action { ACT_NONE, ACT_IGNORED, ACT_BACK, ACT_CONFIRM, ACT_UP, ACT_DOWN, ACT_LEFT, ACT_RIGHT };
+enum Action { ACT_NONE, ACT_IGNORED, ACT_BACK, ACT_CONFIRM, ACT_UP, ACT_DOWN, ACT_LEFT, ACT_RIGHT, ACT_CLEAR };
 
 struct Input
 {
@@ -421,7 +487,8 @@ struct Input
 
 /* What the original input loop would do this frame (no side effects): the
  * first player with any of these inputs decides; triggers need 8 frames
- * since the last accepted input; held Up/Down repeats. */
+ * since the last accepted input; held Up/Down repeats.  Square (ACT_CLEAR)
+ * is ours: the original screens ignore it, so it comes last. */
 Input read_input()
 {
 	const uint32_t st = opt_state();
@@ -452,6 +519,7 @@ Input read_input()
 		}
 		if( trig & PAD_LEFT ) { if( ready ) in.act = ACT_LEFT; return in; }
 		if( trig & PAD_RIGHT ) { if( ready ) in.act = ACT_RIGHT; return in; }
+		if( trig & PAD_SQUARE ) { if( ready ) in.act = ACT_CLEAR; return in; }
 	}
 	Input none = { ACT_NONE, 0, false };
 	return none;
@@ -527,6 +595,54 @@ struct Draw
 		}
 	}
 
+	/* A KEY CONFIG row: what is mapped to the button (as much as fits), or
+	 * the blinking prompt while a capture waits for it. */
+	void key_row( int r, const Row &rw, int player, bool selected, bool capturing )
+	{
+		const int y = ROW_Y0 + ROW_STEP*r;
+		depth();
+		const uint32_t ls = guest_string( STR_LABEL, tr(rw.label) );
+		text( -int(width(ls)) - 0x14, y, ls, 0xC000u | (selected? 0u: 1u) );
+		char v[96] = "";
+		bool own = false;
+		if( capturing )
+		{
+			if( (rd32(opt_state() + 0x28) >> 4) & 1 )
+				std::snprintf( v, sizeof(v), "%s", tr(T_PRESS) );
+		}
+		else
+		{
+			DsfCoreMapping m;
+			if( dsfcore_host_get_mapping(player, rw.id, &m) )
+			{
+				own = m.slot[0][0] || m.slot[1][0];
+				for( int k = 0; k < DSFCORE_MAPPING_SLOTS; ++k )
+				{
+					if( !m.slot[k][0] )
+						continue;
+					char t[96];
+					std::snprintf( t, sizeof(t), "%s%s%s", v, v[0]? " / ": "", m.slot[k] );
+					if( v[0] && width(guest_string(STR_VALUE, t)) > 270 )
+					{
+						std::snprintf( t, sizeof(t), "%s +", v );
+						std::snprintf( v, sizeof(v), "%s", t );
+						break;
+					}
+					std::snprintf( v, sizeof(v), "%s", t );
+				}
+				if( !v[0] )
+					std::snprintf( v, sizeof(v), "-" );
+			}
+		}
+		if( v[0] )
+			text( 0x14, y, guest_string(STR_VALUE, v), 0xC000u | (capturing || own? 3u: 2u) );
+		if( selected )
+		{
+			bar( y );
+			star( 0, y, 1 );
+		}
+	}
+
 	/* EXIT, centred, with a star on each side when selected. */
 	void exit_row( int r, bool selected )
 	{
@@ -564,6 +680,22 @@ struct Draw
 
 bool g_in_original = false;
 
+/* A key capture in progress (the host's state says when it ends). */
+struct Capture { bool active; int page, sel; };
+Capture g_capture = { false, 0, 0 };
+
+/* Pages longer than the screen scroll: the rows above EXIT show a window
+ * that keeps the cursor in the middle, so it follows from the cursor alone. */
+const int PAGE_VISIBLE = MAX_ROWS - 1;
+int page_top( const Page &p, int sel )
+{
+	if( p.nrows <= PAGE_VISIBLE )
+		return 0;
+	int top = (sel < p.nrows? sel: p.nrows) - PAGE_VISIBLE/2;
+	if( top > p.nrows - PAGE_VISIBLE ) top = p.nrows - PAGE_VISIBLE;
+	return top < 0? 0: top;
+}
+
 const ListScreen *screen_for( uint32_t fn, bool draw )
 {
 	for( int i = 0; i < NUM_SCREENS; ++i )
@@ -582,7 +714,7 @@ uint32_t cursor_addr( const ListScreen &s ) { return opt_state() + 0x10 + uint32
 
 /* EXIT's row with the new rows in place. */
 int exit_slot( const ListScreen &s ) { return s.exit_row + s.nrows + (s.keep_gap? 1: 0); }
-int page_exit_slot( const Page &p ) { return p.nrows < MAX_ROWS - 1? p.nrows + 1: p.nrows; }
+int page_exit_slot( const Page &p ) { return p.nrows < PAGE_VISIBLE? p.nrows + 1: PAGE_VISIBLE; }
 
 void patch_gap( const ListScreen &s )
 {
@@ -621,8 +753,15 @@ void on_list_draw( CPUState *cpu, uint32_t fn )
 		{
 			const Page &p = PAGES[page];
 			d.begin();
-			for( int r = 0; r < p.nrows; ++r )
-				d.row( r, p.rows[r], sel == r );
+			const int top = page_top( p, sel );
+			for( int r = top; r < p.nrows && r - top < PAGE_VISIBLE; ++r )
+			{
+				if( p.rows[r].kind == ROW_KEY )
+					d.key_row( r - top, p.rows[r], p.player, sel == r,
+						g_capture.active && g_capture.page == page && g_capture.sel == r );
+				else
+					d.row( r - top, p.rows[r], sel == r );
+			}
 			d.exit_row( page_exit_slot(p), sel == p.nrows );
 			d.footer( sel == p.nrows );
 			psx_mod_finish_function( cpu );
@@ -653,6 +792,20 @@ void page_input( Draw &d, const ListScreen &s, int page, int sel, const Input &i
 {
 	const Page &p = PAGES[page];
 	const uint8_t base = uint8_t( CURSOR_PAGE + (page << 4) );
+	if( g_capture.active )
+	{
+		if( g_capture.page == page && g_capture.sel == sel )
+		{
+			const int state = dsfcore_host_mapping_state();
+			if( state == DSFCORE_CAPTURE_WAITING )
+				return;	/* the host keeps the game's input away meanwhile */
+			d.call( state == DSFCORE_CAPTURE_DONE? SND_DECIDE: SND_BACK );
+			set_help( help_id_for(&p.rows[sel]) );
+			wr32( opt_state(), 0 );	/* the usual 8 frames before the next input */
+		}
+		g_capture.active = false;
+		return;
+	}
 	switch( in.act )
 	{
 	case ACT_UP:
@@ -672,10 +825,33 @@ void page_input( Draw &d, const ListScreen &s, int page, int sel, const Input &i
 		if( sel < p.nrows && p.rows[sel].kind == ROW_SETTING && change_setting(p.rows[sel], in.act == ACT_LEFT? -1: 1) )
 			d.call( SND_CHANGE );
 		break;
+	case ACT_CLEAR:
+		accept( in );
+		if( sel < p.nrows && p.rows[sel].kind == ROW_KEY )
+		{
+			DsfCoreMapping m;
+			if( dsfcore_host_get_mapping(p.player, p.rows[sel].id, &m) && (m.slot[0][0] || m.slot[1][0]) )
+			{
+				dsfcore_host_clear_mapping( p.player, p.rows[sel].id );
+				d.call( SND_CHANGE );
+			}
+		}
+		break;
 	case ACT_CONFIRM:
 		accept( in );
 		if( sel < p.nrows )
+		{
+			if( p.rows[sel].kind == ROW_KEY )
+			{
+				dsfcore_host_begin_mapping( p.player, p.rows[sel].id );
+				g_capture.active = true;
+				g_capture.page = page;
+				g_capture.sel = sel;
+				d.call( SND_DECIDE );
+				set_help( help_id_for(&CAPTURE_HELP) );
+			}
 			break;
+		}
 		/* fall through: EXIT */
 	case ACT_BACK:
 	{

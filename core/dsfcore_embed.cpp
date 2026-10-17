@@ -90,6 +90,28 @@ void dsfcore_host_commit_settings( void )
 		g_host.commit_settings( g_host.user );
 }
 
+int dsfcore_host_get_mapping( int player, int button, DsfCoreMapping *out )
+{
+	return g_host.get_mapping? g_host.get_mapping( g_host.user, player, button, out ): 0;
+}
+
+void dsfcore_host_begin_mapping( int player, int button )
+{
+	if( g_host.begin_mapping )
+		g_host.begin_mapping( g_host.user, player, button );
+}
+
+int dsfcore_host_mapping_state( void )
+{
+	return g_host.mapping_state? g_host.mapping_state( g_host.user ): DSFCORE_CAPTURE_IDLE;
+}
+
+void dsfcore_host_clear_mapping( int player, int button )
+{
+	if( g_host.clear_mapping )
+		g_host.clear_mapping( g_host.user, player, button );
+}
+
 __declspec(dllexport) int dsfcore_start( const DsfCoreHost *host, int argc, const char *const *argv, const char *log_path )
 {
 	if( g_state != DSFCORE_STATE_NOT_STARTED || host == NULL ||

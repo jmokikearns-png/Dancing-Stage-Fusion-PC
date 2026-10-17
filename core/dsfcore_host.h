@@ -24,6 +24,12 @@ int dsfcore_host_get_setting( int id, DsfCoreSetting *out );
 void dsfcore_host_set_setting( int id, int choice );
 void dsfcore_host_commit_settings( void );
 
+/* Key / pad mapping (see DsfCoreHost). */
+int dsfcore_host_get_mapping( int player, int button, DsfCoreMapping *out );
+void dsfcore_host_begin_mapping( int player, int button );
+int dsfcore_host_mapping_state( void );
+void dsfcore_host_clear_mapping( int player, int button );
+
 #ifdef __cplusplus
 }
 #endif

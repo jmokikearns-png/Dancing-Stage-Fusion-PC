@@ -16,6 +16,9 @@
  *   - get_setting() / set_setting() / commit_settings() let the game's own
  *     OPTIONS screens show and change the host's PC settings (rows added to
  *     them by dsfcore_menus.cpp).
+ *   - get_mapping() / begin_mapping() / mapping_state() / clear_mapping():
+ *     the KEY CONFIG pages in the game's CONTROLLER SETTINGS, on top of the
+ *     host's key / pad mapping.
  *
  * All callbacks run on the core's thread.  The host loads the DLL at run time
  * (LoadLibrary + GetProcAddress("dsfcore_start")), so the StepMania program
@@ -30,7 +33,7 @@
 extern "C" {
 #endif
 
-#define DSFCORE_API_VERSION 3
+#define DSFCORE_API_VERSION 4
 
 enum {
 	DSFCORE_FRAME_BLANK = 1,	/* display disabled: show black */
@@ -63,6 +66,31 @@ typedef struct DsfCoreSetting
 	char text[40];			/* the current choice */
 } DsfCoreSetting;
 
+/* Buttons of the KEY CONFIG pages: the PS1 pad, then the PC menu. */
+enum {
+	DSFCORE_BUTTON_UP = 0, DSFCORE_BUTTON_DOWN, DSFCORE_BUTTON_LEFT, DSFCORE_BUTTON_RIGHT,
+	DSFCORE_BUTTON_CROSS, DSFCORE_BUTTON_CIRCLE, DSFCORE_BUTTON_SQUARE, DSFCORE_BUTTON_TRIANGLE,
+	DSFCORE_BUTTON_L1, DSFCORE_BUTTON_L2, DSFCORE_BUTTON_R1, DSFCORE_BUTTON_R2,
+	DSFCORE_BUTTON_START, DSFCORE_BUTTON_SELECT, DSFCORE_BUTTON_PC_MENU,
+	DSFCORE_BUTTON_COUNT
+};
+
+/* What is mapped to one button: the player's own two slots, then the
+ * default.  Plain ASCII as the host names the input ("KEY X", "JOY1 B3"),
+ * "" for none. */
+#define DSFCORE_MAPPING_SLOTS 3
+typedef struct DsfCoreMapping
+{
+	char slot[DSFCORE_MAPPING_SLOTS][24];
+} DsfCoreMapping;
+
+enum {
+	DSFCORE_CAPTURE_IDLE = 0,
+	DSFCORE_CAPTURE_WAITING = 1,	/* the next key / pad button pressed gets mapped */
+	DSFCORE_CAPTURE_DONE = 2,
+	DSFCORE_CAPTURE_CANCELLED = 3	/* Esc */
+};
+
 enum {
 	DSFCORE_STATE_NOT_STARTED = 0,
 	DSFCORE_STATE_RUNNING = 1,
@@ -88,6 +116,14 @@ typedef struct DsfCoreHost
 	int (*get_setting)( void *user, int id, DsfCoreSetting *out );
 	void (*set_setting)( void *user, int id, int choice );
 	void (*commit_settings)( void *user );
+	/* Key / pad mapping (player 0/1, DSFCORE_BUTTON_*).  begin: the next
+	 * press goes to one of the player's own slots (the game gets no input
+	 * meanwhile); clear: empties them, the default stays.  Changes are saved
+	 * at once. */
+	int (*get_mapping)( void *user, int player, int button, DsfCoreMapping *out );
+	void (*begin_mapping)( void *user, int player, int button );
+	int (*mapping_state)( void *user );
+	void (*clear_mapping)( void *user, int player, int button );
 } DsfCoreHost;
 
 /* argv[0] is ignored; the rest are runtime options (--game, --disc, --bios,
