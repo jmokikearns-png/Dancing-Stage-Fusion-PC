@@ -84,6 +84,11 @@ void ScreenPS1Game::ShowError( const CString &sError )
 void ScreenPS1Game::SendPads()
 {
 	uint16_t aPads[2] = { 0xFFFF, 0xFFFF };
+	if( PS1CORE->HoldGameInput() )	/* the game's KEY CONFIG is waiting for a key */
+	{
+		PS1CORE->SetPads( aPads[0], aPads[1] );
+		return;
+	}
 	for( int c = 0; c < 2; ++c )
 	{
 		for( int b = 0; b < NUM_PS1PAD_PS1_BUTTONS; ++b )
@@ -148,6 +153,10 @@ void ScreenPS1Game::DrawPrimitives()
 
 void ScreenPS1Game::Input( const DeviceInput& DeviceI, const InputEventType type, const GameInput &GameI, const MenuInput &MenuI, const StyleInput &StyleI )
 {
+	/* A key capture for the game's KEY CONFIG takes everything (Esc cancels). */
+	if( PS1CORE && !m_bFailed && PS1CORE->CaptureInput(DeviceI, type) )
+		return;
+
 	/* Everything except Back belongs to the PlayStation (sampled in Update),
 	 * so no StepMania menu action happens here. */
 	if( type != IET_FIRST_PRESS || !GameI.IsValid() || GameI.button != PS1PAD_BUTTON_BACK )

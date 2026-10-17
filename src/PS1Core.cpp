@@ -259,6 +259,10 @@ bool PS1Core::Start( CString &sError )
 	host.get_setting = CoreGetSetting;
 	host.set_setting = CoreSetSetting;
 	host.commit_settings = CoreCommitSettings;
+	host.get_mapping = CoreGetMapping;
+	host.begin_mapping = CoreBeginMapping;
+	host.mapping_state = CoreMappingState;
+	host.clear_mapping = CoreClearMapping;
 
 	RageSound_Generic_Software::SetDirectStream( MixThunk, this );
 	if( !RageSound_Generic_Software::DirectStreamSupported() )
@@ -553,6 +557,26 @@ void PS1Core::CoreSetSetting( void *pUser, int id, int iChoice )
 void PS1Core::CoreCommitSettings( void *pUser )
 {
 	((PS1Core *) pUser)->m_Settings.Commit();
+}
+
+int PS1Core::CoreGetMapping( void *pUser, int iPlayer, int iButton, DsfCoreMapping *pOut )
+{
+	return ((PS1Core *) pUser)->m_Settings.GetMapping( iPlayer, iButton, *pOut );
+}
+
+void PS1Core::CoreBeginMapping( void *pUser, int iPlayer, int iButton )
+{
+	((PS1Core *) pUser)->m_Settings.BeginMapping( iPlayer, iButton );
+}
+
+int PS1Core::CoreMappingState( void *pUser )
+{
+	return ((PS1Core *) pUser)->m_Settings.MappingState();
+}
+
+void PS1Core::CoreClearMapping( void *pUser, int iPlayer, int iButton )
+{
+	((PS1Core *) pUser)->m_Settings.ClearMapping( iPlayer, iButton );
 }
 
 /* Return when the next guest frame should run. */

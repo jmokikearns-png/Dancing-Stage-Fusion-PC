@@ -6,6 +6,9 @@
 #include "PrefsManager.h"
 #include "ScreenOptionsMasterPrefs.h"
 #include "StepMania.h"
+#include "InputMapper.h"
+#include "InputFilter.h"
+#include "GameInput.h"
 
 namespace
 {
@@ -43,6 +46,27 @@ namespace
 		return s;
 	}
 
+	/* "Key_x" -> "KEY X", "Joy1_B3" -> "JOY1 B3": the game prints capitals. */
+	CString MappingText( DeviceInput di )
+	{
+		if( !di.IsValid() )
+			return "";
+		CString s = di.toString();
+		for( unsigned i = 0; i < s.size(); ++i )
+		{
+			if( s[i] == '_' )
+				s[i] = ' ';
+			else if( s[i] >= 'a' && s[i] <= 'z' )
+				s[i] = char( s[i] - 32 );
+		}
+		return s;
+	}
+
+	GameInput PadInput( int iPlayer, int iButton )
+	{
+		return GameInput( (GameController) iPlayer, (GameButton) iButton );	/* DSFCORE_BUTTON_* = PS1PAD_BUTTON_* */
+	}
+
 	/* The choice that matches the current preference. */
 	int CurrentChoice( int id, const ConfOption *pOpt, int iNumChoices )
 	{
@@ -60,6 +84,113 @@ PS1Settings::PS1Settings():
 	m_bCommit = false;
 	m_iPendingEffects = 0;
 	m_fRefreshSeconds = 0;
+	m_bHaveMappings = false;
+	m_iCaptureState = DSFCORE_CAPTURE_IDLE;
+	m_iCapturePlayer = m_iCaptureButton = 0;
+}
+
+int PS1Settings::GetMapping( int iPlayer, int iButton, DsfCoreMapping &out )
+{
+	LockMut( m_Lock );
+	if( !m_bHaveMappings || iPlayer < 0 || iPlayer > 1 || iButton < 0 || iButton >= DSFCORE_BUTTON_COUNT )
+		return 0;
+	out = m_Mappings[iPlayer][iButton];
+	return 1;
+}
+
+void PS1Settings::BeginMapping( int iPlayer, int iButton )
+{
+	LockMut( m_Lock );
+	if( iPlayer < 0 || iPlayer > 1 || iButton < 0 || iButton >= DSFCORE_BUTTON_COUNT )
+		return;
+	m_iCapturePlayer = iPlayer;
+	m_iCaptureButton = iButton;
+	m_iCaptureState = DSFCORE_CAPTURE_WAITING;
+}
+
+int PS1Settings::MappingState()
+{
+	LockMut( m_Lock );
+	return m_iCaptureState;
+}
+
+void PS1Settings::ClearMapping( int iPlayer, int iButton )
+{
+	LockMut( m_Lock );
+	if( iPlayer >= 0 && iPlayer <= 1 && iButton >= 0 && iButton < DSFCORE_BUTTON_COUNT )
+		m_ClearRequests.push_back( make_pair(iPlayer, iButton) );
+}
+
+bool PS1Settings::CaptureInput( const DeviceInput &DeviceI, InputEventType type )
+{
+	LockMut( m_Lock );
+	if( m_iCaptureState != DSFCORE_CAPTURE_WAITING )
+		return false;
+	if( type != IET_FIRST_PRESS )
+		return true;	/* repeats and releases of other keys: still waiting */
+
+	m_HeldAfterCapture = DeviceI;
+	if( DeviceI.device == DEVICE_KEYBOARD && DeviceI.button == KEY_ESC )
+	{
+		m_iCaptureState = DSFCORE_CAPTURE_CANCELLED;
+		return true;
+	}
+
+	/* Like StepMania's mapping screen, only the player's own two slots
+	 * change: the one already holding this input, else an empty one, else
+	 * the one with the same kind of device (keyboard / that pad). */
+	const GameInput GameI = PadInput( m_iCapturePlayer, m_iCaptureButton );
+	DeviceInput aCur[2];
+	for( int s = 0; s < 2; ++s )
+		INPUTMAPPER->GameToDevice( GameI, s, aCur[s] );
+	int iSlot;
+	if( aCur[0] == DeviceI ) iSlot = 0;
+	else if( aCur[1] == DeviceI ) iSlot = 1;
+	else if( !aCur[0].IsValid() ) iSlot = 0;
+	else if( !aCur[1].IsValid() ) iSlot = 1;
+	else iSlot = aCur[0].device == DeviceI.device? 0: 1;
+
+	INPUTMAPPER->SetInputMap( DeviceI, GameI, iSlot );
+	INPUTMAPPER->AddDefaultMappingsForCurrentGameIfUnmapped();
+	INPUTMAPPER->SaveMappingsToDisk();
+	LOG->Trace( "PS1Settings: %s mapped to player %i button %i, slot %i (from the game's KEY CONFIG)",
+		MappingText(DeviceI).c_str(), m_iCapturePlayer + 1, m_iCaptureButton, iSlot );
+	m_iCaptureState = DSFCORE_CAPTURE_DONE;
+	RefreshMappings();
+	return true;
+}
+
+bool PS1Settings::HoldGameInput()
+{
+	LockMut( m_Lock );
+	if( m_iCaptureState == DSFCORE_CAPTURE_WAITING )
+		return true;
+	if( m_HeldAfterCapture.IsValid() )
+	{
+		if( INPUTFILTER->IsBeingPressed(m_HeldAfterCapture) )
+			return true;
+		m_HeldAfterCapture.MakeInvalid();
+	}
+	return false;
+}
+
+void PS1Settings::RefreshMappings()
+{
+	for( int p = 0; p < 2; ++p )
+	{
+		for( int b = 0; b < DSFCORE_BUTTON_COUNT; ++b )
+		{
+			DsfCoreMapping &m = m_Mappings[p][b];
+			for( int s = 0; s < DSFCORE_MAPPING_SLOTS; ++s )
+			{
+				DeviceInput di;
+				m.slot[s][0] = 0;
+				if( INPUTMAPPER->GameToDevice(PadInput(p, b), s, di) )
+					snprintf( m.slot[s], sizeof(m.slot[s]), "%s", MappingText(di).c_str() );
+			}
+		}
+	}
+	m_bHaveMappings = true;
 }
 
 int PS1Settings::Get( int id, DsfCoreSetting &out )
@@ -93,13 +224,28 @@ void PS1Settings::Commit()
 
 void PS1Settings::Update( float fDeltaTime )
 {
-	vector< pair<int, int> > vRequests;
+	vector< pair<int, int> > vRequests, vClears;
 	bool bCommit;
 	{
 		LockMut( m_Lock );
 		vRequests.swap( m_Requests );
+		vClears.swap( m_ClearRequests );
 		bCommit = m_bCommit;
 		m_bCommit = false;
+	}
+
+	for( unsigned i = 0; i < vClears.size(); ++i )
+	{
+		const GameInput GameI = PadInput( vClears[i].first, vClears[i].second );
+		INPUTMAPPER->ClearFromInputMap( GameI, 0 );
+		INPUTMAPPER->ClearFromInputMap( GameI, 1 );
+		LOG->Trace( "PS1Settings: player %i button %i: own mappings cleared (from the game's KEY CONFIG)",
+			vClears[i].first + 1, vClears[i].second );
+	}
+	if( !vClears.empty() )
+	{
+		INPUTMAPPER->AddDefaultMappingsForCurrentGameIfUnmapped();
+		INPUTMAPPER->SaveMappingsToDisk();
 	}
 
 	for( unsigned i = 0; i < vRequests.size(); ++i )
@@ -132,11 +278,12 @@ void PS1Settings::Update( float fDeltaTime )
 	/* Keep the snapshot fresh (choices can change, e.g. after a display
 	 * change), but not every frame. */
 	m_fRefreshSeconds -= fDeltaTime;
-	if( !vRequests.empty() || bCommit || m_fRefreshSeconds <= 0 )
+	if( !vRequests.empty() || !vClears.empty() || bCommit || m_fRefreshSeconds <= 0 )
 	{
 		LockMut( m_Lock );
 		if( m_Requests.empty() )	/* don't undo a change queued meanwhile */
 			Refresh();
+		RefreshMappings();
 		m_fRefreshSeconds = 0.5f;
 	}
 }

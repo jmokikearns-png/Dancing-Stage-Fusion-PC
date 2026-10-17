@@ -60,6 +60,9 @@ public:
 
 	/* Main thread, every StepMania update while the game screen is up. */
 	void SetPads( uint16_t iPad1, uint16_t iPad2 );
+	/* Main thread: the game's KEY CONFIG capture (see PS1Settings). */
+	bool CaptureInput( const DeviceInput &DeviceI, InputEventType type ) { return m_Settings.CaptureInput( DeviceI, type ); }
+	bool HoldGameInput() { return m_Settings.HoldGameInput(); }
 	void Update( float fDeltaTime );
 
 	/* Main thread: the frame to show, already uploaded.  NULL until the
@@ -81,6 +84,10 @@ private:
 	static int CoreGetSetting( void *pUser, int id, DsfCoreSetting *pOut );
 	static void CoreSetSetting( void *pUser, int id, int iChoice );
 	static void CoreCommitSettings( void *pUser );
+	static int CoreGetMapping( void *pUser, int iPlayer, int iButton, DsfCoreMapping *pOut );
+	static void CoreBeginMapping( void *pUser, int iPlayer, int iButton );
+	static int CoreMappingState( void *pUser );
+	static void CoreClearMapping( void *pUser, int iPlayer, int iButton );
 
 	struct Frame
 	{
