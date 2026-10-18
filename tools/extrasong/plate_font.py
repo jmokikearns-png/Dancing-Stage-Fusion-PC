@@ -179,6 +179,35 @@ class PlateFont:
 			self.glyphs[ch] = shape[:2]
 		self._fit_spacing(pairs)
 		self.bases = [Counter(b).most_common(1)[0][0] for b in bases]
+		if 'G' not in self.glyphs and 'C' in self.glyphs:
+			self._add_g()
+
+	# The stock plates never use a capital G.  It is the C with a bar and a
+	# right stem, drawn here (rows relative to the baseline, columns x >= 2
+	# of the C; '.' transparent, hex digits palette indices) and shaded like
+	# the bar of the E.
+	G_RIGHT = {
+		-5: '1111111111',
+		-4: '11cbbbff51',
+		-3: '11a888ff51',
+		-2: '211111ff51',
+		-1: '91111aff51',
+		0: 'ffffffffb1',
+		1: '4555555211',
+		2: '1111111111',
+	}
+
+	def _add_g(self):
+		shape, width = self.glyphs['C']
+		cells = {(x, y): v for x, y, v in shape}
+		for y, row in self.G_RIGHT.items():
+			for i, c in enumerate(row):
+				cells.pop((2 + i, y), None)
+				if c != '.':
+					cells[(2 + i, y)] = int(c, 16)
+		self.glyphs['G'] = (tuple(sorted((x, y, v) for (x, y), v in cells.items())), width)
+		self.left['G'] = self.left['C']
+		self.right['G'] = self.right.get('O', self.right['C'])
 
 	def _fit_spacing(self, pairs):
 		"""Proportional spacing: the gap between two letters' fills is the
@@ -204,6 +233,13 @@ class PlateFont:
 		self.right = {c: sol[col[c]] for c in chars}
 		self.left = {c: sol[n + col[c]] for c in chars}
 		self.space = sol[2 * n]
+		# a bearing far from the rest comes from a sample that misleads the
+		# fit (the stock "(" mostly opens small print): use the median
+		for side in (self.right, self.left):
+			mid = float(np.median(list(side.values())))
+			for c, v in side.items():
+				if abs(v - mid) > 3:
+					side[c] = mid
 		err = [abs(self.right[a] + self.left[b] + (self.space if sp else 0) - g) for a, b, sp, g in pairs]
 		self.spacing_error = (float(np.mean(err)), float(max(err)))
 

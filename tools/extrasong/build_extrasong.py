@@ -1,17 +1,31 @@
 #!/usr/bin/env python3
-"""Build a local mod package that adds a StepMania simfile to Dancing Stage
+"""Build a local mod package that adds StepMania simfiles to Dancing Stage
 Fusion's own song list (port/core/dsfcore_extrasong.cpp does the in-RAM
 part).
 
-  build_extrasong.py SONG_DIR DISC.cue OUT_PACKAGE_DIR
-                     [--title T] [--artist A] [--plate PLATE.png] [--background BG.png]
-                     [--master-id 0x8030]
+  build_extrasong.py SONGS.toml DISC.cue OUT_PACKAGE_DIR
 
-SONG_DIR holds NAME.sm, NAME.ogg (or .mp3/.wav), NAME.png (256x80 banner)
-and NAME-bg.png (320x240 background).  Everything is converted to the
-game's own formats and written into free space of the player's own disc
-image by disc overlays; the output is personal (it contains the song and
-data from the disc), never part of this project.
+SONGS.toml lists the songs in song-table order (the first is song 21, and
+a song keeps its save slot only while it keeps its place):
+
+  [[song]]
+  dir = "Tough Enough"          # relative to SONGS.toml
+  master_id = 0x8030            # a free master-table id
+  background = "bg.png"         # optional, instead of NAME-bg.png
+  title = "..."                 # optional plate/list title (default #TITLE)
+  artist = "..."                # optional (default #ARTIST)
+  plate = "plate.png"           # optional plate image instead of the lettering
+  single = [3, 5, 8, 10]        # optional ratings: Beginner, Light, Standard, Heavy
+  double = [5, 8, 10]           # optional ratings: Light, Standard, Heavy
+  unlock = { song = 0x8039, difficulties = ["Standard", "Heavy"] }
+                                # optional: listed once that song is cleared there
+
+A song directory holds NAME.sm, NAME.ogg (or .mp3/.wav), NAME.png (256x80
+banner) and NAME-bg.png (320x240 background).  Everything is converted to
+the game's own formats.  The new disc sectors go into one file the plugin
+appends after the end of the player's own disc image; the output is
+personal (it contains the songs and data from the disc), never part of
+this project.
 
 Formats (notes/dsf-extra-songs.md):
 * READ_DT song entry: PACK[4] = { PACK{tempo map, charts}, event list,
@@ -20,12 +34,18 @@ Formats (notes/dsf-extra-songs.md):
   one u32 per beat, one byte per 16th, one bit per panel; beat 0 is
   played at measure 3 of the tempo map (measured in the game: at 196 and
   at 98 BPM the steps came exactly one measure late with beat 0 at 2).
-* Tempo map: u32 size, (u32 pos in 1/4096 measure, u32 time in 1/75 s).
+* Tempo map: u32 size, then (u32 pos in 1/4096 measure, u32 time in
+  1/75 s) points the game interpolates between; a stop is two points at
+  one position (as on the stock songs).
 * Stream (STR.BIN layout): SPU ADPCM, 0x4000-byte blocks alternating L/R,
   ending in a pair of silent flag-1 blocks (psxaudio.c).
-* Preview: XA ADPCM 4-bit stereo 37.8 kHz, one sector in 8 (psxaudio.c).
+* Preview: XA ADPCM 4-bit stereo 37.8 kHz, eight channels interleaved
+  sector by sector, as in XA.STR (psxaudio.c).
+* Graphics the menus decode from their packs (banners, plates) are 16-byte
+  markers there; the pictures themselves go to gfx.bin, which the plugin
+  serves through the game's LZ decoder.
 """
-import argparse, hashlib, os, re, shutil, struct, subprocess, sys, tempfile
+import argparse, hashlib, math, os, re, shutil, struct, subprocess, sys, tempfile, tomllib
 from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -37,12 +57,12 @@ import plate_font
 EXE_LBA, EXE_SIZE = 24, 636928
 EXE_SHA1 = 'ade130f4ab7cf5291e6a1606cb8d2fd51a01b1da'
 EXE_VBASE = 0x80019800			# vaddr = file offset + this
-READDT_LBA, READDT_FREE = 18000, (28573, 32000)	# 0xFF padding at the end of READ_DT.BIN
-DUMMY_FREE = (91836, 105336)		# DUMMY.BIN
 TOC, TOC_N = 0x80092B50, 235
 SONGTAB, SONGS = 0x800AFE38, 20
-STRTAB = 0x800932B8
-XATAB = 0x800934E4			# entry k = preview id 24 + k
+MASTER, MASTER_N = 0x800A3EA0, 0x252
+PREVIEW_IDS = 50			# music ids: stock streams 1-23, stock previews 25-49
+STREAM_IDS = PREVIEW_IDS + 12		# extra streams after the extra previews (the plugin
+					# makes the driver take these ids as streams, 0x8002C398)
 LANG_ENTRIES = 5			# en, fr, de, it, es copies
 MUSIC_PACKS = range(201, 206)		# music select: items 10-29 banners, 30-49 plates
 RESULT_PACKS = range(206, 211)		# results: items 17-36 plates
@@ -50,6 +70,10 @@ RECORD_PACKS = range(28, 33)		# records: slot 1 = SONGTAB {id, mini, plate}
 WORKOUT_PACK = 181			# workout results: items 1-20 banners 176x55, slot 21 = 0
 UI_DONOR = 14				# song group whose language UI sets are copied (AM-3P)
 EVENT_DONOR = 12			# song group whose event list is copied (ORION.78, 200 BPM)
+MAX_SONGS = 32				# the save keeps records for 32 songs
+DIFFS = ('Beginner', 'Light', 'Standard', 'Heavy')
+SM_NAME = {'Beginner': 'Beginner', 'Light': 'Easy', 'Standard': 'Medium', 'Heavy': 'Hard'}
+MARKER = b'DSFX'
 
 
 class Disc:
@@ -58,6 +82,7 @@ class Disc:
 		m = re.search(r'FILE\s+"([^"]+)"', text)
 		self.bin = os.path.join(os.path.dirname(os.path.abspath(cue)), m.group(1))
 		self.f = open(self.bin, 'rb')
+		self.sectors = os.path.getsize(self.bin) // 2352
 
 	def raw(self, lba):
 		self.f.seek(lba * 2352)
@@ -109,6 +134,18 @@ def build_pack(items):
 	return struct.pack('<%dI' % n, *offs) + body
 
 
+class Blobs:
+	"""Decoded pictures the plugin serves for markers (gfx.bin)."""
+	def __init__(self):
+		self.data, self.index = b'', []
+
+	def marker(self, tim):
+		k = len(self.index)
+		self.index.append((len(self.data), len(tim)))
+		self.data += tim + b'\0' * (-len(tim) % 4)
+		return MARKER + struct.pack('<III', k, k ^ 0xFFFFFFFF, len(tim))
+
+
 # ---- TIM ----------------------------------------------------------------------
 def rgb15(r, g, b, stp=False):
 	v = (r >> 3) | ((g >> 3) << 5) | ((b >> 3) << 10)
@@ -136,7 +173,7 @@ def quantize(img, colours):
 	q = img.convert('RGB').quantize(colours, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.FLOYDSTEINBERG)
 	pal = q.getpalette()[:colours * 3]
 	pal += [0] * (colours * 3 - len(pal))
-	return list(q.getdata()), [tuple(pal[3 * i:3 * i + 3]) for i in range(colours)]
+	return list(q.tobytes()), [tuple(pal[3 * i:3 * i + 3]) for i in range(colours)]
 
 
 def banner_tim(img):
@@ -200,19 +237,49 @@ def parse_sm(path):
 	tags = {}
 	for m in re.finditer(r'#([A-Z]+):([^;]*);', s):
 		tags.setdefault(m.group(1), []).append(m.group(2))
-	bpms = [tuple(float(x) for x in p.split('=')) for p in tags['BPMS'][0].split(',') if p.strip()]
-	if len(bpms) != 1 or tags.get('STOPS', [''])[0].strip():
-		sys.exit('only constant-tempo songs without stops are supported for now')
+	def pairs(tag):
+		out = []
+		for p in tags.get(tag, [''])[0].split(','):
+			if p.strip():
+				b, v = p.split('=')[:2]
+				out.append((float(b), float(v)))
+		return sorted(out)
 	charts = []
 	for n in tags.get('NOTES', []):
 		f = [x.strip() for x in n.split(':')]
 		style, diff, meter, notes = f[0], f[2], int(f[3] or 0), f[5]
 		measures = [[r.strip() for r in m.split('\n') if r.strip()] for m in notes.split(',')]
 		charts.append(dict(style=style, diff=diff, meter=meter, measures=measures))
+	bpms = pairs('BPMS')
+	if not bpms or bpms[0][0] > 0:
+		sys.exit('%s: no tempo at beat 0' % path)
 	return dict(title=tags.get('TITLE', [''])[0].strip(), artist=tags.get('ARTIST', [''])[0].strip(),
-	            offset=float(tags.get('OFFSET', ['0'])[0] or 0), bpm=bpms[0][1],
+	            offset=float(tags.get('OFFSET', ['0'])[0] or 0), bpms=bpms,
+	            stops=[s for s in pairs('STOPS') if s[1] > 0],
 	            sample_start=float(tags.get('SAMPLESTART', ['0'])[0] or 0),
 	            sample_length=float(tags.get('SAMPLELENGTH', ['15'])[0] or 15), charts=charts)
+
+
+class Timing:
+	"""Simfile time (seconds; beat 0 at -OFFSET) of a beat, with the tempo
+	changes and stops; before beat 0 the first tempo continues.  A stop at
+	a beat delays everything after that beat."""
+	def __init__(self, sm):
+		self.offset, self.bpms, self.stops = sm['offset'], sm['bpms'], sm['stops']
+
+	def time(self, beat, after_stop=False):
+		t = -self.offset
+		if beat < 0:
+			return t + beat * 60.0 / self.bpms[0][1]
+		for i, (b, bpm) in enumerate(self.bpms):
+			end = self.bpms[i + 1][0] if i + 1 < len(self.bpms) else math.inf
+			if beat <= b:
+				break
+			t += (min(beat, end) - b) * 60.0 / bpm
+		for b, d in self.stops:
+			if b < beat or (after_stop and b == beat):
+				t += d
+		return t
 
 
 SM_DIFF = {'Beginner': 4, 'Easy': 0, 'Medium': 1, 'Hard': 2}
@@ -224,40 +291,53 @@ PANEL_BITS = {0: 0, 1: 3, 2: 2, 3: 1}	# simfile column (L, D, U, R) -> bit
 
 CHART_START = 3		# tempo-map measure of the chart's first beat
 
-def chart_words(chart, lead_measures, last_measure):
+def chart_words(chart, lead_measures, last_measure, report):
+	"""The chart on the game's 16th-note grid; a step between 16ths moves
+	to the nearest one (reported)."""
 	beats = 4 * last_measure - 8	# the stock charts' length
 	words = [0] * beats
 	cols = 4 if chart['style'] == 'dance-single' else 8
+	moved = 0
 	for m, rows in enumerate(chart['measures']):
 		n = len(rows)
 		for r, row in enumerate(rows):
-			if (r * 16) % n:
-				if any(c in '124' for c in row):
-					sys.exit('a note off the 16th-note grid (measure %d)' % m)
-				continue
 			mask = 0
 			for c in range(cols):
 				if row[c] in '124':	# taps, hold and roll heads; tails and mines dropped
 					mask |= 1 << (PANEL_BITS[c % 4] + (4 if c >= 4 else 0))
 			if not mask:
 				continue
+			if (r * 16) % n:
+				moved += 1
 			if cols == 4:
 				mask |= mask << 4
-			sixteenth = (m + lead_measures - CHART_START) * 16 + (r * 16) // n
+			sixteenth = (m + lead_measures - CHART_START) * 16 + int(round(r * 16.0 / n))
 			if sixteenth < 0 or sixteenth // 4 >= beats:
 				sys.exit('a step outside the song (measure %d)' % m)
 			words[sixteenth // 4] |= mask << (8 * (sixteenth % 4))
+	if moved:
+		report.append('%s %s: %d steps moved to the 16th-note grid' % (chart['style'], chart['diff'], moved))
 	kind = (0 if cols == 4 else 2) | (SM_DIFF[chart['diff']] << 8) | (1 << 16)
 	return struct.pack('<II14I', 64 + 4 * beats, kind, *([0] * 14)) + struct.pack('<%dI' % beats, *words)
 
 
-def tempo_map(lead_measures, last_measure, bpm, offset):
-	"""(pos, time) pairs: measure m at (m - lead) * measure_seconds - offset
-	(the audio is padded with the lead-in)."""
-	ms = 4 * 60.0 / bpm
-	pts = [0, 1, 5, last_measure]
+def tempo_map(lead, last, timing, pad):
+	"""Points (measure, time): tempo-map measure M is simfile beat 4(M - lead),
+	played pad seconds later (the audio is padded with the lead-in)."""
+	T = lambda M, after=False: timing.time(4.0 * (M - lead), after) + pad
+	pts = {0.0, 1.0, float(last)}
+	for b, _ in timing.bpms[1:]:
+		pts.add(b / 4.0 + lead)
+	stops = {b / 4.0 + lead for b, _ in timing.stops}
+	out = []
+	for M in sorted(pts | stops):
+		if M > last:
+			continue
+		out.append((M, T(M)))
+		if M in stops:
+			out.append((M, T(M, True)))
 	# time: 31-bit signed (bit 31 is a flag the game's maps sometimes set)
-	pairs = b''.join(struct.pack('<II', 4096 * m, int(round((m * ms - offset) * 75)) & 0x7FFFFFFF) for m in pts)
+	pairs = b''.join(struct.pack('<II', int(round(4096 * M)), int(round(t * 75)) & 0x7FFFFFFF) for M, t in out)
 	return struct.pack('<I', 4 + len(pairs)) + pairs
 
 
@@ -286,211 +366,271 @@ def pcm(src, rate, out, start=None, length=None, pad_front=0.0, fade=0.0):
 	subprocess.check_call(cmd)
 
 
-def raw_sector(lba, sub, data, form2):
-	t = lba + 150
-	m, s, f = t // 4500, (t // 75) % 60, t % 75
-	bcd = lambda v: (v // 10) << 4 | (v % 10)
-	head = b'\x00' + b'\xff' * 10 + b'\x00' + bytes([bcd(m), bcd(s), bcd(f), 2])
-	sh = bytes(sub) * 2
-	body = data + b'\0' * ((2324 if form2 else 2048) - len(data))
-	tail = b'\0' * (4 if form2 else 280)	# EDC (and ECC) left zero
-	return head + sh + body + tail
+# Media sectors: Mode 2 without the sync/header, 2336 bytes from the
+# duplicated subheader (psx_mod_append_disc_extent).
+def data_sectors(blob):
+	n = (len(blob) + 2047) // 2048
+	blob += b'\0' * (n * 2048 - len(blob))
+	sub = bytes((0, 0, 0x08, 0)) * 2
+	return b''.join(sub + blob[2048 * i:2048 * (i + 1)] + b'\0' * 280 for i in range(n))
+
+
+def xa_sector(sub, data):
+	return bytes(sub) * 2 + data + b'\0' * (2324 - len(data)) + b'\0' * 4
+
+
+# ---- one song -----------------------------------------------------------------
+class Song:
+	def __init__(self, cfg, root):
+		self.cfg = cfg
+		self.dir = os.path.join(root, cfg['dir'])
+		names = [f for f in os.listdir(self.dir) if f.lower().endswith('.sm')]
+		if len(names) != 1:
+			sys.exit('%s: expected one .sm file' % self.dir)
+		self.base = os.path.join(self.dir, names[0][:-3])
+		self.sm = parse_sm(self.base + '.sm')
+		self.audio = next((self.base + e for e in ('.ogg', '.mp3', '.wav') if os.path.exists(self.base + e)), None)
+		if not self.audio:
+			sys.exit('%s: no audio file' % self.dir)
+		self.id = cfg['master_id']
+		self.title = cfg.get('title', self.sm['title'])
+		self.artist = cfg.get('artist', self.sm['artist'])
+		self.path = lambda k: os.path.join(root, cfg[k])
+
+	def chart(self, style, diff):
+		return next((c for c in self.sm['charts'] if c['style'] == style and c['diff'] == SM_NAME[diff]), None)
+
+	def ratings(self, style):
+		"""Nibbles as the song table holds them: Light, Standard, Heavy,
+		Beginner (single only)."""
+		names = DIFFS if style == 'dance-single' else DIFFS[1:]
+		given = self.cfg.get('single' if style == 'dance-single' else 'double')
+		lv = {}
+		for i, d in enumerate(names):
+			c = self.chart(style, d)
+			if not c:
+				continue
+			lv[d] = given[i] if given else c['meter']
+			if not 1 <= lv[d] <= 10:
+				sys.exit('%s: %s %s rating %d is outside 1..10' % (self.title, style, d, lv[d]))
+		return lv.get('Light', 0) | lv.get('Standard', 0) << 4 | lv.get('Heavy', 0) << 8 | lv.get('Beginner', 0) << 12
+
+	def build(self, entry, psxaudio, tmp, font, stock_plate, blobs):
+		sm, report = self.sm, []
+		timing = Timing(sm)
+		dur = float(subprocess.check_output(['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+		                                     '-of', 'default=nw=1:nk=1', self.audio]))
+		bpm0 = sm['bpms'][0][1]
+		first = min(m for c in sm['charts'] for m, rows in enumerate(c['measures'])
+		            if any(any(x in '124' for x in r) for r in rows))
+		lead = max(0, CHART_START - first)
+		pad = lead * 4 * 60.0 / bpm0
+		# the last whole measure inside the (padded) music
+		last = lead
+		while timing.time(4.0 * (last + 1 - lead), True) + pad <= dur + pad:
+			last += 1
+		self.last, self.lead = last, lead
+		# ---- song entry (5 language copies) ----
+		charts = []
+		for style, diffs in (('dance-single', ('Light', 'Standard', 'Heavy', 'Beginner')),
+		                     ('dance-double', ('Light', 'Standard', 'Heavy'))):
+			for d in diffs:
+				c = self.chart(style, d)
+				if c:
+					charts.append(chart_words(c, lead, last, report))
+		slot0 = build_pack([tempo_map(lead, last, timing, pad)] + charts)
+		events = pack_items(entry(68 + 5 * EVENT_DONOR))[1]
+		bg_png = self.path('background') if 'background' in self.cfg else self.base + '-bg.png'
+		bg = konami_lz.encode(background_tim(Image.open(bg_png)))
+		self.entries = [build_pack([slot0, events, bg, pack_items(entry(68 + 5 * UI_DONOR + k))[3]])
+		                for k in range(LANG_ENTRIES)]
+		# ---- graphics ----
+		banner_img = Image.open(self.base + '.png')
+		if 'plate' in self.cfg:
+			plate = plate_tim(self.path('plate'), stock_plate)
+		else:
+			lost = font.missing(self.title + self.artist)
+			if lost:
+				sys.exit('%s: the game\'s lettering has no %s: change title/artist or give a plate'
+				         % (self.title, ' '.join(lost)))
+			plate = lettered_plate_tim(font.plate(self.title, self.artist), stock_plate)
+		self.banner = blobs.marker(banner_tim(banner_img))
+		self.plate = blobs.marker(plate)
+		self.mini = blobs.marker(mini_tim(banner_img))
+		self.workout_index = len(blobs.index)
+		self.workout = blobs.marker(workout_tim(banner_img))
+		# ---- audio ----
+		raw = os.path.join(tmp, 'song.s16')
+		pcm(self.audio, 44100, raw, pad_front=pad)
+		stream = os.path.join(tmp, 'song.str')
+		subprocess.check_call([psxaudio, 'spu', raw, stream])
+		self.stream = open(stream, 'rb').read()
+		prev = os.path.join(tmp, 'prev.s16')
+		pcm(self.audio, 37800, prev, start=sm['sample_start'], length=sm['sample_length'], fade=1.0)
+		xa = os.path.join(tmp, 'prev.xa')
+		subprocess.check_call([psxaudio, 'xa', prev, xa])
+		self.xa = open(xa, 'rb').read()
+		bpm_text = '/'.join('%g' % b for _, b in sm['bpms'][:4]) + ('...' if len(sm['bpms']) > 4 else '')
+		print('%-34s %3d measures (lead %d), %d charts, BPM %s%s' % (
+		      self.title[:34], last, lead, len(charts), bpm_text,
+		      ', %d stops' % len(sm['stops']) if sm['stops'] else ''))
+		for r in report:
+			print('    ' + r)
 
 
 # ---- main ---------------------------------------------------------------------
 def main():
 	ap = argparse.ArgumentParser()
-	ap.add_argument('song_dir'); ap.add_argument('cue'); ap.add_argument('out')
-	ap.add_argument('--plate', help='a title plate PNG (text on transparent, scaled to 360x40) instead of '
-	                'the title and artist set in the game\'s own lettering')
-	ap.add_argument('--background', help='gameplay background PNG (any 4:3 size) instead of NAME-bg.png')
-	ap.add_argument('--title', help='plate title (default: the simfile\'s #TITLE)')
-	ap.add_argument('--artist', help='plate artist (default: the simfile\'s #ARTIST)')
-	ap.add_argument('--master-id', type=lambda x: int(x, 0), default=0x8030)
+	ap.add_argument('songs'); ap.add_argument('cue'); ap.add_argument('out')
 	a = ap.parse_args()
+	cfg = tomllib.load(open(a.songs, 'rb'))
+	root = os.path.dirname(os.path.abspath(a.songs))
+	songs = [Song(c, root) for c in cfg['song']]
+	if SONGS + len(songs) > MAX_SONGS:
+		sys.exit('the game holds %d songs: at most %d extra' % (MAX_SONGS, MAX_SONGS - SONGS))
 
-	names = [f for f in os.listdir(a.song_dir) if f.lower().endswith('.sm')]
-	base = os.path.join(a.song_dir, names[0][:-3])
-	sm = parse_sm(base + '.sm')
-	audio = next(base + e for e in ('.ogg', '.mp3', '.wav') if os.path.exists(base + e))
 	disc = Disc(a.cue)
 	exe = Exe(disc)
 	toc = [(exe.w(TOC + 8 * i), exe.w(TOC + 8 * i + 4)) for i in range(TOC_N)]
-	master_ids = {exe.w(0x800A3EA0 + 20 * i) for i in range(0x252) if exe.w(0x800A3EA0 + 20 * i + 4)}
-	if a.master_id in master_ids:
-		sys.exit('song id 0x%x is taken' % a.master_id)
+	taken = {exe.w(MASTER + 20 * i) for i in range(MASTER_N) if exe.w(MASTER + 20 * i + 4)}
+	blank = sum(1 for i in range(MASTER_N) if not exe.w(MASTER + 20 * i + 4))
+	ids = [s.id for s in songs]
+	if len(set(ids)) != len(ids) or taken & set(ids):
+		sys.exit('song ids must be unique and free in the master table')
+	if blank < len(songs):
+		sys.exit('the master table has only %d blank slots' % blank)
+	for s in songs:
+		u = s.cfg.get('unlock')
+		if u and (u['song'] not in ids or not set(u['difficulties']) <= set(DIFFS)):
+			sys.exit('%s: unlock names an unknown song or difficulty' % s.title)
 	entry = lambda i: disc.data(toc[i][1], toc[i][0])
 
-	for lba in (READDT_FREE[0], READDT_FREE[1] - 1):
-		if disc.user(lba) != b'\xff' * 2048:
-			sys.exit('READ_DT free space is not where expected')
-	if any(disc.user(DUMMY_FREE[0], 4)) or any(disc.user(DUMMY_FREE[1] - 4, 4)):
-		sys.exit('DUMMY.BIN free space is not empty')
-
 	tmp = tempfile.mkdtemp()
+	blobs = Blobs()
 	try:
 		psxaudio = tool(tmp)
-		dur = float(subprocess.check_output(['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
-		                                     '-of', 'default=nw=1:nk=1', audio]))
-		ms = 4 * 60.0 / sm['bpm']
-		first = min(m for c in sm['charts'] for m, rows in enumerate(c['measures']) if any(any(x in '124' for x in r) for r in rows))
-		lead = max(0, CHART_START - first)
-		last = int((dur + lead * ms + sm['offset']) / ms)	# measure at the end of the (padded) music
-		# ---- song entry (5 language copies) ----
-		charts = []
-		order = [('dance-single', d) for d in ('Easy', 'Medium', 'Hard', 'Beginner')] + \
-		        [('dance-double', d) for d in ('Easy', 'Medium', 'Hard')]
-		for style, diff in order:
-			c = next((c for c in sm['charts'] if c['style'] == style and c['diff'] == diff), None)
-			if c:
-				charts.append(chart_words(c, lead, last))
-		slot0 = build_pack([tempo_map(lead, last, sm['bpm'], sm['offset'])] + charts)
-		events = pack_items(entry(68 + 5 * EVENT_DONOR))[1]
-		bg = konami_lz.encode(background_tim(Image.open(a.background or base + '-bg.png')))
-		song_entries = [build_pack([slot0, events, bg, pack_items(entry(68 + 5 * UI_DONOR + k))[3]])
-		                for k in range(LANG_ENTRIES)]
-
-		# ---- graphics ----
-		banner = konami_lz.encode(banner_tim(Image.open(base + '.png')))
-		mini = konami_lz.encode(mini_tim(Image.open(base + '.png')))
+		font = plate_font.PlateFont(disc, exe, toc, pack_items)
 		stock_plate = konami_lz.decode(pack_items(entry(201))[30])
-		if a.plate:
-			plate = konami_lz.encode(plate_tim(a.plate, stock_plate))
-		else:
-			font = plate_font.PlateFont(disc, exe, toc, pack_items)
-			title, artist = a.title or sm['title'], a.artist or sm['artist']
-			lost = font.missing(title + artist)
-			if lost:
-				sys.exit('the game\'s lettering has no %s: change --title/--artist or give --plate'
-				         % ' '.join(lost))
-			plate = konami_lz.encode(lettered_plate_tim(font.plate(title, artist), stock_plate))
-		workout_banner = konami_lz.encode(workout_tim(Image.open(base + '.png')))
-		music, results, records = {}, {}, {}
-		it = pack_items(entry(WORKOUT_PACK))
-		assert len(it) == 22 and it[21] is None
-		records[WORKOUT_PACK] = build_pack(it[:21] + [workout_banner, None])
-		for e in MUSIC_PACKS:
-			it = pack_items(entry(e))
-			assert len(it) == 51 and it[50] is None
-			music[e] = build_pack(it[:50] + [banner, plate, None])
-		for e in RESULT_PACKS:
-			it = pack_items(entry(e))
-			assert len(it) == 38 and it[37] is None
-			results[e] = build_pack(it[:37] + [plate, None])
-		for e in RECORD_PACKS:
-			it = pack_items(entry(e))
-			st = it[1]
-			recs = [struct.unpack_from('<3I', st, 12 * i) for i in range(SONGS)]
-			assert struct.unpack_from('<3I', st, 12 * SONGS) == (0, 0, 0)
-			# re-base: a 22-record table (21 + terminator), data after it
-			old_data_at = 12 * (SONGS + 1)
-			new_data_at = 12 * (SONGS + 2)
-			blobs = st[old_data_at:]
-			blobs += b'\0' * (-len(blobs) % 4)
-			mini_at = new_data_at + len(blobs)
-			plate_at = mini_at + len(mini) + (-len(mini) % 4)
-			table = b''.join(struct.pack('<3I', i, x - old_data_at + new_data_at, y - old_data_at + new_data_at) for i, x, y in recs)
-			table += struct.pack('<3I', a.master_id, mini_at, plate_at) + b'\0' * 12
-			new_st = table + blobs + mini + b'\0' * (-len(mini) % 4) + plate
-			records[e] = build_pack([it[0], new_st] + it[2:])
-
-		# ---- audio ----
-		raw = os.path.join(tmp, 'song.s16')
-		pcm(audio, 44100, raw, pad_front=lead * ms)
-		stream = os.path.join(tmp, 'song.str')
-		subprocess.check_call([psxaudio, 'spu', raw, stream])
-		stream = open(stream, 'rb').read()
-		prev = os.path.join(tmp, 'prev.s16')
-		pcm(audio, 37800, prev, start=sm['sample_start'], length=sm['sample_length'], fade=1.0)
-		xa = os.path.join(tmp, 'prev.xa')
-		subprocess.check_call([psxaudio, 'xa', prev, xa])
-		xa = open(xa, 'rb').read()
+		for s in songs:
+			s.build(entry, psxaudio, tmp, font, stock_plate, blobs)
 	finally:
 		shutil.rmtree(tmp)
 
-	# ---- layout in the free space ----
-	os.makedirs(os.path.join(a.out, 'data'), exist_ok=True)
-	overlays = []
-	lba = READDT_FREE[0]
-	def place(name, blob):
+	# ---- the menus' packs: markers after the stock items ----
+	packs = {}
+	it = pack_items(entry(WORKOUT_PACK))
+	assert len(it) == 22 and it[21] is None
+	packs[WORKOUT_PACK] = build_pack(it[:21] + [s.workout for s in songs] + [None])
+	for e in MUSIC_PACKS:
+		it = pack_items(entry(e))
+		assert len(it) == 51 and it[50] is None
+		packs[e] = build_pack(it[:50] + [x for s in songs for x in (s.banner, s.plate)] + [None])
+	for e in RESULT_PACKS:
+		it = pack_items(entry(e))
+		assert len(it) == 38 and it[37] is None
+		packs[e] = build_pack(it[:37] + [s.plate for s in songs] + [None])
+	for e in RECORD_PACKS:
+		it = pack_items(entry(e))
+		st = it[1]
+		recs = [struct.unpack_from('<3I', st, 12 * i) for i in range(SONGS)]
+		assert struct.unpack_from('<3I', st, 12 * SONGS) == (0, 0, 0)
+		# re-base: one record per song plus the terminator, data after it
+		old_at, new_at = 12 * (SONGS + 1), 12 * (SONGS + len(songs) + 1)
+		data = st[old_at:]
+		data += b'\0' * (-len(data) % 4)
+		table = b''.join(struct.pack('<3I', i, x - old_at + new_at, y - old_at + new_at) for i, x, y in recs)
+		for s in songs:
+			mini_at = new_at + len(data)
+			data += s.mini
+			table += struct.pack('<3I', s.id, mini_at, mini_at + len(s.mini))
+			data += s.plate
+		packs[e] = build_pack([it[0], table + b'\0' * 12 + data] + it[2:])
+
+	# ---- media: the sectors appended after the disc ----
+	base = disc.sectors
+	media, lba = [], base
+	def put(sectors):
 		nonlocal lba
-		n = (len(blob) + 2047) // 2048
-		if lba + n > READDT_FREE[1]:
-			sys.exit('not enough free space in READ_DT')
 		at = lba
-		open(os.path.join(a.out, 'data', name), 'wb').write(blob + b'\xff' * (n * 2048 - len(blob)))
-		overlays.append(('disc_user', at * 2048, name))
-		lba += n
-		return (len(blob), at)
-	entries = [place('song_%d.bin' % k, b) for k, b in enumerate(song_entries)]
-	toc_new = {}
-	for e, b in list(music.items()) + list(results.items()) + list(records.items()):
-		toc_new[e] = place('e%03d.bin' % e, b)
-	# stream in DUMMY.BIN, then 10 zero sectors, then the preview
-	slba = DUMMY_FREE[0]
-	sn = (len(stream) + 2047) // 2048
-	open(os.path.join(a.out, 'data', 'stream.bin'), 'wb').write(stream + b'\0' * (sn * 2048 - len(stream)))
-	overlays.append(('disc_user', slba * 2048, 'stream.bin'))
-	xlba = slba + sn + 10
-	xlba += -xlba % 8
-	audio_sectors = len(xa) // 2304
-	raws = []
-	for i in range(audio_sectors * 8):
-		lba_i = xlba + i
-		if i % 8 == 0:
-			k = i // 8
-			sub = (1, 0, 0xE4 if k == audio_sectors - 1 else 0x64, 0x01)
-			raws.append(raw_sector(lba_i, sub, xa[2304 * k:2304 * (k + 1)], True))
-		else:
-			raws.append(raw_sector(lba_i, (0xFF, i % 8, 0x04, 0x01), b'', False))
-	if xlba + len(raws) > DUMMY_FREE[1]:
-		sys.exit('not enough free space in DUMMY.BIN')
-	open(os.path.join(a.out, 'data', 'preview.raw'), 'wb').write(b''.join(raws))
-	overlays.append(('disc_raw', xlba * 2352, 'preview.raw'))
-	xa_entry = (0 << 24 | xlba, 1 << 24 | (xlba + 8 * (audio_sectors - 1)), 0x178)
+		media.append(sectors)
+		lba += len(sectors) // 2336
+		return at
+	for s in songs:
+		s.entry_lbas = [(len(b), put(data_sectors(b))) for b in s.entries]
+	toc_new = {e: (len(b), put(data_sectors(b))) for e, b in sorted(packs.items())}
+	for s in songs:
+		s.stream_lba = put(data_sectors(s.stream) + data_sectors(b'\0' * 2048 * 10))
+	# previews: eight to a block, channel c on every eighth sector from c
+	for blk in range(0, len(songs), 8):
+		group = songs[blk:blk + 8]
+		counts = [len(s.xa) // 2304 for s in group]
+		start, file_no = lba, 1 + blk // 8
+		sectors = []
+		for i in range(8 * max(counts)):
+			c, k = i % 8, i // 8
+			if c < len(group) and k < counts[c]:
+				sub = (file_no, c, 0xE4 if k == counts[c] - 1 else 0x64, 0x01)
+				sectors.append(xa_sector(sub, group[c].xa[2304 * k:2304 * (k + 1)]))
+			else:
+				sectors.append(xa_sector((0xFF, c, 0x04, 0x01), b''))
+		put(b''.join(sectors))
+		for c, s in enumerate(group):
+			s.xa_entry = (c << 24 | (start + c), file_no << 24 | (start + c + 8 * (counts[c] - 1)), 0x178)
+	if lba + 150 > 450000:
+		sys.exit('the songs do not fit before 99:59:74')
 
-	# ---- the record ----
-	levels = {}
-	for c in sm['charts']:
-		levels[(c['style'], c['diff'])] = min(c['meter'], 9)
-	sp = levels.get(('dance-single', 'Easy'), 0) | levels.get(('dance-single', 'Medium'), 0) << 4 | \
-	     levels.get(('dance-single', 'Hard'), 0) << 8 | levels.get(('dance-single', 'Beginner'), 0) << 12
-	dp = levels.get(('dance-double', 'Easy'), 0) | levels.get(('dance-double', 'Medium'), 0) << 4 | \
-	     levels.get(('dance-double', 'Hard'), 0) << 8
+	os.makedirs(os.path.join(a.out, 'data'), exist_ok=True)
+	with open(os.path.join(a.out, 'data', 'media.bin'), 'wb') as f:
+		for m in media:
+			f.write(m)
+	open(os.path.join(a.out, 'data', 'gfx.bin'), 'wb').write(blobs.data)
+
+	# ---- the list ----
 	donor = SONGTAB + 44 * 9	# ORION.78's record: the words we have no source for
-	record = [a.master_id, SONGS + 1, 24, 50, sp, dp, 0, 0, exe.w(donor + 32), 0, exe.w(donor + 40)]
-	disc_sha = hashlib.sha256(open(disc.bin, 'rb').read()).hexdigest()
-
-	with open(os.path.join(a.out, 'data', 'extrasongs.txt'), 'w') as f:
+	with open(os.path.join(a.out, 'data', 'extrasongs.txt'), 'w', encoding='latin-1') as f:
 		f.write('# Read by port/core/dsfcore_extrasong.cpp.  Numbers are hex.\n')
-		f.write('song %s\n' % sm['title'])
-		f.write('artist %s\n' % sm['artist'])
-		f.write('record %s\n' % ' '.join('%x' % w for w in record))
-		f.write('stream %x %x %x %x\n' % (slba, len(stream), 44100, 127))
-		f.write('entries %s\n' % ' '.join('%x %x' % e for e in entries))
-		f.write('gfx 32 33\n')	# music-select pack items 50, 51
-		f.write('xa %x %x %x\n' % xa_entry)
-		f.write('end\n')
+		f.write('media %x %x\n' % (base, lba - base))
+		for k, (off, size) in enumerate(blobs.index):
+			f.write('blob %x %x %x\n' % (k, off, size))
+		for k, s in enumerate(songs):
+			record = [s.id, SONGS + 1 + k, STREAM_IDS + k, PREVIEW_IDS + k,
+			          s.ratings('dance-single'), s.ratings('dance-double'), 0, 0,
+			          exe.w(donor + 32), 0, exe.w(donor + 40)]
+			f.write('song %s\n' % s.title)
+			f.write('artist %s\n' % s.artist)
+			f.write('record %s\n' % ' '.join('%x' % w for w in record))
+			f.write('stream %x %x %x %x\n' % (s.stream_lba, len(s.stream), 44100, 127))
+			f.write('entries %s\n' % ' '.join('%x %x' % e for e in s.entry_lbas))
+			f.write('gfx %x %x\n' % (50 + 2 * k, 51 + 2 * k))	# music-select pack items
+			f.write('xa %x %x %x\n' % s.xa_entry)
+			f.write('workout %x\n' % s.workout_index)
+			u = s.cfg.get('unlock')
+			if u:
+				mask = sum(1 << DIFFS.index(d) for d in u['difficulties'])
+				f.write('unlock %x %x\n' % (u['song'], mask))
+			f.write('end\n')
 		for e, (size, l) in sorted(toc_new.items()):
 			f.write('toc %x %x %x\n' % (e, size, l))
+
+	media_path = os.path.join(a.out, 'data', 'media.bin')
+	media_size = os.path.getsize(media_path)
+	media_sha = hashlib.sha256(open(media_path, 'rb').read()).hexdigest()
+	disc_sha = hashlib.sha256(open(disc.bin, 'rb').read()).hexdigest()
 	with open(os.path.join(a.out, 'manifest.toml'), 'w') as f:
-		f.write('format_version = 7\nid = "dsf.extrasongs"\nversion = "1.0.0"\n'
+		f.write('format_version = 9\nid = "dsf.extrasongs"\nversion = "1.0.0"\n'
 		        'name = "Extra songs"\nauthor = "local"\n'
-		        'description = "%s added to the song list (made from your own files and disc; never share it)."\n'
-		        'resolver = "declarative"\nsave_compatibility = "shared"\n\n' % sm['title'])
+		        'description = "%d songs added to the song list (made from your own files and disc; never share it)."\n'
+		        'resolver = "declarative"\nsave_compatibility = "shared"\nprepare = "dsf.extrasongs.media"\n\n' % len(songs))
 		f.write('[[target]]\ngame_id = "SLES-04163"\ndisc_sha256 = "%s"\n\n' % disc_sha)
 		f.write('[[feature]]\nid = "extra-songs"\nname = "Extra songs"\n'
 		        'description = "Adds the songs in this package to the song list."\ngroup = "Content"\n'
 		        'default_enabled = true\n\n')
 		f.write('[[resource]]\nfeature = "extra-songs"\nid = "data"\nlabel = "Song data"\n'
-		        'format = "folder"\ndefault = "data"\nrequired = true\n\n')
-		f.write('[[plugin]]\nfeature = "extra-songs"\nid = "dsf.extrasong"\n\n')
-		for target, off, name in overlays:
-			p = os.path.join(a.out, 'data', name)
-			f.write('[[overlay]]\nfeature = "extra-songs"\ntarget = "%s"\noffset = %d\nfile = "data/%s"\nsha256 = "%s"\n\n'
-			        % (target, off, name, hashlib.sha256(open(p, 'rb').read()).hexdigest()))
-	print('%s: %d measures (lead %d), %d charts, stream %d sectors @%d, preview %d sectors @%d, READ_DT up to %d'
-	      % (sm['title'], last, lead, len(charts), sn, slba, len(raws), xlba, lba))
+		        'format = "folder"\ndefault = "data"\n\n')	# not required: a preparer must supply every required resource
+		f.write('[[resource]]\nfeature = "extra-songs"\nid = "media"\nlabel = "Song audio and graphics"\n'
+		        'format = "file"\nhidden = true\nrequired = true\nsize = %d\nsha256 = "%s"\n\n' % (media_size, media_sha))
+		f.write('[[plugin]]\nfeature = "extra-songs"\nid = "dsf.extrasong"\n')
+	print('%d songs, media %d sectors from LBA %d, %d pictures' % (len(songs), lba - base, base, len(blobs.index)))
 
 
 if __name__ == '__main__':

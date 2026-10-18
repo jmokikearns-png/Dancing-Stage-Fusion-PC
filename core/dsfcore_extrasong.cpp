@@ -19,32 +19,49 @@
  * that hold their bases and counts are patched to them; the extra songs'
  * names go into blank slots of the master table and the READ_DT entries
  * rebuilt with their graphics (music select, results, records) replace the
- * stock ones in the table of contents.  Everything the songs bring -- data,
- * audio, the list in extrasongs.txt -- comes from a separate local package
- * made by port/tools/extrasong/build_extrasong.py from the player's own
- * files and disc (never part of this project); it writes the data into
- * free space of the disc image with disc overlays and selects this plugin.
+ * stock ones in the table of contents.  Everything the songs bring comes
+ * from a separate local package made by port/tools/extrasong/build_extrasong.py
+ * from the player's own files and disc (never part of this project):
+ * extrasongs.txt (the list), gfx.bin (pictures) and media.bin, the new disc
+ * sectors, which activation appends after the end of the mounted disc.
+ *
+ * The menus' packs hold a 16-byte marker for each extra picture: every pack
+ * item goes through the game's LZ decoder (0x8002E6F0), which is replaced by
+ * LZ_GUEST, the same decoder that serves a marker's picture from gfx.bin.
+ * That keeps the packs, and the RAM they are loaded to, at the stock size.
+ *
+ * The music select lists a song when 0x80050C40 accepts it (in DOUBLE mode
+ * only songs with double charts); AVAIL_GUEST adds the unlock condition.
  *
  * Workout results show each song's 176x55 banner (READ_DT e181, item idx+1)
  * from a VRAM grid: x = 640 + 64*(idx/4), y = 256 + 55*(idx%4), CLUT at
  * (640, 476+idx), computed by 0x8008CE50 for drawing and inline by the
  * loader at 0x8008A9A0.  Index 20 would land on the font page at x = 960,
  * so both go to WORKOUT_SLOT, a plugin-defined guest function that keeps the
- * stock grid for the 20 songs and gives extra songs free VRAM of that screen.
+ * stock grid for the 20 songs.  That screen has room for 8 more banners, so
+ * when it loads they go to the extra songs of the workout history (a ring of
+ * 50 {.., number at +8} entries at 0x800DE67C, head 0x800DE668, count
+ * 0x800DE66C), most recent first; any other extra song loads a 2x1 stand-in
+ * into an unused corner.
  */
 #include "mod_plugins.h"
+#include "mod_packages.h"
 #include "cpu_state.h"
 
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <map>
 #include <string>
 #include <vector>
 
 namespace {
 
 uint32_t rd32( uint32_t a ) { return psx_mod_read_word( a ); }
+uint8_t rd8( uint32_t a ) { return psx_mod_read_byte( a ); }
+uint32_t rd32u( uint32_t a ) { return rd8(a) | uint32_t(rd8(a + 1)) << 8 | uint32_t(rd8(a + 2)) << 16 | uint32_t(rd8(a + 3)) << 24; }
 void wr32( uint32_t a, uint32_t v ) { psx_mod_write_word( a, v ); }
 void wr8( uint32_t a, uint8_t v ) { psx_mod_write_byte( a, v ); }
 
@@ -55,7 +72,7 @@ const uint32_t GFXTAB = 0x800AA154, GFX_SIZE = 12;
 const uint32_t XATAB = 0x800934E4, XA_SIZE = 12, NUM_STOCK_XA = 26;	/* ids 24..49 */
 const uint32_t MASTER = 0x800A3EA0, MASTER_SIZE = 20, NUM_MASTER = 0x252;
 const uint32_t TOC = 0x80092B50, NUM_TOC = 235;
-const int MAX_EXTRA = 8;
+const int MAX_EXTRA = 12;		/* the save keeps records for 32 songs */
 
 /* Constants of the code that uses each table: lui/addiu pairs holding the
  * base, and loop bounds / counts holding 20. */
@@ -72,18 +89,34 @@ const Pair GFX_PAIRS[] = { { 0x80050BCC, 0x80050BD0 }, { 0x80050BEC, 0x80050BF0 
 const uint32_t GFX_COUNTS[] = { 0x80050C24 };
 const Pair STR_PAIRS[] = { { 0x8002CA44, 0x8002CA48 } };	/* the base is the table - 16 (1-based) */
 const Pair XA_PAIRS[] = { { 0x80028E50, 0x80028E58 }, { 0x8002E26C, 0x8002E27C } };
-/* The sound driver takes music ids 1..49 only: sltiu v0,(id-1),0x31. */
+/* The sound driver plays music ids 1..49 only: sltiu v0,(id-1),0x31. */
 const uint32_t MUSIC_ID_LIMIT = 0x800296E0, MUSIC_ID_LIMIT_STOCK = 0x2C420031;
+
+/* Replaced functions (see the header). */
+const uint32_t LZ_FN = 0x8002E6F0, LZ_GUEST = 0x8F000020;
+/* The sound driver plays music ids below 25 as STR streams (by number in
+ * the stream table) and the others as XA (0x8002C398); KIND_GUEST adds the
+ * extra songs' stream ids, which follow their preview ids. */
+const uint32_t KIND_FN = 0x8002C398, KIND_GUEST = 0x8F000040;
+const uint32_t MAX_STREAM_ID = 80;
+const uint32_t AVAIL_FN = 0x80050C40, AVAIL_GUEST = 0x8F000030;
+const uint32_t PLAY_STYLE = 0x800BA328;	/* byte; 2 = DOUBLE */
+const uint32_t MARKER_WORD = 0x58465344;	/* "DSFX" */
 
 /* Workout results banner slots (see the header). */
 const uint32_t WORKOUT_SLOT_FN = 0x8008CE50, WORKOUT_LOADER = 0x8008A9A0, WORKOUT_SLOT = 0x8F000010;
+const uint32_t WORKOUT_LOADER_RA = WORKOUT_LOADER + 7 * 4;	/* after the patched block's jal + delay slot */
+const uint32_t HISTORY = 0x800DE668, HISTORY_ROWS = 0x800DE67C, HISTORY_SIZE = 50;
 /* Free on that screen (VRAM map of the workout results, 2026-10-17); each
  * keeps the 176-pixel banner inside one texture page (x%64 <= 20). */
 const uint16_t EXTRA_WORKOUT_SLOTS[][2] = {
 	{ 768, 0 }, { 768, 55 }, { 768, 110 }, { 768, 165 },
 	{ 847, 156 }, { 896, 50 }, { 896, 105 }, { 896, 160 },
 };
+const int NUM_WORKOUT_SLOTS = int( sizeof(EXTRA_WORKOUT_SLOTS) / sizeof(EXTRA_WORKOUT_SLOTS[0]) );
+const uint16_t WORKOUT_SCRATCH[2] = { 1000, 511 };	/* unused on that screen */
 inline uint32_t jal( uint32_t target ) { return 0x0C000000u | ((target >> 2) & 0x03FFFFFFu); }
+inline uint32_t j( uint32_t target ) { return 0x08000000u | ((target >> 2) & 0x03FFFFFFu); }
 void patch_workout_slots();
 
 /* Stock words that tell the executable is in RAM and not yet patched.  The
@@ -97,6 +130,7 @@ const uint32_t STOCK_CHECK[][2] = {
 	{ 0x80050C24, 0x2CA20014 }, { MUSIC_ID_LIMIT, MUSIC_ID_LIMIT_STOCK },
 	{ 0x800932A4, 0x00006F91 }, { 0x800B017C, 0x00008015 }, { 0x800B4C68, 0x80023944 },
 	{ WORKOUT_SLOT_FN, 0x04810002 }, { WORKOUT_LOADER, 0x06010002 }, { 0x8008A9F0, 0xAFA20034 },
+	{ LZ_FN, 0x00A05021 }, { LZ_FN + 4, 0x90890000 }, { KIND_FN, 0x3084FFFF }, { KIND_FN + 4, 0x2C840019 }, { AVAIL_FN, 0x3C02800C }, { AVAIL_FN + 4, 0x8043A328 },
 };
 
 struct Song
@@ -107,21 +141,32 @@ struct Song
 	uint32_t entries[5][2];	/* {size, lba}: en, fr, de, it, es */
 	uint32_t gfx[2];	/* banner and title plate items of the music-select pack */
 	uint32_t xa[3];		/* the preview's XA table entry */
+	uint32_t workout;	/* gfx.bin picture of the workout-results banner */
+	uint32_t unlock_id, unlock_mask;	/* listed once that song is cleared there (0: always) */
 };
+struct Blob { uint32_t offset, size; };
 std::vector<Song> g_songs;
 std::vector<std::pair<uint32_t, std::pair<uint32_t, uint32_t> > > g_toc;	/* entry -> {size, lba} */
-bool g_loaded = false;
+std::vector<Blob> g_blobs;
+std::vector<uint8_t> g_gfx;
+uint32_t g_media_base = 0, g_media_sectors = 0;
+int32_t g_delta = 0;		/* where the media landed minus where the list expects it */
+bool g_loaded = false, g_media_ok = false;
 
 /* Enhancement memory, for up to MAX_EXTRA extra songs. */
 uint32_t g_mem = 0;
-const uint32_t M_SONGS = 0x000;		/* 28 x 44 */
-const uint32_t M_STREAMS = 0x500;	/* 31 x 16 */
-const uint32_t M_GFX = 0x700;		/* 28 x 12 */
-const uint32_t M_GROUPS = 0x880;	/* 8 x 24 */
-const uint32_t M_ENTRIES = 0x980;	/* 8 x 40 */
-const uint32_t M_XA = 0xB00;		/* 34 x 12 */
-const uint32_t M_STRINGS = 0xD00;	/* 8 x 96 */
-const uint32_t M_SIZE = 0x1000;
+const uint32_t M_SONGS = 0x000;		/* 32 x 44 */
+const uint32_t M_STREAMS = 0x580;	/* MAX_STREAM_ID x 16 */
+const uint32_t M_GFX = 0xA80;		/* 32 x 12 */
+const uint32_t M_GROUPS = 0xC00;	/* 12 x 24 */
+const uint32_t M_ENTRIES = 0xD20;	/* 12 x 40 */
+const uint32_t M_XA = 0xF00;		/* 38 x 12 */
+const uint32_t M_STRINGS = 0x10D0;	/* 12 x 96 */
+const uint32_t M_SIZE = 0x1580;
+
+/* Workout slot assignment for the current visit of the screen. */
+int g_slot_song[NUM_WORKOUT_SLOTS];	/* extra song index per slot, -1 free */
+int32_t g_stand_in_blob = -1;		/* the next decode of this picture is the 2x1 stand-in */
 
 uint32_t hi16( uint32_t a ) { return (a + 0x8000u) >> 16; }
 uint32_t lo16( uint32_t a ) { return a & 0xFFFFu; }
@@ -156,9 +201,12 @@ uint32_t put_string( uint32_t at, const std::string &s, uint32_t room )
 	return at;
 }
 
-/* extrasongs.txt: "song TITLE" starts a song; "artist", "record" (11 words),
- * "stream" (4), "entries" (5 x size lba), "gfx" (2), "xa" (3), "end";
- * "toc ENTRY SIZE LBA" lines replace table-of-contents entries.  Hex. */
+/* extrasongs.txt: "media BASE SECTORS", "blob K OFFSET SIZE" (gfx.bin);
+ * "song TITLE" starts a song; "artist", "record" (11 words), "stream" (4),
+ * "entries" (5 x size lba), "gfx" (2), "xa" (3), "workout" (blob),
+ * optionally "unlock ID MASK", then "end"; "toc ENTRY SIZE LBA" lines
+ * replace table-of-contents entries.  Hex; LBAs as if the media started at
+ * BASE. */
 std::vector<uint32_t> hex_words( const char *s )
 {
 	std::vector<uint32_t> out;
@@ -172,6 +220,19 @@ std::vector<uint32_t> hex_words( const char *s )
 		s = end;
 	}
 	return out;
+}
+
+bool read_file( const std::string &path, std::vector<uint8_t> &out )
+{
+	FILE *f = fopen( path.c_str(), "rb" );
+	if( !f )
+		return false;
+	uint8_t buf[65536];
+	size_t n;
+	while( (n = fread(buf, 1, sizeof(buf), f)) > 0 )
+		out.insert( out.end(), buf, buf + n );
+	fclose( f );
+	return true;
 }
 
 void load_songs()
@@ -201,6 +262,8 @@ void load_songs()
 		const char *rest = sp? sp + 1: "";
 		const std::vector<uint32_t> w = hex_words( rest );
 		if( key == "song" ) { s = Song(); s.title = rest; in_song = true; complete = true; }
+		else if( !in_song && key == "media" && w.size() == 2 ) { g_media_base = w[0]; g_media_sectors = w[1]; }
+		else if( !in_song && key == "blob" && w.size() == 3 && w[0] == g_blobs.size() ) g_blobs.push_back( Blob{w[1], w[2]} );
 		else if( !in_song && key == "toc" && w.size() == 3 ) g_toc.push_back( std::make_pair(w[0], std::make_pair(w[1], w[2])) );
 		else if( !in_song ) continue;
 		else if( key == "artist" ) s.artist = rest;
@@ -209,9 +272,12 @@ void load_songs()
 		else if( key == "entries" && w.size() == 10 ) memcpy( s.entries, w.data(), sizeof(s.entries) );
 		else if( key == "gfx" && w.size() == 2 ) memcpy( s.gfx, w.data(), sizeof(s.gfx) );
 		else if( key == "xa" && w.size() == 3 ) memcpy( s.xa, w.data(), sizeof(s.xa) );
+		else if( key == "workout" && w.size() == 1 ) s.workout = w[0];
+		else if( key == "unlock" && w.size() == 2 ) { s.unlock_id = w[0]; s.unlock_mask = w[1]; }
 		else if( key == "end" )
 		{
-			if( complete && g_songs.size() < size_t(MAX_EXTRA) )
+			if( complete && g_songs.size() < size_t(MAX_EXTRA) && s.record[2] >= 1 &&
+			    s.record[2] <= MAX_STREAM_ID && s.record[3] >= 24 && s.record[3] < 24 + 38 )
 				g_songs.push_back( s );
 			in_song = false;
 		}
@@ -219,8 +285,42 @@ void load_songs()
 			complete = false;
 	}
 	fclose( f );
+	if( !read_file(std::string(dir) + "/gfx.bin", g_gfx) )
+		g_blobs.clear();
+	for( const Blob &b : g_blobs )
+		if( uint64_t(b.offset) + b.size > g_gfx.size() )
+		{
+			g_blobs.clear();
+			break;
+		}
+	if( g_blobs.empty() )
+	{
+		psx_mod_counter_add( "dsf.extrasong.no_pictures", 1 );
+		g_songs.clear();
+	}
 	psx_mod_counter_add( "dsf.extrasong.songs", uint32_t(g_songs.size()) );
 }
+
+/* Activation: mount the songs' sectors after the disc. */
+void on_activate()
+{
+	g_loaded = false;
+	g_media_ok = false;
+	g_songs.clear(); g_toc.clear(); g_blobs.clear(); g_gfx.clear();
+	g_media_base = g_media_sectors = 0;
+	load_songs();
+	uint32_t lba = 0;
+	if( g_media_sectors && psx_mod_append_disc_extent("media", 0, g_media_sectors, &lba) )
+	{
+		g_delta = int32_t( lba - g_media_base );
+		g_media_ok = true;
+	}
+	else
+		psx_mod_counter_add( "dsf.extrasong.no_media", 1 );
+}
+
+uint32_t moved( uint32_t lba ) { return uint32_t( int32_t(lba) + g_delta ); }
+uint32_t moved_xa( uint32_t w ) { return (w & 0xFF000000u) | (moved(w & 0xFFFFFFu) & 0xFFFFFFu); }
 
 bool stock_code_present()
 {
@@ -232,8 +332,7 @@ bool stock_code_present()
 
 void install()
 {
-	load_songs();
-	if( g_songs.empty() )
+	if( g_songs.empty() || !g_media_ok )
 		return;
 	if( g_mem == 0 )
 		g_mem = psx_mod_alloc_guest_memory( M_SIZE, 16 );
@@ -244,6 +343,8 @@ void install()
 	const uint32_t n = NUM_STOCK + uint32_t(g_songs.size());
 
 	copy_words( songs, SONGTAB, NUM_STOCK * SONG_SIZE );
+	for( uint32_t a = 0; a < MAX_STREAM_ID * STR_SIZE; a += 4 )
+		wr32( streams + a, 0 );
 	copy_words( streams, STRTAB, NUM_STOCK_STR * STR_SIZE );
 	copy_words( gfx, GFXTAB, NUM_STOCK * GFX_SIZE );
 	copy_words( xa, XATAB, NUM_STOCK_XA * XA_SIZE );
@@ -261,21 +362,23 @@ void install()
 		for( int l = 0; l < 5; ++l )
 		{
 			wr32( e + 8u*uint32_t(l), s.entries[l][0] );
-			wr32( e + 8u*uint32_t(l) + 4, s.entries[l][1] );
+			wr32( e + 8u*uint32_t(l) + 4, moved(s.entries[l][1]) );
 			wr32( g + 4u + 4u*uint32_t(l), e + 8u*uint32_t(l) );
 		}
 		wr32( g, e );		/* JA: the English data, as the stock songs */
 		wr32( rec + 36, g );
 		const uint32_t st = streams + (s.record[2] - 1) * STR_SIZE;
-		for( int i = 0; i < 4; ++i )
+		wr32( st, moved(s.stream[0]) );
+		for( int i = 1; i < 4; ++i )
 			wr32( st + 4u*uint32_t(i), s.stream[i] );
 		const uint32_t gf = gfx + idx * GFX_SIZE;
 		wr32( gf, s.record[0] );
 		wr32( gf + 4, s.gfx[0] );
 		wr32( gf + 8, s.gfx[1] );
 		const uint32_t xe = xa + (s.record[3] - 24) * XA_SIZE;
-		for( int i = 0; i < 3; ++i )
-			wr32( xe + 4u*uint32_t(i), s.xa[i] );
+		wr32( xe, moved_xa(s.xa[0]) );
+		wr32( xe + 4, moved_xa(s.xa[1]) );
+		wr32( xe + 8, s.xa[2] );
 
 		while( blank < NUM_MASTER && rd32(MASTER + blank * MASTER_SIZE + 4) != 0 &&
 		       rd32(MASTER + blank * MASTER_SIZE) != s.record[0] )
@@ -298,7 +401,7 @@ void install()
 		if( t.first < NUM_TOC )
 		{
 			wr32( TOC + 8 * t.first, t.second.first );
-			wr32( TOC + 8 * t.first + 4, t.second.second );
+			wr32( TOC + 8 * t.first + 4, moved(t.second.second) );
 		}
 
 	patch_base( SONG_PAIRS, sizeof(SONG_PAIRS)/sizeof(SONG_PAIRS[0]), songs );
@@ -307,25 +410,195 @@ void install()
 	patch_count( GFX_COUNTS, sizeof(GFX_COUNTS)/sizeof(GFX_COUNTS[0]), n );
 	patch_base( STR_PAIRS, sizeof(STR_PAIRS)/sizeof(STR_PAIRS[0]), streams - STR_SIZE );
 	patch_base( XA_PAIRS, sizeof(XA_PAIRS)/sizeof(XA_PAIRS[0]), xa );
+	/* every play command passes this check, streams and previews alike */
 	uint32_t max_id = 0x31;
 	for( const Song &s : g_songs )
-		if( s.record[3] > max_id )
-			max_id = s.record[3];
+		for( uint32_t id : { s.record[2], s.record[3] } )
+			if( id > max_id )
+				max_id = id;
 	psx_mod_write_code_word( MUSIC_ID_LIMIT, (MUSIC_ID_LIMIT_STOCK & 0xFFFF0000u) | max_id );
+	/* the LZ decoder and the music select's song filter: j GUEST; nop */
+	psx_mod_write_code_word( LZ_FN, j(LZ_GUEST) );
+	psx_mod_write_code_word( LZ_FN + 4, 0 );
+	psx_mod_write_code_word( AVAIL_FN, j(AVAIL_GUEST) );
+	psx_mod_write_code_word( AVAIL_FN + 4, 0 );
+	psx_mod_write_code_word( KIND_FN, j(KIND_GUEST) );
+	psx_mod_write_code_word( KIND_FN + 4, 0 );
 	patch_workout_slots();
 	psx_mod_counter_add( "dsf.extrasong.installed", 1 );
 }
 
-/* WORKOUT_SLOT(idx, &x, &y, &clut_x, &clut_y): 0x8008CE50's contract. */
+/* ---- LZ_GUEST(src, dst) -> bytes written: 0x8002E6F0's contract ---- */
+const Blob *marker_blob( uint32_t src )
+{
+	if( rd32u(src) != MARKER_WORD )
+		return NULL;
+	const uint32_t k = rd32u( src + 4 );
+	if( rd32u(src + 8) != (k ^ 0xFFFFFFFFu) || k >= g_blobs.size() || rd32u(src + 12) != g_blobs[k].size )
+		return NULL;
+	return &g_blobs[k];
+}
+
+/* A 4bpp TIM of 8x1 pixels with the picture's own CLUT, for an extra song
+ * whose workout banner has no slot on this visit. */
+uint32_t write_stand_in( const Blob &b, uint32_t dst )
+{
+	const uint8_t *t = g_gfx.data() + b.offset;
+	uint32_t clut_block;
+	memcpy( &clut_block, t + 8, 4 );
+	uint32_t n = 0;
+	for( ; n < 8 + clut_block; ++n )
+		wr8( dst + n, t[n] );
+	const uint8_t image[16] = { 16, 0, 0, 0,  0, 0, 0, 0,  2, 0, 1, 0,  0, 0, 0, 0 };	/* 12 + 4 bytes, w 2, h 1 */
+	for( uint32_t i = 0; i < sizeof(image); ++i )
+		wr8( dst + n + i, image[i] );
+	return n + uint32_t( sizeof(image) );
+}
+
+void on_lz( CPUState *cpu, uint32_t )
+{
+	uint32_t src = cpu->gpr[4], dst = cpu->gpr[5];
+	const uint32_t start = dst;
+	if( const Blob *b = marker_blob(src) )
+	{
+		if( g_stand_in_blob >= 0 && b == &g_blobs[uint32_t(g_stand_in_blob)] )
+			dst += write_stand_in( *b, dst );
+		else
+			for( uint32_t i = 0; i < b->size; ++i )
+				wr8( dst++, g_gfx[b->offset + i] );
+		g_stand_in_blob = -1;
+		src += 16;
+	}
+	else
+	{
+		/* Konami LZ: a control byte gives 8 flags, LSB first; 0 copies a
+		 * byte, 1 reads a code: 0xxxxxxx yyyyyyyy copies (x>>2)+3 bytes from
+		 * ((x&3)<<8|y) back, 10llxxxx copies l+2 from x+1 back, 11xxxxxx
+		 * copies x+8 bytes as they are, 0xFF ends. */
+		for( ;; )
+		{
+			uint32_t ctrl = rd8( src++ );
+			for( int bit = 0; bit < 8; ++bit, ctrl >>= 1 )
+			{
+				if( !(ctrl & 1) )
+				{
+					wr8( dst++, rd8(src++) );
+					continue;
+				}
+				const uint32_t c = rd8( src++ );
+				uint32_t len, from;
+				if( !(c & 0x80) )
+				{
+					const uint32_t lo = rd8( src++ );
+					len = (c >> 2) + 3;
+					from = dst - (((c & 3) << 8) | lo);
+				}
+				else if( !(c & 0x40) )
+				{
+					len = ((c >> 4) & 3) + 2;
+					from = dst - ((c & 0xF) + 1);
+				}
+				else if( c == 0xFF )
+					goto done;
+				else
+				{
+					for( uint32_t i = (c & 0x3F) + 8; i; --i )
+						wr8( dst++, rd8(src++) );
+					continue;
+				}
+				for( ; len; --len )
+					wr8( dst++, rd8(from++) );
+			}
+		}
+	}
+done:
+	cpu->gpr[4] = src;
+	cpu->gpr[5] = dst;
+	cpu->gpr[10] = start;
+	cpu->gpr[2] = dst - start;
+}
+
+/* ---- KIND_GUEST(music id) -> 2 stream, 1 XA: 0x8002C398's contract ---- */
+void on_kind( CPUState *cpu, uint32_t )
+{
+	const uint32_t id = cpu->gpr[4] & 0xFFFFu;
+	bool stream = id < 25;
+	cpu->gpr[4] = stream;
+	for( const Song &s : g_songs )
+		if( s.record[2] == id )
+			stream = true;
+	cpu->gpr[2] = stream? 2: 1;
+}
+
+/* ---- AVAIL_GUEST(record) -> listed: 0x80050C40's contract plus unlocks ---- */
+bool unlocked( const Song &s );
+
+void on_avail( CPUState *cpu, uint32_t )
+{
+	const uint32_t rec = cpu->gpr[4];
+	const int32_t style = int8_t( rd8(PLAY_STYLE) );
+	uint32_t listed = 1;
+	if( style == 2 )
+		listed = (rd32(rec + 0x14) & 0xF) != 0;
+	if( listed )
+		for( const Song &s : g_songs )
+			if( s.record[0] == rd32(rec) && s.unlock_id && !unlocked(s) )
+				listed = 0;
+	cpu->gpr[3] = uint32_t( style );
+	cpu->gpr[5] = listed;
+	cpu->gpr[2] = listed;
+}
+
+/* ---- WORKOUT_SLOT(idx, &x, &y, &clut_x, &clut_y): 0x8008CE50's contract ---- */
+int extra_by_number( uint32_t number )
+{
+	for( size_t k = 0; k < g_songs.size(); ++k )
+		if( g_songs[k].record[1] == number )
+			return int( k );
+	return -1;
+}
+
+void assign_workout_slots()
+{
+	for( int &s : g_slot_song ) s = -1;
+	uint32_t count = rd32( HISTORY + 4 ), head = rd32( HISTORY );
+	if( count > HISTORY_SIZE ) count = HISTORY_SIZE;
+	if( head >= HISTORY_SIZE ) head = 0;
+	int used = 0;
+	for( uint32_t r = 0; r < count && used < NUM_WORKOUT_SLOTS; ++r )
+	{
+		const uint32_t row = (head + HISTORY_SIZE - 1 - r) % HISTORY_SIZE;	/* newest first */
+		const int k = extra_by_number( rd8(HISTORY_ROWS + 16 * row + 8) );
+		bool have = k < 0;
+		for( int s = 0; s < used && !have; ++s )
+			have = g_slot_song[s] == k;
+		if( !have )
+			g_slot_song[used++] = k;
+	}
+}
+
 void on_workout_slot( CPUState *cpu, uint32_t )
 {
 	const int32_t i = int32_t( cpu->gpr[4] );
+	const bool loading = cpu->gpr[31] == WORKOUT_LOADER_RA;
 	uint32_t x = 640 + 64 * uint32_t(i / 4), y = 256 + 55 * uint32_t(i % 4);
-	const int n = int( sizeof(EXTRA_WORKOUT_SLOTS) / sizeof(EXTRA_WORKOUT_SLOTS[0]) );
-	if( i >= NUM_STOCK_INT && i - NUM_STOCK_INT < n )
+	if( i >= NUM_STOCK_INT && i - NUM_STOCK_INT < int(g_songs.size()) )
 	{
-		x = EXTRA_WORKOUT_SLOTS[i - NUM_STOCK_INT][0];
-		y = EXTRA_WORKOUT_SLOTS[i - NUM_STOCK_INT][1];
+		const int k = i - NUM_STOCK_INT;
+		if( loading && k == 0 )
+			assign_workout_slots();
+		x = WORKOUT_SCRATCH[0];
+		y = WORKOUT_SCRATCH[1];
+		bool slot = false;
+		for( int s = 0; s < NUM_WORKOUT_SLOTS; ++s )
+			if( g_slot_song[s] == k )
+			{
+				x = EXTRA_WORKOUT_SLOTS[s][0];
+				y = EXTRA_WORKOUT_SLOTS[s][1];
+				slot = true;
+			}
+		if( loading && !slot )
+			g_stand_in_blob = int32_t( g_songs[size_t(k)].workout );
 	}
 	wr32( cpu->gpr[5], x );
 	wr32( cpu->gpr[6], y );
@@ -340,7 +613,7 @@ void patch_workout_slots()
 {
 	enum { V0 = 2, A0 = 4, A1 = 5, A2 = 6, A3 = 7, S0 = 16, SP = 29 };
 	/* the slot function: j WORKOUT_SLOT; nop */
-	psx_mod_write_code_word( WORKOUT_SLOT_FN, 0x08000000u | ((WORKOUT_SLOT >> 2) & 0x03FFFFFFu) );
+	psx_mod_write_code_word( WORKOUT_SLOT_FN, j(WORKOUT_SLOT) );
 	psx_mod_write_code_word( WORKOUT_SLOT_FN + 4, 0 );
 	/* the loader's inline formula (x, y, clut x, clut y to 0x28..0x34(sp)) */
 	const uint32_t code[] = {
@@ -356,16 +629,43 @@ void patch_workout_slots()
 	for( ; a <= 0x8008A9F0; a += 4 ) psx_mod_write_code_word( a, 0 );
 }
 
+/* ---- unlocks ---- */
+bool unlocked( const Song & )
+{
+	return true;
+}
+
 void on_vblank()
 {
 	if( stock_code_present() )
 		install();
 }
 
+/* The media file ships in the package; the runtime verifies it (size and
+ * SHA-256 in the manifest) before activation mounts it. */
+bool prepare_media( const PSXRecompV4::ModPrepareContext &ctx,
+                    std::map<std::string, std::filesystem::path> &outputs, std::string &reason )
+{
+	const std::filesystem::path media = ctx.package.root / "data" / "media.bin";
+	std::error_code ec;
+	if( !std::filesystem::is_regular_file(media, ec) )
+	{
+		reason = "data/media.bin is missing";
+		return false;
+	}
+	outputs["media"] = media;
+	return true;
+}
+
 } // namespace
 
 PSX_MOD_CONSTRUCTOR( dsf_register_extrasong )
 {
+	(void) psx_mod_register_activation_plugin( "dsf.extrasong", on_activate );
 	(void) psx_mod_register_vblank_plugin( "dsf.extrasong", on_vblank );
 	(void) psx_mod_register_guest_function_plugin( "dsf.extrasong", WORKOUT_SLOT, on_workout_slot );
+	(void) psx_mod_register_guest_function_plugin( "dsf.extrasong", LZ_GUEST, on_lz );
+	(void) psx_mod_register_guest_function_plugin( "dsf.extrasong", AVAIL_GUEST, on_avail );
+	(void) psx_mod_register_guest_function_plugin( "dsf.extrasong", KIND_GUEST, on_kind );
+	(void) PSXRecompV4::mod_register_media_preparer( "dsf.extrasongs.media", prepare_media, prepare_media );
 }
