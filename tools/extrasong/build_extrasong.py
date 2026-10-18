@@ -20,6 +20,10 @@ a song keeps its save slot only while it keeps its place):
   unlock = { song = 0x8039, difficulties = ["Standard", "Heavy"] }
                                 # optional: listed once that song is cleared there
 
+  [[stock]]                     # a new gameplay background for one of the 20
+  index = 17                    # song-table index (17 = Mickey)
+  background = "bg.png"
+
 A song directory holds NAME.sm, NAME.ogg (or .mp3/.wav), NAME.png (256x80
 banner) and NAME-bg.png (320x240 background).  Everything is converted to
 the game's own formats.  The new disc sectors go into one file the plugin
@@ -545,6 +549,22 @@ def main():
 			table += struct.pack('<3I', s.id, mini_at, mini_at + len(s.mini))
 			data += s.plate
 		packs[e] = build_pack([it[0], table + b'\0' * 12 + data] + it[2:])
+	# stock songs' new backgrounds: their language entries (the TOC entries
+	# their song record's group points to) with item 2 replaced
+	for st in cfg.get('stock', []):
+		k = st['index']
+		if not 0 <= k < SONGS:
+			sys.exit('stock index %d is not one of the 20 songs' % k)
+		group = exe.w(SONGTAB + 44 * k + 36)
+		bg = konami_lz.encode(background_tim(Image.open(os.path.join(root, st['background']))))
+		for p in sorted({exe.w(group + 4 * l) for l in range(6)}):
+			if not (TOC <= p < TOC + 8 * TOC_N and (p - TOC) % 8 == 0):
+				sys.exit('stock song %d: its entries are not in the TOC' % k)
+			e = (p - TOC) // 8
+			it = pack_items(entry(e))
+			assert len(it) == 4
+			packs[e] = build_pack(it[:2] + [bg, it[3]])
+		print('stock song %d: new background in %d language entries' % (k, len({exe.w(group + 4 * l) for l in range(6)})))
 
 	# ---- media: the sectors appended after the disc ----
 	base = disc.sectors

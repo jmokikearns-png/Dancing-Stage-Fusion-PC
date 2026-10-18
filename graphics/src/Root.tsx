@@ -8,6 +8,7 @@ import {sizes} from './tokens';
 import {FontMatch} from './FontMatch';
 import {SongPlate, SongPlateProps} from './SongPlate';
 import {SongBackground, SongBackgroundProps} from './SongBackground';
+import {BgGoWest, BgHeavenEarth, BgKidsInAmerica, BgMickey} from './SongBackgrounds';
 
 export const Root: React.FC = () => (
 	<>
@@ -48,6 +49,11 @@ export const Root: React.FC = () => (
 			defaultProps={{photo: 'photo.png', photoCrop: {x: -190, y: 92, w: 470, h: 352}, titleLines: ['TOUGH', 'ENOUGH'],
 				artist: 'Vanilla Ninja', titleLogo: {src: 'logo_stamp.png', w: 520, h: 292},
 				artistLogo: {src: 'logo_script.png', w: 820, h: 190}} satisfies SongBackgroundProps} />
+		{/* gameplay backgrounds without the artists' photos, PS1-version style */}
+		<Still id="BgKidsInAmerica" component={BgKidsInAmerica} width={1280} height={960} />
+		<Still id="BgGoWest" component={BgGoWest} width={1280} height={960} />
+		<Still id="BgHeavenEarth" component={BgHeavenEarth} width={1280} height={960} />
+		<Still id="BgMickey" component={BgMickey} width={1280} height={960} />
 		<Still id="ThemeSplash" component={ThemeSplash} width={468} height={62} />
 	</>
 );
