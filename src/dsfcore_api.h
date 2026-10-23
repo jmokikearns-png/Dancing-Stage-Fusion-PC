@@ -33,7 +33,7 @@
 extern "C" {
 #endif
 
-#define DSFCORE_API_VERSION 4
+#define DSFCORE_API_VERSION 5
 
 enum {
 	DSFCORE_FRAME_BLANK = 1,	/* display disabled: show black */
@@ -124,6 +124,9 @@ typedef struct DsfCoreHost
 	void (*begin_mapping)( void *user, int player, int button );
 	int (*mapping_state)( void *user );
 	void (*clear_mapping)( void *user, int player, int button );
+	/* The player chose QUIT on the game's main menu: leave the program as
+	 * the host's own exit does.  The core keeps running until then. */
+	void (*quit)( void *user );
 } DsfCoreHost;
 
 /* argv[0] is ignored; the rest are runtime options (--game, --disc, --bios,

@@ -106,6 +106,11 @@ void ScreenPS1Game::Update( float fDeltaTime )
 	if( m_bFailed || PS1CORE == NULL )
 		return;
 
+	if( PS1CORE->TakeQuitRequest() )
+	{
+		SCREENMAN->SetNewScreen( "ScreenExit" );
+		return;
+	}
 	if( PS1CORE->HasExited() )
 	{
 		ShowError( ssprintf("The game stopped (code %i).\nSee dsfcore.log in the game folder.", PS1CORE->GetExitCode()) );
@@ -157,15 +162,14 @@ void ScreenPS1Game::Input( const DeviceInput& DeviceI, const InputEventType type
 	if( PS1CORE && !m_bFailed && PS1CORE->CaptureInput(DeviceI, type) )
 		return;
 
-	/* Everything except Back belongs to the PlayStation (sampled in Update),
-	 * so no StepMania menu action happens here. */
+	/* Everything belongs to the PlayStation (sampled in Update): the game
+	 * has its own OPTIONS for the PC settings and QUIT on its main menu.  Back
+	 * only leaves the error message when the game couldn't start. */
 	if( type != IET_FIRST_PRESS || !GameI.IsValid() || GameI.button != PS1PAD_BUTTON_BACK )
 		return;
 
 	if( m_bFailed )
 		SCREENMAN->SetNewScreen( "ScreenTitleMenu" );
-	else
-		SCREENMAN->SetNewScreen( "ScreenPS1Pause" );
 }
 
 void ScreenPS1Game::HandleScreenMessage( const ScreenMessage SM )

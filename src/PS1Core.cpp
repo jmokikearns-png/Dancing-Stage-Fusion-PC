@@ -135,6 +135,7 @@ PS1Core::PS1Core():
 {
 	m_bStarted = false;
 	m_bRunning = false;
+	m_bQuitRequested = false;
 	m_hModule = NULL;
 	m_pfnState = m_pfnExitCode = NULL;
 	m_iFramesProduced = 0;
@@ -263,6 +264,7 @@ bool PS1Core::Start( CString &sError )
 	host.begin_mapping = CoreBeginMapping;
 	host.mapping_state = CoreMappingState;
 	host.clear_mapping = CoreClearMapping;
+	host.quit = CoreQuit;
 
 	RageSound_Generic_Software::SetDirectStream( MixThunk, this );
 	if( !RageSound_Generic_Software::DirectStreamSupported() )
@@ -577,6 +579,11 @@ int PS1Core::CoreMappingState( void *pUser )
 void PS1Core::CoreClearMapping( void *pUser, int iPlayer, int iButton )
 {
 	((PS1Core *) pUser)->m_Settings.ClearMapping( iPlayer, iButton );
+}
+
+void PS1Core::CoreQuit( void *pUser )
+{
+	((PS1Core *) pUser)->m_bQuitRequested = true;
 }
 
 /* Return when the next guest frame should run. */

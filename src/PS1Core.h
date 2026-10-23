@@ -52,6 +52,8 @@ public:
 	bool Start( CString &sErrorOut );
 	bool IsStarted() const { return m_bStarted; }
 	bool HasExited() const;
+	/* Main thread: true once after the player chose QUIT on the game's main menu. */
+	bool TakeQuitRequest() { bool b = m_bQuitRequested; m_bQuitRequested = false; return b; }
 	int GetExitCode() const;
 
 	/* Let the guest run, or park it at its next VBlank (menus open). */
@@ -88,6 +90,7 @@ private:
 	static void CoreBeginMapping( void *pUser, int iPlayer, int iButton );
 	static int CoreMappingState( void *pUser );
 	static void CoreClearMapping( void *pUser, int iPlayer, int iButton );
+	static void CoreQuit( void *pUser );
 
 	struct Frame
 	{
@@ -106,6 +109,7 @@ private:
 
 	bool m_bStarted;
 	bool m_bRunning;
+	volatile bool m_bQuitRequested;	/* set on the core thread */
 	void *m_hModule;
 	void *m_pfnState, *m_pfnExitCode;
 

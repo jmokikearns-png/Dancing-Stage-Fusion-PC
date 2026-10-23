@@ -1,8 +1,8 @@
 /* ScreenPS1Game - plays the original Dancing Stage Fusion (PS1Core).
  *
  * Shows the PlayStation's picture (4:3, centred) and feeds it the pads from
- * the "ps1pad" game's mappings.  The Back button (Esc by default; never a
- * PlayStation button) opens the port menu; the game is parked meanwhile. */
+ * the "ps1pad" game's mappings.  The PC settings are in the game's own
+ * OPTIONS and QUIT on its main menu leaves the program (ScreenExit). */
 
 #ifndef SCREEN_PS1_GAME_H
 #define SCREEN_PS1_GAME_H

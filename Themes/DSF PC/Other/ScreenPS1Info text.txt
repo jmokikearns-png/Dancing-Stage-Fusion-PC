@@ -45,7 +45,7 @@ Enter - Start    Backspace - Select
 
 Player 2: the numeric keypad (8 2 4 6 arrows, 0 Cross, . Circle, 1 Square, 3 Triangle, Enter Start, + Select).
 
-Esc while playing - the PC menu (resume or quit).
+QUIT, under OPTIONS on the game's main menu, closes Dancing Stage Fusion PC.
 
 [CREDITS]
 PORT BY
