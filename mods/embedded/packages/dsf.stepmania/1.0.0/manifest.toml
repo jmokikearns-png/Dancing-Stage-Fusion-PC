@@ -42,3 +42,14 @@ default_enabled = true
 [[plugin]]
 feature = "stepmania-quit"
 id = "dsf.stepmania.quit"
+
+[[feature]]
+id = "stepmania-stepcolors"
+name = "STEP MARK COLORS TYPE3"
+description = "A third STEP MARK COLORS choice in GRAPHIC OPTIONS: TYPE2's colouring by note with DDR Solo's colours (4th orange, 8th cyan, 12th magenta, 16th and finer purple)."
+group = "Graphics"
+default_enabled = true
+
+[[plugin]]
+feature = "stepmania-stepcolors"
+id = "dsf.stepmania.stepcolors"

@@ -37,6 +37,11 @@ strict = true
 # (port/core/dsfcore_hooks.cpp).  0x800243FC = the game's per-frame pad read
 # (decodes the two LIBPAD receive buffers at 0x800B4DB8 / 0x800B4DEC).
 mod_function_entry_funcs = ["0x800243FC"]
+# STEP MARK COLORS TYPE3 (port/core/dsfcore_stepcolors.cpp): the three
+# `== TYPE2` tests, the note's palette choice, the two palette builders'
+# exits and the save check.
+mod_instruction_sites = ["0x80051950", "0x80054D24", "0x800556FC", "0x800519F0",
+                         "0x8005517C", "0x80055A7C", "0x80084BC0"]
 
 [runtime]
 window_title = "Dancing Stage Fusion Recompiled"

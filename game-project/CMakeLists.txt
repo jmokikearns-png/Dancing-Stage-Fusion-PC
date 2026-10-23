@@ -43,7 +43,8 @@ if(DSF_EMBED)
                                        "${DSF_PORT_DIR}/core/dsfcore_hooks.cpp"
                                        "${DSF_PORT_DIR}/core/dsfcore_menus.cpp"
                                        "${DSF_PORT_DIR}/core/dsfcore_extrasong.cpp"
-                                       "${DSF_PORT_DIR}/core/dsfcore_quitmenu.cpp")
+                                       "${DSF_PORT_DIR}/core/dsfcore_quitmenu.cpp"
+                                       "${DSF_PORT_DIR}/core/dsfcore_stepcolors.cpp")
     target_include_directories(psx-runtime PRIVATE "${DSF_PORT_DIR}/core")
     set_target_properties(psx-runtime PROPERTIES OUTPUT_NAME dsfcore PREFIX "")
 elseif(WIN32)
@@ -60,6 +61,7 @@ if(NOT WIN32)
                                        "${DSF_PORT_DIR}/core/dsfcore_hooks.cpp"
                                        "${DSF_PORT_DIR}/core/dsfcore_menus.cpp"
                                        "${DSF_PORT_DIR}/core/dsfcore_extrasong.cpp"
-                                       "${DSF_PORT_DIR}/core/dsfcore_quitmenu.cpp")
+                                       "${DSF_PORT_DIR}/core/dsfcore_quitmenu.cpp"
+                                       "${DSF_PORT_DIR}/core/dsfcore_stepcolors.cpp")
     target_include_directories(psx-runtime PRIVATE "${DSF_PORT_DIR}/core")
 endif()

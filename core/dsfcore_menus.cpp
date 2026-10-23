@@ -24,6 +24,12 @@
  * SOUND OPTIONS gets the PC sound rows, GRAPHIC OPTIONS a DISPLAY SETTINGS
  * page, CONTROLLER SETTINGS a KEY CONFIG page per player (the host's key /
  * pad mapping; a page longer than the screen scrolls).
+ *
+ * GRAPHIC OPTIONS' STEP MARK COLORS also gets a third value, TYPE3 (DDR
+ * Solo's colours; the gameplay side is dsfcore_stepcolors.cpp): its change
+ * routine 0x800E9D3C steps it mod 3 instead of mod 2, and the draw routine
+ * reads its text id from a copy of the overlay's 2-entry table 0x800F130C
+ * with a third, virtual id, answered with the game's TYPE2 text ending in 3.
  */
 #include "dsfcore_host.h"
 #include "mod_plugins.h"
@@ -436,6 +442,61 @@ bool change_setting( const Row &r, int dir )
 	return true;
 }
 
+/* ---- STEP MARK COLORS TYPE3 ------------------------------------------- */
+
+const uint32_t SYSTEM_DATA_PTR = 0x800B1AFCu, STEP_MARK_COLORS = 0x77u;
+const int STEP_MARK_ROW = 3;
+const uint32_t FN_GRAPHIC_CHANGE = 0x800E9D3Cu, GRAPHIC_CHANGE_WORD = 0x00A03021u;	/* (row *, dir) -> changed */
+const uint32_t STEP_MARK_TABLE = 0x800F130Cu;		/* TYPE1, TYPE2 text ids */
+const uint32_t STEP_MARK_TABLE_HI = 0x800EA150u, STEP_MARK_TABLE_HI_STOCK = 0x3C03800Fu;	/* lui v1, 0x800f */
+const uint32_t STEP_MARK_TABLE_LO = 0x800EA158u, STEP_MARK_TABLE_LO_STOCK = 0x2463130Cu;	/* addiu v1, v1, 0x130c */
+const uint32_t STR_TYPE3 = VIRTUAL_STRING + 0x400u;
+uint32_t g_step_mark_table = 0;
+
+void patch_step_mark_values()
+{
+	if( rd32(STEP_MARK_TABLE_HI) != STEP_MARK_TABLE_HI_STOCK || rd32(STEP_MARK_TABLE_LO) != STEP_MARK_TABLE_LO_STOCK )
+		return;	/* patched already (or not this code) */
+	if( g_step_mark_table == 0 )
+		g_step_mark_table = psx_mod_alloc_guest_memory( 12, 4 );
+	if( g_step_mark_table == 0 )
+		return;
+	wr32( g_step_mark_table, rd32(STEP_MARK_TABLE) );
+	wr32( g_step_mark_table + 4, rd32(STEP_MARK_TABLE + 4) );
+	wr32( g_step_mark_table + 8, STR_TYPE3 );
+	const uint32_t hi = (g_step_mark_table + 0x8000u) >> 16, lo = g_step_mark_table & 0xFFFFu;
+	psx_mod_write_code_word( STEP_MARK_TABLE_HI, 0x3C030000u | hi );
+	psx_mod_write_code_word( STEP_MARK_TABLE_LO, 0x24630000u | lo );
+}
+
+/* The game's TYPE2 text with its last 2 made a 3. */
+bool type3_text( CPUState *cpu )
+{
+	char t[64];
+	game_string( rd32(STEP_MARK_TABLE + 4), t, sizeof(t) );
+	char *two = NULL;
+	for( char *c = t; *c; ++c )
+		if( *c == '2' )
+			two = c;
+	if( !two )
+		return false;
+	*two = '3';
+	cpu->gpr[2] = guest_string( STR_VALUE, t );
+	return true;
+}
+
+/* STEP MARK COLORS steps through TYPE1, TYPE2, TYPE3; the other rows are the game's. */
+void on_graphic_change( CPUState *cpu, uint32_t fn )
+{
+	if( rd32(fn) != GRAPHIC_CHANGE_WORD || !options_overlay_resident() || rd8(cpu->gpr[4]) != STEP_MARK_ROW )
+		return;
+	const uint32_t sys = rd32( SYSTEM_DATA_PTR );
+	const int dir = int16_t( cpu->gpr[5] & 0xFFFFu );
+	wr8( sys + STEP_MARK_COLORS, uint8_t((rd8(sys + STEP_MARK_COLORS) + dir + 3) % 3) );
+	cpu->gpr[2] = 1;
+	psx_mod_finish_function( cpu );
+}
+
 /* ---- the help line ---------------------------------------------------- */
 
 /* Virtual string ids: VIRTUAL_STRING + screen * 0x100 + row (0x80: page rows). */
@@ -459,6 +520,8 @@ uint32_t help_id_for( const Row *r )
 int on_game_string( CPUState *cpu, uint32_t )
 {
 	const uint32_t id = cpu->gpr[4];
+	if( id == STR_TYPE3 && options_overlay_resident() )
+		return type3_text( cpu )? 1: 0;
 	if( id < VIRTUAL_STRING || id >= VIRTUAL_STRING + 0x400 || !g_help_rows[id - VIRTUAL_STRING] ||
 	    !options_overlay_resident() )
 		return 0;	/* the game's own string */
@@ -768,6 +831,8 @@ void on_list_draw( CPUState *cpu, uint32_t fn )
 		}
 	}
 	patch_gap( *s );
+	if( s->draw_fn == 0x800E9E90u )	/* GRAPHIC OPTIONS */
+		patch_step_mark_values();
 	g_in_original = true;
 	d.call( fn );
 	g_in_original = false;
@@ -964,4 +1029,5 @@ PSX_MOD_CONSTRUCTOR( dsf_register_stepmania_menus )
 		(void) psx_mod_register_function_entry_plugin( id, SCREENS[i].input_fn, on_list_input );
 	}
 	(void) psx_mod_register_function_filter_plugin( id, FN_STRING, on_game_string );
+	(void) psx_mod_register_function_entry_plugin( id, FN_GRAPHIC_CHANGE, on_graphic_change );
 }
