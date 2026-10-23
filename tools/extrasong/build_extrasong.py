@@ -607,6 +607,9 @@ def main():
 
 	# ---- the list ----
 	donor = SONGTAB + 44 * 9	# ORION.78's record: the words we have no source for
+	# Record word 8, low half: the song's length in measures; play ends there
+	# (ORION.78: 80, its tempo map ends at 79; with ORION's 80 a longer song
+	# stopped at measure 80).
 	with open(os.path.join(a.out, 'data', 'extrasongs.txt'), 'w', encoding='latin-1') as f:
 		f.write('# Read by port/core/dsfcore_extrasong.cpp.  Numbers are hex.\n')
 		f.write('media %x %x\n' % (base, lba - base))
@@ -615,7 +618,7 @@ def main():
 		for k, s in enumerate(songs):
 			record = [s.id, SONGS + 1 + k, STREAM_IDS + k, PREVIEW_IDS + k,
 			          s.ratings('dance-single'), s.ratings('dance-double'), 0, 0,
-			          exe.w(donor + 32), 0, exe.w(donor + 40)]
+			          (exe.w(donor + 32) & 0xFFFF0000) | (s.last + 1), 0, exe.w(donor + 40)]
 			f.write('song %s\n' % s.title)
 			f.write('artist %s\n' % s.artist)
 			f.write('record %s\n' % ' '.join('%x' % w for w in record))
