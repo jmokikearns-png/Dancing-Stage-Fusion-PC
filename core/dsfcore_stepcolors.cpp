@@ -18,7 +18,8 @@
  * Before each `addiu` a value of 2 is presented as 1, so TYPE3 runs TYPE2's
  * code.  Then, for TYPE3 only:
  *   0x800519F0  (after the note's palette is chosen) the palette-3 notes that
- *               are not 12ths move to palette 1, so palette 3 is 12ths only;
+ *               are not 12ths (320 / 672 in the beat) move to palette 1, so
+ *               palette 3 is 12ths only;
  *   0x8005517C, 0x80055A7C  (each builder's exit) the four palettes are
  *               re-tinted: each colour keeps its brightness (top channel)
  *               and whiteness (bottom / top channel) and takes Solo's hue.
@@ -76,11 +77,12 @@ void on_save_check( CPUState *cpu, uint32_t )
 		cpu->gpr[2] = 1;
 }
 
-/* A 12th lies a third of a beat in (1024 per beat). */
+/* A 12th (1024 per beat): the step-list builder places triplet notes at
+ * (3 - n) * 1024 / 3 rounded down to 32 (0x8007FDDC), i.e. 320 and 672. */
 bool is_twelfth( uint32_t position )
 {
-	const int x = int( position & 0x3FFu );
-	return (x >= 339 && x <= 344) || (x >= 680 && x <= 686);
+	const uint32_t x = position & 0x3FFu;
+	return x == 320 || x == 672;
 }
 
 void on_note_palette( CPUState *cpu, uint32_t )
