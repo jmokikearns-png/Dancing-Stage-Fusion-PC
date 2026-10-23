@@ -31,3 +31,14 @@ default_enabled = true
 [[plugin]]
 feature = "stepmania-menus"
 id = "dsf.stepmania.menus"
+
+[[feature]]
+id = "stepmania-quit"
+name = "QUIT on the main menu"
+description = "A QUIT entry under OPTIONS on the game's main menu, in the menu's own lettering, that leaves the program."
+group = "Controls"
+default_enabled = true
+
+[[plugin]]
+feature = "stepmania-quit"
+id = "dsf.stepmania.quit"

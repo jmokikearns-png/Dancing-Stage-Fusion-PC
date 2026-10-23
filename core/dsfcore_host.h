@@ -30,6 +30,9 @@ void dsfcore_host_begin_mapping( int player, int button );
 int dsfcore_host_mapping_state( void );
 void dsfcore_host_clear_mapping( int player, int button );
 
+/* QUIT on the main menu (see DsfCoreHost.quit). */
+void dsfcore_host_quit( void );
+
 #ifdef __cplusplus
 }
 #endif

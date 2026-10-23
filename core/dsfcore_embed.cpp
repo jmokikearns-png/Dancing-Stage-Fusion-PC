@@ -113,6 +113,12 @@ void dsfcore_host_clear_mapping( int player, int button )
 		g_host.clear_mapping( g_host.user, player, button );
 }
 
+void dsfcore_host_quit( void )
+{
+	if( g_host.quit )
+		g_host.quit( g_host.user );
+}
+
 __declspec(dllexport) int dsfcore_start( const DsfCoreHost *host, int argc, const char *const *argv, const char *log_path )
 {
 	if( g_state != DSFCORE_STATE_NOT_STARTED || host == NULL ||

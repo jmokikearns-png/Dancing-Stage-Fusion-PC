@@ -2,10 +2,12 @@
  * Linux test build (the debug server drives it): no buttons from a host, PC
  * settings kept in memory with StepMania's choice lists, and key mappings
  * with the port's default keys.  A key capture can't see real keys here: it
- * completes by itself after about a second with a made-up pad button. */
+ * completes by itself after about a second with a made-up pad button.
+ * QUIT on the main menu ends the program. */
 #include "dsfcore_host.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 namespace {
@@ -149,4 +151,11 @@ extern "C" void dsfcore_host_clear_mapping( int player, int button )
 		return;
 	g_mappings[player][button].slot[0][0] = 0;
 	g_mappings[player][button].slot[1][0] = 0;
+}
+
+/* No host to return to: QUIT ends the test program. */
+extern "C" void dsfcore_host_quit( void )
+{
+	std::fflush( stdout );
+	std::exit( 0 );
 }
