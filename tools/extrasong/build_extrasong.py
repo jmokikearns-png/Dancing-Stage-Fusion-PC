@@ -12,6 +12,7 @@ a song keeps its save slot only while it keeps its place):
   dir = "Tough Enough"          # relative to SONGS.toml
   master_id = 0x8030            # a free master-table id
   background = "bg.png"         # optional, instead of NAME-bg.png
+  banner = "banner.png"         # optional, instead of NAME.png
   title = "..."                 # optional plate/list title (default #TITLE)
   artist = "..."                # optional (default #ARTIST)
   plate = "plate.png"           # optional plate image instead of the lettering
@@ -19,6 +20,7 @@ a song keeps its save slot only while it keeps its place):
   double = [5, 8, 10]           # optional ratings: Light, Standard, Heavy
   unlock = { song = 0x8039, difficulties = ["Standard", "Heavy"] }
                                 # optional: listed once that song is cleared there
+  outro = 2                     # optional: measures of play after the last step
 
   [[stock]]                     # a new gameplay background for one of the 20
   index = 17                    # song-table index (17 = Mickey)
@@ -457,7 +459,7 @@ class Song:
 		self.entries = [build_pack([slot0, events, bg, pack_items(entry(68 + 5 * UI_DONOR + k))[3]])
 		                for k in range(LANG_ENTRIES)]
 		# ---- graphics ----
-		banner_img = Image.open(self.base + '.png')
+		banner_img = Image.open(self.path('banner') if 'banner' in self.cfg else self.base + '.png')
 		if 'plate' in self.cfg:
 			plate = plate_tim(self.path('plate'), stock_plate)
 		else:

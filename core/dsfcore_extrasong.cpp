@@ -101,6 +101,8 @@ const uint32_t KIND_FN = 0x8002C398, KIND_GUEST = 0x8F000040;
 const uint32_t MAX_STREAM_ID = 80;
 const uint32_t AVAIL_FN = 0x80050C40, AVAIL_GUEST = 0x8F000030;
 const uint32_t PLAY_STYLE = 0x800BA328;	/* byte; 2 = DOUBLE */
+const uint32_t SAVE_PTR = 0x800B1AFC;	/* -> the save: song records at +0x90, 0x50 bytes each */
+const int SAVE_RECORDS = 32;
 const uint32_t MARKER_WORD = 0x58465344;	/* "DSFX" */
 
 /* Workout results banner slots (see the header). */
@@ -629,10 +631,27 @@ void patch_workout_slots()
 	for( ; a <= 0x8008A9F0; a += 4 ) psx_mod_write_code_word( a, 0 );
 }
 
-/* ---- unlocks ---- */
-bool unlocked( const Song & )
+/* ---- unlocks ----
+ * The results code (0x80089880..0x80089B10) keeps one save record per song:
+ * +0x24 the song id, and per chart d (single Beginner, Light, Standard,
+ * Heavy = 0..3, double +4) the score at +4d and the grade at +0x46+d.  It
+ * writes them only after a cleared play (a failed one leaves the record as
+ * it was), so a grade means that chart was cleared. */
+bool unlocked( const Song &s )
 {
-	return true;
+	const uint32_t save = rd32( SAVE_PTR );
+	if( (save & 0xFFE00000u) != 0x80000000u )
+		return false;
+	for( int i = 0; i < SAVE_RECORDS; ++i )
+	{
+		const uint32_t rec = save + 0x90 + 0x50 * i;
+		if( (rd32(rec + 0x24) & 0xFFFF) != s.unlock_id )
+			continue;
+		for( int d = 0; d < 8; ++d )
+			if( (s.unlock_mask >> (d & 3) & 1) && rd8(rec + 0x46 + d) )
+				return true;
+	}
+	return false;
 }
 
 void on_vblank()
