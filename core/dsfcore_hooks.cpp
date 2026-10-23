@@ -27,7 +27,9 @@
  *   (0 Left, 1 Down, 2 Up, 3 Right, 4-7 the same on the double side), so
  *   rows 0-7 are single arrows and jumps get 8, 9, ... as they first
  *   appear.  The table is reused after the song, so it is copied when play
- *   starts.  Single only: slots 4-7 are not pressed.
+ *   starts.  Slots 0-3 are pressed on player 1's pad, 4-7 (double play's
+ *   right-hand mat) on player 2's; player 2's pad is only taken over when
+ *   the chart uses those slots.
  *   Each step is pressed for one frame, on the frame whose clock is nearest
  *   its time + DSF_AUTOPLAY_OFFSET ticks (the clock moves 1.5 ticks a
  *   frame).  The default -3 is what judges every step PERFECT: the game
@@ -58,25 +60,30 @@ double g_autoplay_offset = -3.0;
 bool g_playing = false;
 int g_next_step = 0;
 int32_t g_last_clock = 0;
-uint16_t g_pattern_bits[MAX_PATTERNS];	/* pattern -> player 1 pad bits to clear */
+uint16_t g_pattern_bits[MAX_PATTERNS][2];	/* pattern -> each pad's bits to clear */
 int g_patterns = 0;
+bool g_double = false;			/* the chart has slots 4-7 */
 
 void read_patterns()
 {
+	g_double = false;
 	for( g_patterns = 0; g_patterns < MAX_PATTERNS; ++g_patterns )
 	{
 		const uint32_t row = PATTERNS + 8 * uint32_t(g_patterns);
 		if( psx_mod_read_byte(row) == 5 )
 			break;
-		uint16_t bits = 0;
-		for( int k = 0; k < 4; ++k )
-			if( psx_mod_read_byte(row + uint32_t(k)) )
-				bits |= PANEL_BIT[k];
-		g_pattern_bits[g_patterns] = bits;
+		for( int pad = 0; pad < 2; ++pad )
+		{
+			uint16_t bits = 0;
+			for( int k = 0; k < 4; ++k )
+				if( psx_mod_read_byte(row + uint32_t(4 * pad + k)) )
+					bits |= PANEL_BIT[k];
+			g_pattern_bits[g_patterns][pad] = bits;
+		}
 	}
 }
 
-bool autoplay_pad( uint16_t &pad )
+bool autoplay_pads( uint16_t pads[2] )
 {
 	if( g_autoplay < 0 )
 	{
@@ -98,7 +105,9 @@ bool autoplay_pad( uint16_t &pad )
 		read_patterns();
 	}
 	g_last_clock = clock;
-	pad = 0xFFFF;
+	pads[0] = 0xFFFF;
+	if( g_double )
+		pads[1] = 0xFFFF;
 	for( ; g_next_step < MAX_STEPS; ++g_next_step )
 	{
 		const uint32_t e = STEP_LIST + STEP_SIZE * uint32_t(g_next_step);
@@ -110,7 +119,13 @@ bool autoplay_pad( uint16_t &pad )
 		const double t = int16_t( psx_mod_read_half(e + 8) ) + g_autoplay_offset;
 		if( t > clock + 0.75 )	/* nearer the next frame's clock (+1.5) */
 			break;
-		pad &= uint16_t( ~g_pattern_bits[pattern] );
+		pads[0] &= uint16_t( ~g_pattern_bits[pattern][0] );
+		if( g_pattern_bits[pattern][1] && !g_double )
+		{
+			g_double = true;	/* from now on player 2's pad is ours too */
+			pads[1] = 0xFFFF;
+		}
+		pads[1] &= uint16_t( ~g_pattern_bits[pattern][1] );
 	}
 	return true;
 }
@@ -119,7 +134,7 @@ void on_game_pad_read( struct CPUState *, uint32_t )
 {
 	uint16_t pads[2] = { 0xFFFF, 0xFFFF };	/* active-low: nothing pressed */
 	const bool host = dsfcore_host_read_pads( pads ) != 0;
-	const bool autoplay = autoplay_pad( pads[0] );
+	const bool autoplay = autoplay_pads( pads );
 	if( !host && !autoplay )
 		return;
 	if( host && !g_bLoggedPads )
