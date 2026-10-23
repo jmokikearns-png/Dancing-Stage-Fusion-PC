@@ -294,6 +294,7 @@ PANEL_BITS = {0: 0, 1: 3, 2: 2, 3: 1}	# simfile column (L, D, U, R) -> bit
 
 
 CHART_START = 3		# tempo-map measure of the chart's first beat
+OUTRO = 2		# measures of play after a song's last step (songs.toml: outro)
 
 def chart_words(chart, lead_measures, last_measure, report):
 	"""The chart on the game's 16th-note grid; a step between 16ths moves
@@ -434,6 +435,13 @@ class Song:
 		while timing.time(4.0 * (last + 1 - lead), True) + pad <= dur + pad:
 			last += 1
 		self.last, self.lead = last, lead
+		# Play ends OUTRO measures after the last step, as on the stock songs
+		# (0.5 to 5 after theirs), so the rest of the music plays under CLEARED;
+		# never past the music's end.
+		last_step = max(m + lead + r / float(len(rows)) for c in sm['charts']
+		                for m, rows in enumerate(c['measures'])
+		                for r, row in enumerate(rows) if any(x in '124' for x in row))
+		self.length = min(last + 1, int(math.ceil(last_step + self.cfg.get('outro', OUTRO))))
 		# ---- song entry (5 language copies) ----
 		charts = []
 		for style, diffs in (('dance-single', ('Light', 'Standard', 'Heavy', 'Beginner')),
@@ -475,8 +483,8 @@ class Song:
 		subprocess.check_call([psxaudio, 'xa', prev, xa])
 		self.xa = open(xa, 'rb').read()
 		bpm_text = '/'.join('%g' % b for _, b in sm['bpms'][:4]) + ('...' if len(sm['bpms']) > 4 else '')
-		print('%-34s %3d measures (lead %d), %d charts, BPM %s%s' % (
-		      self.title[:34], last, lead, len(charts), bpm_text,
+		print('%-34s %3d measures, play to %d (lead %d), %d charts, BPM %s%s' % (
+		      self.title[:34], last, self.length, lead, len(charts), bpm_text,
 		      ', %d stops' % len(sm['stops']) if sm['stops'] else ''))
 		for r in report:
 			print('    ' + r)
@@ -608,7 +616,8 @@ def main():
 	# ---- the list ----
 	donor = SONGTAB + 44 * 9	# ORION.78's record: the words we have no source for
 	# Record word 8, low half: the song's length in measures; play ends there
-	# (ORION.78: 80, its tempo map ends at 79; with ORION's 80 a longer song
+	# and CLEARED shows over the rest of the music (ORION.78: 80, its last
+	# step at 75 and tempo map end at 79; with ORION's 80 a longer song
 	# stopped at measure 80).
 	with open(os.path.join(a.out, 'data', 'extrasongs.txt'), 'w', encoding='latin-1') as f:
 		f.write('# Read by port/core/dsfcore_extrasong.cpp.  Numbers are hex.\n')
@@ -618,7 +627,7 @@ def main():
 		for k, s in enumerate(songs):
 			record = [s.id, SONGS + 1 + k, STREAM_IDS + k, PREVIEW_IDS + k,
 			          s.ratings('dance-single'), s.ratings('dance-double'), 0, 0,
-			          (exe.w(donor + 32) & 0xFFFF0000) | (s.last + 1), 0, exe.w(donor + 40)]
+			          (exe.w(donor + 32) & 0xFFFF0000) | s.length, 0, exe.w(donor + 40)]
 			f.write('song %s\n' % s.title)
 			f.write('artist %s\n' % s.artist)
 			f.write('record %s\n' % ' '.join('%x' % w for w in record))
