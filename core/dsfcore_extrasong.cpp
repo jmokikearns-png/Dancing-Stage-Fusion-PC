@@ -41,7 +41,8 @@
  * stock grid for the 20 songs.  That screen has room for 8 more banners, so
  * when it loads they go to the extra songs of the workout history (a ring of
  * 50 {.., number at +8} entries at 0x800DE67C, head 0x800DE668, count
- * 0x800DE66C), most recent first; any other extra song loads a 2x1 stand-in
+ * 0x800DE66C), most recent first, after the song just played (not yet in
+ * the history when the banners load); any other extra song loads a 2x1 stand-in
  * into an unused corner.
  *
  * RECORDS (an overlay at 0x800E0000) loads every song's 88x28 mini banner
@@ -132,6 +133,9 @@ const uint16_t REC_FREE_X = 960, REC_FREE_Y = 0;
 const uint32_t WORKOUT_SLOT_FN = 0x8008CE50, WORKOUT_LOADER = 0x8008A9A0, WORKOUT_SLOT = 0x8F000010;
 const uint32_t WORKOUT_LOADER_RA = WORKOUT_LOADER + 7 * 4;	/* after the patched block's jal + delay slot */
 const uint32_t HISTORY = 0x800DE668, HISTORY_ROWS = 0x800DE67C, HISTORY_SIZE = 50;
+/* The song just played (player 1's song number): the results screen loads
+ * its banners before 0x8008FC5C adds that song to the history. */
+const uint32_t CURRENT_SONG = 0x800BA32A;
 /* Free on that screen (VRAM map of the workout results, 2026-10-17); each
  * keeps the 176-pixel banner inside one texture page (x%64 <= 20). */
 const uint16_t EXTRA_WORKOUT_SLOTS[][2] = {
@@ -615,10 +619,10 @@ void assign_workout_slots()
 	if( count > HISTORY_SIZE ) count = HISTORY_SIZE;
 	if( head >= HISTORY_SIZE ) head = 0;
 	int used = 0;
-	for( uint32_t r = 0; r < count && used < NUM_WORKOUT_SLOTS; ++r )
+	for( uint32_t r = 0; r <= count && used < NUM_WORKOUT_SLOTS; ++r )
 	{
-		const uint32_t row = (head + HISTORY_SIZE - 1 - r) % HISTORY_SIZE;	/* newest first */
-		const int k = extra_by_number( rd8(HISTORY_ROWS + 16 * row + 8) );
+		const uint32_t row = (head + HISTORY_SIZE - r) % HISTORY_SIZE;	/* newest first */
+		const int k = extra_by_number( r == 0? rd8(CURRENT_SONG): rd8(HISTORY_ROWS + 16 * row + 8) );
 		bool have = k < 0;
 		for( int s = 0; s < used && !have; ++s )
 			have = g_slot_song[s] == k;
