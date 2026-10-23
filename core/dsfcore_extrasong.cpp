@@ -43,6 +43,16 @@
  * 50 {.., number at +8} entries at 0x800DE67C, head 0x800DE668, count
  * 0x800DE66C), most recent first; any other extra song loads a 2x1 stand-in
  * into an unused corner.
+ *
+ * RECORDS (an overlay at 0x800E0000) loads every song's 88x28 mini banner
+ * in a loop at 0x800E8F78 into 20-byte slots at [0x800F2140] + 0x7C, count
+ * at +0x2FC, and stores each next id before testing it for the table's end:
+ * with 32 songs that end mark lands on the count and empties the list, so
+ * no banner or title shows.  When the loop decodes its first banner,
+ * on_lz moves that store after the test.  The loop places banner n at
+ * x = 832 + 21*(n%3), y = 256 + 26*(n/3), which past n = 26 runs into the
+ * palettes at y = 496 and off VRAM; on_lz moves those to the free page at
+ * x = 960, y = 0.
  */
 #include "mod_plugins.h"
 #include "mod_packages.h"
@@ -104,6 +114,19 @@ const uint32_t PLAY_STYLE = 0x800BA328;	/* byte; 2 = DOUBLE */
 const uint32_t SAVE_PTR = 0x800B1AFC;	/* -> the save: song records at +0x90, 0x50 bytes each */
 const int SAVE_RECORDS = 32;
 const uint32_t MARKER_WORD = 0x58465344;	/* "DSFX" */
+
+/* RECORDS overlay: its mini-banner loop (see the header). */
+const uint32_t REC_LZ_RA = 0x800E90C4, REC_OBJ = 0x800F2140;
+const uint32_t REC_SLOTS = 0x7C, REC_SLOT_SIZE = 20, REC_COUNT = 0x2FC;
+const uint32_t REC_STORE = 0x800E8FA4, REC_LOAD = 0x800E8FA8, REC_SPARE = 0x800E8FAC;
+const uint32_t REC_STOCK[][2] = {
+	{ REC_STORE, 0xAE020000 },	/* sw v0, 0(s0): the id, in the end test's delay slot */
+	{ REC_LOAD, 0x8E22FFFC },	/* lw v0, -4(s1) */
+	{ REC_SPARE, 0x00000000 },	/* nop (load delay) */
+	{ 0x800E90BC, 0x0C00B9BC },	/* jal 0x8002E6F0 */
+};
+const uint32_t REC_FIRST_MOVED = 27;	/* banners from here on go to the free page */
+const uint16_t REC_FREE_X = 960, REC_FREE_Y = 0;
 
 /* Workout results banner slots (see the header). */
 const uint32_t WORKOUT_SLOT_FN = 0x8008CE50, WORKOUT_LOADER = 0x8008A9A0, WORKOUT_SLOT = 0x8F000010;
@@ -457,8 +480,33 @@ uint32_t write_stand_in( const Blob &b, uint32_t dst )
 	return n + uint32_t( sizeof(image) );
 }
 
+/* Called from the RECORDS mini-banner loop, before it uploads banner n
+ * from the slot s0 points to. */
+void records_slot( CPUState *cpu )
+{
+	bool stock = true;
+	for( const auto &c : REC_STOCK )
+		stock = stock && rd32( c[0] ) == c[1];
+	if( stock )
+	{
+		psx_mod_write_code_word( REC_STORE, 0x00404821 );	/* move t1, v0 */
+		psx_mod_write_code_word( REC_SPARE, 0xAE090000 );	/* sw t1, 0(s0) */
+	}
+	const uint32_t obj = rd32( REC_OBJ );
+	const uint32_t n = rd32( obj + REC_COUNT ) - 1;	/* counted before the decode */
+	const uint32_t slot = cpu->gpr[16];
+	if( n < REC_FIRST_MOVED || n >= 32 || slot != obj + REC_SLOTS + REC_SLOT_SIZE * n )
+		return;
+	const uint32_t k = n - REC_FIRST_MOVED;
+	const uint16_t x = uint16_t( REC_FREE_X + 21 * (k % 3) ), y = uint16_t( REC_FREE_Y + 26 * (k / 3) );
+	wr8( slot + 0xC, uint8_t(x) ); wr8( slot + 0xD, uint8_t(x >> 8) );
+	wr8( slot + 0xE, uint8_t(y) ); wr8( slot + 0xF, uint8_t(y >> 8) );
+}
+
 void on_lz( CPUState *cpu, uint32_t )
 {
+	if( cpu->gpr[31] == REC_LZ_RA )
+		records_slot( cpu );
 	uint32_t src = cpu->gpr[4], dst = cpu->gpr[5];
 	const uint32_t start = dst;
 	if( const Blob *b = marker_blob(src) )
