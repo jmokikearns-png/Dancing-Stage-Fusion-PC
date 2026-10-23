@@ -66,7 +66,8 @@ typedef struct DsfCoreSetting
 	char text[40];			/* the current choice */
 } DsfCoreSetting;
 
-/* Buttons of the KEY CONFIG pages: the PS1 pad, then the PC menu. */
+/* Buttons of the KEY CONFIG pages: the PS1 pad.  PC_MENU is StepMania's Back,
+ * which the pages no longer list (QUIT on the main menu replaced the PC menu). */
 enum {
 	DSFCORE_BUTTON_UP = 0, DSFCORE_BUTTON_DOWN, DSFCORE_BUTTON_LEFT, DSFCORE_BUTTON_RIGHT,
 	DSFCORE_BUTTON_CROSS, DSFCORE_BUTTON_CIRCLE, DSFCORE_BUTTON_SQUARE, DSFCORE_BUTTON_TRIANGLE,
