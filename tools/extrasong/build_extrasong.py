@@ -21,6 +21,8 @@ a song keeps its save slot only while it keeps its place):
   unlock = { song = 0x8039, difficulties = ["Standard", "Heavy"] }
                                 # optional: listed once that song is cleared there
   outro = 2                     # optional: measures of play after the last step
+  script = 12                   # optional: the stock song (group 0..19) whose background
+                                # animation script is fitted to this song (default ORION.78)
 
   [[stock]]                     # a new gameplay background for one of the 20
   index = 17                    # song-table index (17 = Mickey)
@@ -75,7 +77,7 @@ RESULT_PACKS = range(206, 211)		# results: items 17-36 plates
 RECORD_PACKS = range(28, 33)		# records: slot 1 = SONGTAB {id, mini, plate}
 WORKOUT_PACK = 181			# workout results: items 1-20 banners 176x55, slot 21 = 0
 UI_DONOR = 14				# song group whose language UI sets are copied (AM-3P)
-EVENT_DONOR = 12			# song group whose event list is copied (ORION.78, 200 BPM)
+EVENT_DONOR = 12			# default script donor (songs.toml script = group): ORION.78
 MAX_SONGS = 32				# the save keeps records for 32 songs
 DIFFS = ('Beginner', 'Light', 'Standard', 'Heavy')
 SM_NAME = {'Beginner': 'Beginner', 'Light': 'Easy', 'Standard': 'Medium', 'Heavy': 'Hard'}
@@ -328,6 +330,129 @@ def chart_words(chart, lead_measures, last_measure, report):
 	return struct.pack('<II14I', 64 + 4 * beats, kind, *([0] * 14)) + struct.pack('<%dI' % beats, *words)
 
 
+# ---- background animation scripts (song entry slot 1) -------------------------
+# u32 size, u16 5, u16 k, u32 n, n x s32 cue position (1/4096 measure; the
+# first is -99999, the second 0), n x 8 words: what the stage does from that
+# cue on (background layers, camera, effects).  Only the positions are time.
+
+def parse_events(ev):
+	w = struct.unpack_from('<%dI' % (len(ev) // 4), ev, 0)
+	n = w[2]
+	if w[0] != len(ev) or len(ev) != 12 + 36 * n:
+		sys.exit('an event list that is not 12 + 36 * cues bytes')
+	pos = [struct.unpack('<i', struct.pack('<I', x))[0] for x in w[3:3 + n]]
+	recs = [w[3 + n + 8 * i:3 + n + 8 * i + 8] for i in range(n)]
+	return w[1], pos, recs
+
+
+def build_events(head, pos, recs):
+	n = len(pos)
+	return struct.pack('<III', 12 + 36 * n, head, n) + struct.pack('<%di' % n, *pos) + \
+		b''.join(struct.pack('<8I', *r) for r in recs)
+
+
+def stock_density(slot0):
+	"""Steps per tempo-map measure of a stock song (its single Standard chart,
+	else its busiest single chart), and its last tempo-map measure."""
+	items = pack_items(slot0)
+	tm = items[0]
+	npts = (struct.unpack_from('<I', tm, 0)[0] - 4) // 8
+	last = struct.unpack_from('<I', tm, 4 + 8 * (npts - 1))[0] / 4096.0
+	best = None
+	for c in items[1:]:
+		kind = struct.unpack_from('<I', c, 4)[0]
+		if kind & 0xFF:
+			continue
+		words = struct.unpack_from('<%dI' % ((len(c) - 64) // 4), c, 64)
+		d = [0] * (int(last) + 2)
+		for i, wd in enumerate(words):
+			M = CHART_START + i // 4
+			if M < len(d):
+				d[M] += sum(1 for q in range(4) if (wd >> (8 * q)) & 0xFF)
+		key = (((kind >> 8) & 0xFF) == SM_DIFF['Medium'], sum(d))
+		if best is None or key > best[0]:
+			best = (key, d)
+	return best[1], last
+
+
+def structure(d, last):
+	"""Anchors of a song's shape from its steps per measure: where the steps
+	start and end, and the breaks between (2+ measures well below the song's
+	usual density), as (start, end) pairs."""
+	busy = [M for M, v in enumerate(d) if v]
+	if not busy:
+		return 0.0, float(last), []
+	first, end = busy[0], busy[-1] + 1
+	nz = sorted(v for v in d[first:end] if v)
+	low = 0.4 * nz[len(nz) // 2]
+	breaks, M = [], first
+	while M < end:
+		if d[M] <= low:
+			k = M
+			while k < end and d[k] <= low:
+				k += 1
+			if k - M >= 2:
+				breaks.append((M, k))
+			M = k
+		else:
+			M += 1
+	return float(first), float(end), breaks
+
+
+def anchor_map(d_dens, d_last, n_dens, n_last):
+	"""Piecewise-linear map from donor measures to new-song measures through
+	matching anchors: the steps' start and end, and breaks paired in order
+	by their place in the song (within 15% of its length)."""
+	df, de, db = structure(d_dens, d_last)
+	nf, ne, nb = structure(n_dens, n_last)
+	rel = lambda x, f, e: (x - f) / max(e - f, 1.0)
+	pts, j = [(0.0, 0.0), (df, nf)], 0
+	for a0, a1 in db:
+		best = None
+		for k in range(j, len(nb)):
+			gap = abs(rel(a0, df, de) - rel(nb[k][0], nf, ne))
+			if gap < 0.15 and (best is None or gap < best[0]):
+				best = (gap, k)
+		if best:
+			k = best[1]
+			pts += [(float(a0), float(nb[k][0])), (float(a1), float(nb[k][1]))]
+			j = k + 1
+	pts += [(de, ne), (max(d_last, de + 1), max(n_last, ne + 1))]
+	xs, ys = [], []
+	for x, y in sorted(pts):
+		if (not xs or (x > xs[-1] and y > ys[-1])):
+			xs.append(x); ys.append(y)
+	def f(p):
+		if p <= xs[0]:
+			return ys[0]
+		for i in range(1, len(xs)):
+			if p <= xs[i]:
+				return ys[i - 1] + (p - xs[i - 1]) * (ys[i] - ys[i - 1]) / (xs[i] - xs[i - 1])
+		return ys[-1] + (p - xs[-1]) * (ys[-1] - ys[-2]) / (xs[-1] - xs[-2])
+	return f, list(zip(xs, ys))
+
+
+def retime_events(ev, donor_slot0, dens, last):
+	"""A stock song's script on another song's structure: each cue moves to
+	the same place in the new song's shape (anchor_map), snapped to its
+	beats."""
+	head, pos, recs = parse_events(ev)
+	d_dens, d_last = stock_density(donor_slot0)
+	f, _ = anchor_map(d_dens[:int(d_last) + 1], d_last, dens[:int(last) + 1], last)
+	out_pos, out_recs, prev = pos[:2], recs[:2], 0.0
+	for p, r in zip(pos[2:], recs[2:]):
+		x = p / 4096.0
+		grid = 1.0 if x == int(x) else 0.25
+		y = round(f(x) / grid) * grid
+		y = max(y, prev + (0.5 if grid == 1.0 else 0.25))	# two cues met: keep them apart
+		if y > last - 0.25:
+			y = last - 0.25
+			if y <= prev:
+				continue
+		out_pos.append(int(round(y * 4096))); out_recs.append(r); prev = y
+	return build_events(head, out_pos, out_recs), len(pos) - len(out_pos)
+
+
 def tempo_map(lead, last, timing, pad):
 	"""Points (measure, time): tempo-map measure M is simfile beat 4(M - lead),
 	played pad seconds later (the audio is padded with the lead-in)."""
@@ -453,7 +578,19 @@ class Song:
 				if c:
 					charts.append(chart_words(c, lead, last, report))
 		slot0 = build_pack([tempo_map(lead, last, timing, pad)] + charts)
-		events = pack_items(entry(68 + 5 * EVENT_DONOR))[1]
+		# the background animation script: a stock song's, on this song's structure
+		donor = self.cfg.get('script', EVENT_DONOR)
+		if not 0 <= donor < SONGS:
+			sys.exit('%s: script %d is not one of the 20 songs' % (self.title, donor))
+		dens = [0] * (last + 2)
+		ref = self.chart('dance-single', 'Standard') or max((c for c in sm['charts'] if c['style'] == 'dance-single'),
+		                                                     key=lambda c: c['meter'])
+		for m, rows in enumerate(ref['measures']):
+			if m + lead < len(dens):
+				dens[m + lead] += sum(1 for row in rows if any(x in '124' for x in row[:4]))
+		donor_entry = pack_items(entry(68 + 5 * donor))
+		events, dropped = retime_events(donor_entry[1], donor_entry[0], dens, float(self.length))
+		self.script = (donor, len(parse_events(events)[1]), dropped)
 		bg_png = self.path('background') if 'background' in self.cfg else self.base + '-bg.png'
 		bg = konami_lz.encode(background_tim(Image.open(bg_png)))
 		self.entries = [build_pack([slot0, events, bg, pack_items(entry(68 + 5 * UI_DONOR + k))[3]])
@@ -488,6 +625,8 @@ class Song:
 		print('%-34s %3d measures, play to %d (lead %d), %d charts, BPM %s%s' % (
 		      self.title[:34], last, self.length, lead, len(charts), bpm_text,
 		      ', %d stops' % len(sm['stops']) if sm['stops'] else ''))
+		print('    background script from stock song %d, %d cues%s' % (
+		      self.script[0], self.script[1], ', %d past the end dropped' % self.script[2] if self.script[2] else ''))
 		for r in report:
 			print('    ' + r)
 
