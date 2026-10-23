@@ -21,6 +21,8 @@ a song keeps its save slot only while it keeps its place):
   unlock = { song = 0x8039, difficulties = ["Standard", "Heavy"] }
                                 # optional: listed once that song is cleared there
   outro = 2                     # optional: measures of play after the last step
+  stage = 1                     # optional: the song's own background animation on this stage
+                                # set (1..17, not 11; one song each), from the stock records
   script = 12                   # optional: the stock song (group 0..19) whose background
                                 # animation script is fitted to this song (default ORION.78)
 
@@ -453,6 +455,133 @@ def retime_events(ev, donor_slot0, dens, last):
 	return build_events(head, out_pos, out_recs), len(pos) - len(out_pos)
 
 
+# ---- a unique background animation per song --------------------------------
+# Built from the stock scripts' own cue records (195 distinct among their 738
+# cues): each record is scored by how busy the stock song's steps are where
+# it plays (relative to that song), sorted into calm (the calmest quarter),
+# high (the busiest quarter) and mid, and the songs
+# get disjoint palettes of them.  A song's script is then laid out on its own
+# shape: the song's picture at the start, in long breaks and after the last
+# step; calm records in quiet phrases, a pair of mid records swapping every 2
+# measures, a pair of high records swapping every measure in its loudest
+# parts.  Its stage set (header k, the six pictures the records draw) is
+# chosen per song (songs.toml stage).
+
+STAGE_SETS = 17			# k = 1..17 -> the table at 0x800B0510 (k = 11 has 4 pictures: not used)
+MAX_CUES = 141			# the game copies a script into 5120 bytes (0x800D81C0)
+PALETTE = {'calm': 3, 'mid': 5, 'high': 4}
+
+
+def record_library(entry):
+	"""The stock scripts' records: the two frame records every song uses (the
+	start state, and the song's own picture), and the others with a score."""
+	from collections import defaultdict, Counter
+	scores, bg = defaultdict(list), Counter()
+	init = None
+	for g in range(SONGS):
+		it = pack_items(entry(68 + 5 * g))
+		_, pos, recs = parse_events(it[1])
+		d, d_last = stock_density(it[0])
+		busy = [v for v in d if v]
+		mean = sum(busy) / len(busy)
+		P = [p / 4096.0 for p in pos] + [d_last]
+		init = recs[0]
+		bg[recs[1]] += 1
+		for i in range(2, len(recs)):
+			a, b = int(max(P[i], 0)), int(max(P[i + 1], P[i] + 1))
+			seg = [d[M] for M in range(a, max(a + 1, b)) if M < len(d)]
+			scores[recs[i]].append(sum(seg) / max(1, len(seg)) / mean)
+	song_bg = bg.most_common(1)[0][0]
+	lib = [(r, sum(v) / len(v)) for r, v in scores.items() if r not in (init, song_bg)]
+	return init, song_bg, sorted(lib)
+
+
+def assign_palettes(lib, n, seed=0x0D5F):
+	"""Disjoint palettes for n songs: each bucket shuffled (fixed seed), then
+	dealt round robin."""
+	import random
+	rnd = random.Random(seed)
+	ranked = [r for r, v in sorted(lib, key=lambda x: (x[1], x[0]))]	# calmest first
+	q = len(ranked) // 4
+	buckets = {'calm': ranked[:q], 'mid': ranked[q:len(ranked) - q], 'high': ranked[len(ranked) - q:]}
+	pal = [{b: [] for b in buckets} for _ in range(n)]
+	for b, recs in buckets.items():
+		rnd.shuffle(recs)
+		if len(recs) < n * PALETTE[b]:
+			sys.exit('not enough %s records for %d songs' % (b, n))
+		for i in range(n * PALETTE[b]):
+			pal[i % n][b].append(recs[i])
+	return pal
+
+
+def measure_energy(audio, timing, lead, n):
+	"""Loudness per tempo-map measure of the song's audio (RMS, relative)."""
+	import numpy as np
+	raw = subprocess.check_output(['ffmpeg', '-v', 'error', '-i', audio, '-ac', '1', '-ar', '11025', '-f', 's16le', '-'])
+	x = np.frombuffer(raw, np.int16).astype(float)
+	out = []
+	for M in range(n):
+		a = int(max(0.0, timing.time(4.0 * (M - lead), True)) * 11025)
+		b = int(max(0.0, timing.time(4.0 * (M + 1 - lead), True)) * 11025)
+		seg = x[a:b] if b > a else x[a:a + 1]
+		out.append(float(np.sqrt((seg ** 2).mean())) if len(seg) else 0.0)
+	return out
+
+
+def compose_script(k, init, song_bg, pal, dens, rms, length):
+	"""A script laid out on the song's shape (see above)."""
+	busy = [M for M, v in enumerate(dens) if v]
+	first, end = busy[0], busy[-1] + 1
+	mean = lambda v: sum(v) / max(1, len(v))
+	dm = mean([v for v in dens[first:end] if v]) or 1.0
+	rm = mean(rms[first:end]) or 1.0
+	e = [0.5 * dens[M] / dm + 0.5 * rms[M] / rm for M in range(len(dens))]
+	# 4-measure phrases from the first step
+	# a phrase's kind is ranked within the song: its loudest 30% high, its
+	# quietest 25% calm (steps well below the song's usual: a break)
+	blocks = [(a, min(a + 4, end)) for a in range(first, end, 4)]
+	energy = [mean(e[a:b]) for a, b in blocks]
+	order = sorted(energy)
+	hi_at, lo_at = order[int(len(order) * 0.7)], order[int(len(order) * 0.25)]
+	phrases = []
+	for (a, b), e_avg in zip(blocks, energy):
+		kind = 'break' if mean(dens[a:b]) / dm < 0.35 else 'high' if e_avg >= hi_at else 'calm' if e_avg < lo_at else 'mid'
+		if phrases and phrases[-1][2] == kind:
+			phrases[-1][1] = b
+		else:
+			phrases.append([a, b, kind])
+	turn = {'calm': 0, 'mid': 0, 'high': 0}
+	def take(b, n=1):
+		recs = [pal[b][(turn[b] + i) % len(pal[b])] for i in range(n)]
+		turn[b] += n
+		return recs
+	cues = [(-99999, init), (0, song_bg)]
+	if first >= 4:
+		cues.append((first - 2, take('calm')[0]))
+	for a, b, kind in phrases:
+		if kind == 'break':
+			cues.append((a, song_bg if b - a >= 4 else take('calm')[0]))
+		elif kind == 'calm':
+			for M in range(a, b, 4):
+				cues.append((M, take('calm')[0]))
+		elif kind == 'mid':
+			pair = take('mid', 2)
+			for i, M in enumerate(range(a, b, 2)):
+				cues.append((M, pair[i % 2]))
+		else:
+			pair = take('high', 2)
+			for i, M in enumerate(range(a, b)):
+				if i and i % 8 == 0:
+					pair = take('high', 2)
+				cues.append((M, pair[i % 2]))
+	if end <= length - 0.25:
+		cues.append((end, song_bg))
+	while len(cues) > MAX_CUES:		# too many: the busiest stretches change every other measure
+		cues = cues[:2] + [c for i, c in enumerate(cues[2:]) if i % 2 == 0]
+	pos = [cues[0][0]] + [int(round(M * 4096)) for M, _ in cues[1:]]
+	return build_events((k << 16) | 5, pos, [r for _, r in cues]), [p[2] for p in phrases]
+
+
 def tempo_map(lead, last, timing, pad):
 	"""Points (measure, time): tempo-map measure M is simfile beat 4(M - lead),
 	played pad seconds later (the audio is padded with the lead-in)."""
@@ -578,7 +707,8 @@ class Song:
 				if c:
 					charts.append(chart_words(c, lead, last, report))
 		slot0 = build_pack([tempo_map(lead, last, timing, pad)] + charts)
-		# the background animation script: a stock song's, on this song's structure
+		# the background animation script: the song's own (songs.toml stage), or
+		# a stock song's fitted to its structure (songs.toml script)
 		donor = self.cfg.get('script', EVENT_DONOR)
 		if not 0 <= donor < SONGS:
 			sys.exit('%s: script %d is not one of the 20 songs' % (self.title, donor))
@@ -588,9 +718,18 @@ class Song:
 		for m, rows in enumerate(ref['measures']):
 			if m + lead < len(dens):
 				dens[m + lead] += sum(1 for row in rows if any(x in '124' for x in row[:4]))
-		donor_entry = pack_items(entry(68 + 5 * donor))
-		events, dropped = retime_events(donor_entry[1], donor_entry[0], dens, float(self.length))
-		self.script = (donor, len(parse_events(events)[1]), dropped)
+		if 'stage' in self.cfg:
+			k = self.cfg['stage']
+			if not 1 <= k <= STAGE_SETS or k == 11:
+				sys.exit('%s: stage %d is not a stage set with six pictures' % (self.title, k))
+			rms = measure_energy(self.audio, timing, lead, len(dens))
+			events, shape = compose_script(k, self.lib[0], self.lib[1], self.palette, dens, rms, float(self.length))
+			self.script = ('stage set %d' % k, len(parse_events(events)[1]), ' '.join(shape))
+		else:
+			donor_entry = pack_items(entry(68 + 5 * donor))
+			events, dropped = retime_events(donor_entry[1], donor_entry[0], dens, float(self.length))
+			self.script = ('from stock song %d' % donor, len(parse_events(events)[1]),
+			               '%d past the end dropped' % dropped if dropped else '')
 		bg_png = self.path('background') if 'background' in self.cfg else self.base + '-bg.png'
 		bg = konami_lz.encode(background_tim(Image.open(bg_png)))
 		self.entries = [build_pack([slot0, events, bg, pack_items(entry(68 + 5 * UI_DONOR + k))[3]])
@@ -625,8 +764,7 @@ class Song:
 		print('%-34s %3d measures, play to %d (lead %d), %d charts, BPM %s%s' % (
 		      self.title[:34], last, self.length, lead, len(charts), bpm_text,
 		      ', %d stops' % len(sm['stops']) if sm['stops'] else ''))
-		print('    background script from stock song %d, %d cues%s' % (
-		      self.script[0], self.script[1], ', %d past the end dropped' % self.script[2] if self.script[2] else ''))
+		print('    background script %s, %d cues%s' % (self.script[0], self.script[1], ': ' + self.script[2] if self.script[2] else ''))
 		for r in report:
 			print('    ' + r)
 
@@ -664,6 +802,13 @@ def main():
 		psxaudio = tool(tmp)
 		font = plate_font.PlateFont(disc, exe, toc, pack_items)
 		stock_plate = konami_lz.decode(pack_items(entry(201))[30])
+		lib = record_library(entry)
+		own = [s for s in songs if 'stage' in s.cfg]
+		stages = [s.cfg['stage'] for s in own]
+		if len(set(stages)) != len(stages):
+			sys.exit('two songs with the same stage set')
+		for s, pal in zip(own, assign_palettes(lib[2], len(own))):
+			s.lib, s.palette = lib, pal
 		for s in songs:
 			s.build(entry, psxaudio, tmp, font, stock_plate, blobs)
 	finally:
