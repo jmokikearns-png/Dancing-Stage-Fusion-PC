@@ -322,7 +322,6 @@ const Row KEY_ROWS[] = {
 	KEY_ROW( DSFCORE_BUTTON_R2, "R2", "R2", "R2", "R2", "R2" ),
 	KEY_ROW( DSFCORE_BUTTON_START, "START", "START", "START", "START", "START" ),
 	KEY_ROW( DSFCORE_BUTTON_SELECT, "SELECT", "SELECT", "SELECT", "SELECT", "SELECT" ),
-	KEY_ROW( DSFCORE_BUTTON_PC_MENU, "PC MENU", "MENU PC", "PC-MEN" LU2, "MENU PC", "MEN" LU " PC" ),
 };
 
 /* The help line while a key capture waits. */
