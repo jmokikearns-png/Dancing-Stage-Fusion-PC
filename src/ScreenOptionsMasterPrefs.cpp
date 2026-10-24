@@ -666,6 +666,7 @@ static void InitializeConfOptions()
 	ADD( ConfOption( "PS1MatchPictureToSound",		MovePref,			"OFF","ON" ) );
 	ADD( ConfOption( "PS1SyncOffset",				PS1SyncOffset,		PS1SyncOffsetChoices ) );
 	ADD( ConfOption( "PS1AutoTiming",				MovePref,			"OFF","ON" ) );
+	ADD( ConfOption( "PS1SmoothArrows",				MovePref,			"OFF","ON" ) );
 	/* These two take effect the next time the program starts. */
 	ADD( ConfOption( "PS1OpenGL",					MovePref,			"SOFTWARE","OPENGL" ) );
 	ADD( ConfOption( "PS1InternalResolution",		PS1InternalResolution,	"NATIVE","720p","1080p","1440p" ) );

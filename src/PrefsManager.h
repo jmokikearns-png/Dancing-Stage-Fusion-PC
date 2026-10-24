@@ -296,6 +296,7 @@ public:
 	Preference<int>		m_iPS1SyncOffsetMs;	/* > 0 shows the picture later */
 	Preference<bool>	m_bPS1AutoTiming;	/* the core keeps the game's TIMING right (dsfcore_timing.cpp) */
 	Preference<bool>	m_bPS1OpenGL;		/* else the software renderer (max 4x) */
+	Preference<bool>	m_bPS1SmoothArrows;	/* in-between frames for the step field (dsfcore_smooth.cpp) */
 	Preference<CString>	m_sPS1InternalResolution;	/* native, 720p, 1080p, 1440p */
 	Preference<CString>	m_iSoundDevice;	
 	Preference<RageSoundReader_Resample::ResampleQuality>	m_SoundResampleQuality;

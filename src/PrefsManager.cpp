@@ -287,6 +287,7 @@ PrefsManager::PrefsManager() :
 	m_iPS1SyncOffsetMs				( "PS1SyncOffsetMs",			0 ),
 	m_bPS1AutoTiming				( "PS1AutoTiming",				false ),
 	m_bPS1OpenGL					( "PS1OpenGL",					true ),
+	m_bPS1SmoothArrows				( "PS1SmoothArrows",			true ),
 	m_sPS1InternalResolution		( "PS1InternalResolution",		"1080p" ),
 	m_iSoundDevice					( "SoundDevice",				"" ),
 	m_SoundResampleQuality			( "SoundResampleQuality",		RageSoundReader_Resample::RESAMP_NORMAL ),

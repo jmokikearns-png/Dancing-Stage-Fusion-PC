@@ -32,6 +32,7 @@ namespace
 		{ DSFCORE_SETTING_RENDER_QUALITY,	"PS1InternalResolution",	"1080p",	true },
 		{ DSFCORE_SETTING_RENDERER,		"PS1OpenGL",			"OPENGL",	true },
 		{ DSFCORE_SETTING_AUTO_TIMING,		"PS1AutoTiming",		"OFF",		false },
+		{ DSFCORE_SETTING_SMOOTH_ARROWS,	"PS1SmoothArrows",		"ON",		false },
 	};
 
 	/* DisplayResolution's first choices are named by width only. */
