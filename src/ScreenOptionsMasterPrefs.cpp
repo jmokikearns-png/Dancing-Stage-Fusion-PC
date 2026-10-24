@@ -665,6 +665,7 @@ static void InitializeConfOptions()
 	ADD( ConfOption( "SoundWriteAhead",				SoundWriteAhead,	"AUTO","12 ms","17 ms","23 ms","35 ms","46 ms","70 ms","93 ms" ) );
 	ADD( ConfOption( "PS1MatchPictureToSound",		MovePref,			"OFF","ON" ) );
 	ADD( ConfOption( "PS1SyncOffset",				PS1SyncOffset,		PS1SyncOffsetChoices ) );
+	ADD( ConfOption( "PS1AutoTiming",				MovePref,			"OFF","ON" ) );
 	/* These two take effect the next time the program starts. */
 	ADD( ConfOption( "PS1OpenGL",					MovePref,			"SOFTWARE","OPENGL" ) );
 	ADD( ConfOption( "PS1InternalResolution",		PS1InternalResolution,	"NATIVE","720p","1080p","1440p" ) );

@@ -91,6 +91,7 @@ private:
 	static int CoreMappingState( void *pUser );
 	static void CoreClearMapping( void *pUser, int iPlayer, int iButton );
 	static void CoreQuit( void *pUser );
+	static int CoreMeasureLatency( void *pUser, DsfCoreLatency *pOut );
 
 	struct Frame
 	{
@@ -140,6 +141,7 @@ private:
 	int m_iRingFrames;
 	volatile int64_t m_iAudioWritten;	/* frames ever written */
 	volatile int64_t m_iAudioRead;		/* frames ever read */
+	volatile double m_fQueueAverage;	/* sound queued ahead of the device, frames (mixer thread) */
 	int64_t m_iUnderruns, m_iOverruns;
 	float m_fStatsSeconds;		/* log a pacing summary every few seconds */
 	int64_t m_iStatsFrames, m_iStatsAudio;

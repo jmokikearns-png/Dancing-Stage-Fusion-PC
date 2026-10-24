@@ -157,6 +157,7 @@ PS1Core::PS1Core():
 	m_iRingFrames = 16384;	/* 370 ms */
 	m_Ring.resize( m_iRingFrames * 2 );
 	m_iAudioWritten = m_iAudioRead = 0;
+	m_fQueueAverage = 0;
 	m_iUnderruns = m_iOverruns = 0;
 	m_fStatsSeconds = 0;
 	m_iStatsFrames = m_iStatsAudio = 0;
@@ -265,6 +266,7 @@ bool PS1Core::Start( CString &sError )
 	host.mapping_state = CoreMappingState;
 	host.clear_mapping = CoreClearMapping;
 	host.quit = CoreQuit;
+	host.measure_latency = CoreMeasureLatency;
 
 	RageSound_Generic_Software::SetDirectStream( MixThunk, this );
 	if( !RageSound_Generic_Software::DirectStreamSupported() )
@@ -586,6 +588,29 @@ void PS1Core::CoreQuit( void *pUser )
 	((PS1Core *) pUser)->m_bQuitRequested = true;
 }
 
+/* For AUTO TIMING.  Sound: the guest's sound waits in our queue (its
+ * average) and then the device's latency.  Picture: a guest frame waits on
+ * average half a refresh for the next draw, is put on screen at the next
+ * refresh with vsync, and its middle is scanned out half a refresh later:
+ * about two refreshes (one without vsync).  A screen's own processing and
+ * the driver's frame queue are not known here. */
+int PS1Core::CoreMeasureLatency( void *pUser, DsfCoreLatency *pOut )
+{
+	PS1Core *p = (PS1Core *) pUser;
+	if( p->m_bClockPaced )
+		return 0;	/* no sound device */
+	const double fSound = p->m_fQueueAverage / SAMPLE_RATE + SOUNDMAN->GetPlayLatency();
+	const RageDisplay::VideoModeParams vp = DISPLAY->GetVideoModeParams();
+	const int iRate = vp.rate > 20 && vp.rate < 500? vp.rate: 60;
+	pOut->sound_ms = int( fSound * 1000 + 0.5 );
+	pOut->picture_ms = int( (vp.vsync? 2.0: 1.0) * 1000.0 / iRate + 0.5 );
+	pOut->refresh_hz = vp.rate > 20 && vp.rate < 500? vp.rate: 0;
+	LOG->Trace( "PS1Core: AUTO TIMING scan: sound %i ms (queue %.1f ms, device %.1f ms), picture %i ms (%i Hz, vsync %s)",
+		pOut->sound_ms, p->m_fQueueAverage * 1000.0 / SAMPLE_RATE, SOUNDMAN->GetPlayLatency() * 1000.0,
+		pOut->picture_ms, iRate, vp.vsync? "on": "off" );
+	return 1;
+}
+
 /* Return when the next guest frame should run. */
 void PS1Core::PaceNextFrame()
 {
@@ -635,6 +660,10 @@ int PS1Core::MixAudio( int16_t *pBuf, int iFrames )
 	int iGot = (int) min( int64_t(iFrames), iWritten - iRead );
 	if( iGot < iFrames )
 		++m_iUnderruns;
+	/* A sample waits behind what is queued when it is written: on average
+	 * about the middle of the queue before and after this read. */
+	const double fQueued = double(iWritten - iRead) - iGot / 2.0;
+	m_fQueueAverage = m_fQueueAverage == 0? fQueued: m_fQueueAverage * 0.98 + fQueued * 0.02;
 	for( int i = 0; i < iGot; ++i )
 	{
 		const int iPos = int( (iRead + i) % m_iRingFrames );

@@ -285,6 +285,7 @@ PrefsManager::PrefsManager() :
 	m_iSoundWriteAhead				( "SoundWriteAhead",			0 ),
 	m_bPS1MatchPictureToSound		( "PS1MatchPictureToSound",		false ),
 	m_iPS1SyncOffsetMs				( "PS1SyncOffsetMs",			0 ),
+	m_bPS1AutoTiming				( "PS1AutoTiming",				false ),
 	m_bPS1OpenGL					( "PS1OpenGL",					true ),
 	m_sPS1InternalResolution		( "PS1InternalResolution",		"1080p" ),
 	m_iSoundDevice					( "SoundDevice",				"" ),

@@ -33,7 +33,7 @@
 extern "C" {
 #endif
 
-#define DSFCORE_API_VERSION 5
+#define DSFCORE_API_VERSION 6
 
 enum {
 	DSFCORE_FRAME_BLANK = 1,	/* display disabled: show black */
@@ -52,6 +52,7 @@ enum {
 	DSFCORE_SETTING_VSYNC,
 	DSFCORE_SETTING_RENDER_QUALITY,		/* the game's internal resolution */
 	DSFCORE_SETTING_RENDERER,
+	DSFCORE_SETTING_AUTO_TIMING,		/* the core keeps TIMING right (see measure_latency) */
 	DSFCORE_SETTING_COUNT
 };
 
@@ -65,6 +66,18 @@ typedef struct DsfCoreSetting
 	int32_t applies_later;		/* 1: takes effect the next time the game starts */
 	char text[40];			/* the current choice */
 } DsfCoreSetting;
+
+/* The PC's own delays, for AUTO TIMING: how long after the game makes a
+ * sound it is heard (the host's queue and the sound device's latency), and
+ * after a picture is made it is on the screen (an estimate from the refresh
+ * rate and vsync).  What the PC can't know (a TV's or headphones' delay) is
+ * left to the core, which learns it from the player's steps. */
+typedef struct DsfCoreLatency
+{
+	int32_t sound_ms;
+	int32_t picture_ms;
+	int32_t refresh_hz;		/* 0 when unknown */
+} DsfCoreLatency;
 
 /* Buttons of the KEY CONFIG pages: the PS1 pad.  PC_MENU is StepMania's Back,
  * which the pages no longer list (QUIT on the main menu replaced the PC menu). */
@@ -128,6 +141,8 @@ typedef struct DsfCoreHost
 	/* The player chose QUIT on the game's main menu: leave the program as
 	 * the host's own exit does.  The core keeps running until then. */
 	void (*quit)( void *user );
+	/* v6: the delays as measured now; 0 when the host can't tell. */
+	int (*measure_latency)( void *user, DsfCoreLatency *out );
 } DsfCoreHost;
 
 /* argv[0] is ignored; the rest are runtime options (--game, --disc, --bios,
