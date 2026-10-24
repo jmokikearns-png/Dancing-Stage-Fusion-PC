@@ -295,6 +295,13 @@ const Row DISPLAY_ROWS[] = {
 	     "OPENGL nutzt die Grafikkarte (empfohlen).\n(Gilt ab dem n" a3 "chsten Start.)",
 	     "OPENGL usa la scheda grafica (consigliato).\n(Dal prossimo avvio.)",
 	     "OPENGL usa la tarjeta gr" "\xE1" "fica (recomendado).\n(Al pr" o1 "ximo inicio.)" }}, false },
+	{ ROW_SETTING, DSFCORE_SETTING_SMOOTH_ARROWS,
+	  {{ "SMOOTH ARROWS", "FL" LE2 "CHES FLUIDES", "FL" LU2 "SSIGE PFEILE", "FRECCE FLUIDE", "FLECHAS FLUIDAS" }},
+	  {{ "ON: the arrows move every frame instead of every\nother one. Twice the work during songs: turn it\nOFF if songs slow down.",
+	     "ACTIV" LE "E : les fl" e2 "ches bougent " a2 " chaque image au lieu\nd'une sur deux. Double travail pendant les\nchansons : d" e1 "sactive si le jeu ralentit.",
+	     "EIN: die Pfeile bewegen sich jedes Bild statt\njedes zweite. Doppelte Arbeit w" a3 "hrend der Songs:\nAUS, wenn das Spiel langsamer wird.",
+	     "ON: le frecce si muovono a ogni fotogramma invece\nche ogni due. Doppio lavoro durante i brani:\nOFF se il gioco rallenta.",
+	     "ACTIVAR: las flechas se mueven en cada imagen y\nno cada dos. El doble de trabajo en las canciones:\nDESACTIVAR si el juego se ralentiza." }}, false },
 };
 
 const Row CONTROLLER_ROWS[] = {

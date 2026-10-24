@@ -53,3 +53,14 @@ default_enabled = true
 [[plugin]]
 feature = "stepmania-stepcolors"
 id = "dsf.stepmania.stepcolors"
+
+[[feature]]
+id = "stepmania-smooth"
+name = "SMOOTH ARROWS"
+description = "The step field at the PAL frame rate: between two of the game's frames a sandboxed render pass draws the next one with the arrows halfway, shown on the VBlank in between. The game's own timing is untouched."
+group = "Graphics"
+default_enabled = true
+
+[[plugin]]
+feature = "stepmania-smooth"
+id = "dsf.stepmania.smooth"

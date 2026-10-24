@@ -38,6 +38,7 @@ void init()
 		{ DSFCORE_SETTING_RENDER_QUALITY, { "NATIVE","720p","1080p","1440p" }, 2, 1 },
 		{ DSFCORE_SETTING_RENDERER, { "SOFTWARE","OPENGL" }, 1, 1 },
 		{ DSFCORE_SETTING_AUTO_TIMING, { "OFF","ON" }, 0, 0 },
+		{ DSFCORE_SETTING_SMOOTH_ARROWS, { "OFF","ON" }, 1, 0 },
 	};
 	for( unsigned i = 0; i < sizeof(table)/sizeof(table[0]); ++i )
 	{

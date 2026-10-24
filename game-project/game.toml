@@ -36,12 +36,14 @@ strict = true
 # Dancing Stage Fusion PC: functions the port's StepMania integration hooks
 # (port/core/dsfcore_hooks.cpp).  0x800243FC = the game's per-frame pad read
 # (decodes the two LIBPAD receive buffers at 0x800B4DB8 / 0x800B4DEC).
-mod_function_entry_funcs = ["0x800243FC"]
+# 0x80037ED8 = VSync, where SMOOTH ARROWS (dsfcore_smooth.cpp) draws each
+# song frame's in-between.
+mod_function_entry_funcs = ["0x800243FC", "0x80037ED8"]
 # STEP MARK COLORS TYPE3 (port/core/dsfcore_stepcolors.cpp): the three
 # `== TYPE2` tests, the note's palette choice, the two palette builders'
-# exits and the save check.
+# exits and the save check.  0x800488D4: SMOOTH ARROWS, the scroll position.
 mod_instruction_sites = ["0x80051950", "0x80054D24", "0x800556FC", "0x800519F0",
-                         "0x8005517C", "0x80055A7C", "0x80084BC0"]
+                         "0x8005517C", "0x80055A7C", "0x80084BC0", "0x800488D4"]
 
 [runtime]
 window_title = "Dancing Stage Fusion Recompiled"

@@ -33,7 +33,7 @@
 extern "C" {
 #endif
 
-#define DSFCORE_API_VERSION 6
+#define DSFCORE_API_VERSION 7
 
 enum {
 	DSFCORE_FRAME_BLANK = 1,	/* display disabled: show black */
@@ -53,6 +53,7 @@ enum {
 	DSFCORE_SETTING_RENDER_QUALITY,		/* the game's internal resolution */
 	DSFCORE_SETTING_RENDERER,
 	DSFCORE_SETTING_AUTO_TIMING,		/* the core keeps TIMING right (see measure_latency) */
+	DSFCORE_SETTING_SMOOTH_ARROWS,		/* v7: in-between frames for the step field */
 	DSFCORE_SETTING_COUNT
 };
 
