@@ -119,6 +119,11 @@ void dsfcore_host_quit( void )
 		g_host.quit( g_host.user );
 }
 
+int dsfcore_host_measure_latency( DsfCoreLatency *out )
+{
+	return g_host.measure_latency? g_host.measure_latency( g_host.user, out ): 0;
+}
+
 __declspec(dllexport) int dsfcore_start( const DsfCoreHost *host, int argc, const char *const *argv, const char *log_path )
 {
 	if( g_state != DSFCORE_STATE_NOT_STARTED || host == NULL ||

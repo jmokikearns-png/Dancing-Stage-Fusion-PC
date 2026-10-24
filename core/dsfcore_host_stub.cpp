@@ -37,6 +37,7 @@ void init()
 		{ DSFCORE_SETTING_VSYNC, { "NO","YES" }, 1, 0 },
 		{ DSFCORE_SETTING_RENDER_QUALITY, { "NATIVE","720p","1080p","1440p" }, 2, 1 },
 		{ DSFCORE_SETTING_RENDERER, { "SOFTWARE","OPENGL" }, 1, 1 },
+		{ DSFCORE_SETTING_AUTO_TIMING, { "OFF","ON" }, 0, 0 },
 	};
 	for( unsigned i = 0; i < sizeof(table)/sizeof(table[0]); ++i )
 	{
@@ -151,6 +152,17 @@ extern "C" void dsfcore_host_clear_mapping( int player, int button )
 		return;
 	g_mappings[player][button].slot[0][0] = 0;
 	g_mappings[player][button].slot[1][0] = 0;
+}
+
+/* No sound device or screen to measure: DSF_STUB_SOUND_MS / DSF_STUB_PICTURE_MS
+ * (default 60 and 33) stand in for them, for tests of AUTO TIMING. */
+extern "C" int dsfcore_host_measure_latency( DsfCoreLatency *out )
+{
+	const char *a = std::getenv( "DSF_STUB_SOUND_MS" ), *b = std::getenv( "DSF_STUB_PICTURE_MS" );
+	out->sound_ms = a? std::atoi( a ): 60;
+	out->picture_ms = b? std::atoi( b ): 33;
+	out->refresh_hz = 60;
+	return 1;
 }
 
 /* No host to return to: QUIT ends the test program. */

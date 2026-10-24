@@ -32,11 +32,11 @@
  *   the chart uses those slots.
  *   Each step is pressed for one frame, on the frame whose clock is nearest
  *   its time + DSF_AUTOPLAY_OFFSET ticks (the clock moves 1.5 ticks a
- *   frame).  The default -3 is what judges every step PERFECT: the game
- *   judges a press against the clock a little later than the frame it was
- *   read on.
+ *   frame).  The default -4 is the middle of the PERFECT window (about
+ *   -7.25 to -0.7 ticks; see dsfcore_timing.cpp).
  */
 #include "dsfcore_host.h"
+#include "dsfcore_timing.h"
 #include "mod_plugins.h"
 
 #include <cstdint>
@@ -56,7 +56,8 @@ const uint32_t GAME_STATE = 0x800BA310, SONG_CLOCK = 0x800BB4AC, STEP_LIST = 0x8
 const int STEP_SIZE = 16, MAX_STEPS = 4096, MAX_PATTERNS = 64;
 const uint16_t PANEL_BIT[4] = { 1u << 7, 1u << 6, 1u << 4, 1u << 5 };	/* Left, Down, Up, Right */
 int g_autoplay = -1;		/* -1: not read yet */
-double g_autoplay_offset = -3.0;
+double g_autoplay_offset = -4.0;
+bool g_autoplay_raw = false;	/* DSF_AUTOPLAY_RAW=1: ignore TIMING, like a player with a fixed delay (tests) */
 bool g_playing = false;
 int g_next_step = 0;
 int32_t g_last_clock = 0;
@@ -91,6 +92,8 @@ bool autoplay_pads( uint16_t pads[2] )
 		g_autoplay = e && *e && *e != '0';
 		if( const char *o = std::getenv("DSF_AUTOPLAY_OFFSET") )
 			g_autoplay_offset = std::atof( o );
+		const char *r = std::getenv( "DSF_AUTOPLAY_RAW" );
+		g_autoplay_raw = r && *r && *r != '0';
 	}
 	if( !g_autoplay || int16_t(psx_mod_read_half(GAME_STATE)) != 4 )
 	{
@@ -116,7 +119,9 @@ bool autoplay_pads( uint16_t pads[2] )
 			break;
 		if( pattern < 0 || pattern >= g_patterns )
 			continue;
-		const double t = int16_t( psx_mod_read_half(e + 8) ) + g_autoplay_offset;
+		double t = int16_t( psx_mod_read_half(e + 8) ) + g_autoplay_offset;
+		if( g_autoplay_raw )	/* the step's time without the game's TIMING (system data + 0x52) */
+			t -= int8_t( psx_mod_read_byte(psx_mod_read_word(0x800B1AFCu) + 0x52u) );
 		if( t > clock + 0.75 )	/* nearer the next frame's clock (+1.5) */
 			break;
 		pads[0] &= uint16_t( ~g_pattern_bits[pattern][0] );
@@ -132,6 +137,7 @@ bool autoplay_pads( uint16_t pads[2] )
 
 void on_game_pad_read( struct CPUState *, uint32_t )
 {
+	dsf_auto_timing_frame();	/* before this read: the last read's presses */
 	uint16_t pads[2] = { 0xFFFF, 0xFFFF };	/* active-low: nothing pressed */
 	const bool host = dsfcore_host_read_pads( pads ) != 0;
 	const bool autoplay = autoplay_pads( pads );

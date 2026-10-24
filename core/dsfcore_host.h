@@ -33,6 +33,9 @@ void dsfcore_host_clear_mapping( int player, int button );
 /* QUIT on the main menu (see DsfCoreHost.quit). */
 void dsfcore_host_quit( void );
 
+/* The PC's sound and picture delays (see DsfCoreHost.measure_latency). */
+int dsfcore_host_measure_latency( DsfCoreLatency *out );
+
 #ifdef __cplusplus
 }
 #endif

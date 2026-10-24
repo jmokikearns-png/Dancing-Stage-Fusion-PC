@@ -32,6 +32,7 @@
  * with a third, virtual id, answered with the game's TYPE2 text ending in 3.
  */
 #include "dsfcore_host.h"
+#include "dsfcore_timing.h"
 #include "mod_plugins.h"
 #include "cpu_state.h"
 
@@ -230,6 +231,13 @@ const Row SOUND_ROWS[] = {
 	     "Verz" o3 "gert das Bild um diesen Wert. +10 bis\n+40 ms probieren, wenn die Pfeile zu fr" u2 "h wirken.",
 	     "Ritarda l'immagine di questo valore. Prova\nda +10 a +40 ms se le frecce sono in anticipo.",
 	     "Retrasa la imagen esta cantidad. Prueba de +10\na +40 ms si las flechas van adelantadas." }}, true },
+	{ ROW_SETTING, DSFCORE_SETTING_AUTO_TIMING,
+	  {{ "AUTO TIMING", "TEMPS AUTO", "AUTO-TIMING", "TEMPO AUTO", "SINCRO. AUTO" }},
+	  {{ "ON: measures this PC's sound and picture delay,\nsets TIMING and PICTURE SYNC, then fine-tunes\nTIMING from your steps after every song.",
+	     "ACTIV" LE "E : mesure le retard du son et de l'image,\nr" e2 "gle TEMPS et SYNCHRO IMAGE, puis ajuste\nTEMPS d'apr" e2 "s vos pas apr" e2 "s chaque chanson.",
+	     "EIN: misst Ton- und Bildverz" o3 "gerung, stellt\nTIMING und BILD-SYNC ein und passt TIMING\nnach jedem Song an deine Schritte an.",
+	     "ON: misura il ritardo di audio e immagine,\nimposta TEMPO e SINCRO IMMAGINE, poi regola\nTEMPO dai tuoi passi dopo ogni brano.",
+	     "ACTIVAR: mide el retardo de sonido e imagen,\najusta SINCRONIZACI" LO "N y SINCRO. IMAGEN y\nla afina con tus pasos tras cada canci" o1 "n." }}, false },
 };
 
 enum { PAGE_DISPLAY, PAGE_KEYS_1P, PAGE_KEYS_2P, NUM_PAGES };
@@ -425,6 +433,9 @@ void value_text( int id, const DsfCoreSetting &s, char *out, size_t n )
 		std::snprintf( out + i, n - i, " HZ" );
 }
 
+void set_help( uint32_t id );
+void show_scan_result();
+
 /* Left/Right on a setting row.  Returns true when the value changed. */
 bool change_setting( const Row &r, int dir )
 {
@@ -439,6 +450,8 @@ bool change_setting( const Row &r, int dir )
 	if( c == s.choice )
 		return false;
 	dsfcore_host_set_setting( r.id, c );
+	if( r.id == DSFCORE_SETTING_AUTO_TIMING && c == 1 )
+		show_scan_result();
 	return true;
 }
 
@@ -497,6 +510,36 @@ void on_graphic_change( CPUState *cpu, uint32_t fn )
 	psx_mod_finish_function( cpu );
 }
 
+/* ---- AUTO TIMING ------------------------------------------------------- */
+
+const uint32_t STR_SCAN = VIRTUAL_STRING + 0x401u;
+char g_scan_text[200];
+
+/* AUTO TIMING just turned on: scan the PC (dsfcore_timing.cpp) and say what
+ * was set in the help line. */
+void show_scan_result()
+{
+	AutoTimingScan r;
+	if( !dsf_auto_timing_scan(r) )
+	{
+		const Text no = {{ "This PC can't report its delays: TIMING will\nbe set from your steps after each song.",
+			"Ce PC ne donne pas ses retards : TEMPS sera\nr" e1 "gl" e1 " d'apr" e2 "s vos pas apr" e2 "s chaque chanson.",
+			"Dieser PC meldet keine Verz" o3 "gerung: TIMING wird\nnach jedem Song an deine Schritte angepasst.",
+			"Questo PC non indica i ritardi: TEMPO sar" a2 "\nregolato dai tuoi passi dopo ogni brano.",
+			"Este PC no indica sus retardos: SINCRONIZACI" LO "N\nse ajustar" "\xE1" " con tus pasos tras cada canci" o1 "n." }};
+		std::snprintf( g_scan_text, sizeof(g_scan_text), "%s", tr(no) );
+		set_help( STR_SCAN );
+		return;
+	}
+	const Text fmt = {{ "Sound %d ms, picture %d ms. Set: TIMING %+d,\nPICTURE SYNC ON, PICTURE DELAY %+d ms.\nTIMING keeps adjusting to your steps.",
+		"Son %d ms, image %d ms. R" e1 "glages : TEMPS %+d,\nSYNCHRO IMAGE ACTIV" LE "E, D" LE "LAI %+d ms.\nTEMPS continue de s'adapter " a2 " vos pas.",
+		"Ton %d ms, Bild %d ms. Gesetzt: TIMING %+d,\nBILD-SYNC EIN, BILDVERZ" LOE "GERUNG %+d ms.\nTIMING passt sich weiter deinen Schritten an.",
+		"Audio %d ms, immagine %d ms. Impostati: TEMPO\n%+d, SINCRO IMMAGINE ON, RITARDO %+d ms.\nTEMPO continua ad adattarsi ai tuoi passi.",
+		"Sonido %d ms, imagen %d ms. Ajuste: SINCRONIZACI" LO "N\n%+d, SINCRO. IMAGEN ACTIVAR, RETARDO %+d ms.\nSe seguir" "\xE1" " ajustando con tus pasos." }};
+	std::snprintf( g_scan_text, sizeof(g_scan_text), tr(fmt), r.sound_ms, r.picture_ms, r.timing, r.picture_delay_ms );
+	set_help( STR_SCAN );
+}
+
 /* ---- the help line ---------------------------------------------------- */
 
 /* Virtual string ids: VIRTUAL_STRING + screen * 0x100 + row (0x80: page rows). */
@@ -522,6 +565,11 @@ int on_game_string( CPUState *cpu, uint32_t )
 	const uint32_t id = cpu->gpr[4];
 	if( id == STR_TYPE3 && options_overlay_resident() )
 		return type3_text( cpu )? 1: 0;
+	if( id == STR_SCAN && options_overlay_resident() )
+	{
+		cpu->gpr[2] = guest_string( STR_HELP, g_scan_text );
+		return 1;
+	}
 	if( id < VIRTUAL_STRING || id >= VIRTUAL_STRING + 0x400 || !g_help_rows[id - VIRTUAL_STRING] ||
 	    !options_overlay_resident() )
 		return 0;	/* the game's own string */
