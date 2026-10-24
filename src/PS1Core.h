@@ -11,7 +11,8 @@
  *    ("audio master"), so game time can never drift away from the music.
  *    The core thread does this itself (it waits whenever enough sound is
  *    queued), so StepMania's own frame rate doesn't matter.  Without a
- *    working sound device it is paced by the clock at 50 Hz.
+ *    working sound device it is paced by the clock at the PAL frame rate
+ *    (49.761 Hz).
  *  - Picture: each guest frame is queued with the position of its audio.  By
  *    default the newest frame is shown (lowest lag: steps are judged by the
  *    game against what the player sees).  "Match Picture to Sound" instead

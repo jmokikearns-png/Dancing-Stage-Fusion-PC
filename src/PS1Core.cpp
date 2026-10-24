@@ -20,7 +20,10 @@ extern CString DirOfExecutable;	/* RageFileManager.cpp */
 namespace
 {
 	const int SAMPLE_RATE = 44100;
-	const int PAL_AUDIO_FRAMES_PER_VIDEO_FRAME = 882;	/* 44100 / 50: exact for the PS1's PAL timing */
+	/* A PAL progressive frame is 680624 CPU cycles (49.761 Hz; the runtime's
+	 * psx_video_timing.h), and a sound frame 768 cycles (44100 Hz). */
+	const int64_t PAL_FRAME_CPU_CYCLES = 680624, CPU_CLOCK_HZ = 33868800;
+	const int PAL_AUDIO_FRAMES_PER_VIDEO_FRAME = 886;	/* 680624 / 768 = 886.2 */
 	const int MAX_QUEUED_FRAMES = 16;	/* ~320 ms of picture, more than any sound latency we use */
 	/* Sound kept queued ahead of the device: one video frame (the guest
 	 * produces it a frame at a time) plus the device's chunk of ~12 ms. */
@@ -631,11 +634,11 @@ void PS1Core::PaceNextFrame()
 			continue;
 		}
 
-		/* No sound device asking for sound: 50 Hz by the clock, and drop the
+		/* No sound device asking for sound: the PAL frame rate by the clock, and drop the
 		 * sound nobody plays. */
 		m_bClockPaced = 1;
 		AtomicStore( m_iAudioRead, AtomicLoad(m_iAudioWritten) );
-		const int64_t iPeriod = m_iTicksPerSecond / 50;
+		const int64_t iPeriod = m_iTicksPerSecond * PAL_FRAME_CPU_CYCLES / CPU_CLOCK_HZ;
 		if( m_iClockNextTicks == 0 || iNow - m_iClockNextTicks > m_iTicksPerSecond / 5 )
 			m_iClockNextTicks = iNow;	/* start, or resync after a stall */
 		if( iNow >= m_iClockNextTicks )
