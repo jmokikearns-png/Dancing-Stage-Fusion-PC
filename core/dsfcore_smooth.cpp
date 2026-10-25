@@ -10,24 +10,24 @@
  * 0x800B4CD0 + 0x5C db, db = [0x800B4DB0]).  At the VSync's entry the pass
  * replays the loop from RAM -- its top through DrawSync, 0x80026294 ..
  * 0x800263B8, then PutDispEnv and DrawOTagEnv, 0x800263C0 .. 0x80026430
- * (the pass drops the display change) -- with the song clock one frame on
- * and each player's scroll position halfway: the next frame, drawn into the
- * buffer this one is about to be drawn in.  It is shown on the VBlank after
- * this frame's own.  The pass is sandboxed and rolled back, so the game
- * itself runs as it always does: judgements, life, the dancer and every
- * effect keep their timing (the in-between shows them a frame on).
+ * (the pass drops the display change) -- at the same song clock, with each
+ * player's scroll position half a frame on: the next frame's arrows, drawn
+ * into the buffer this one is about to be drawn in.  It is shown on the
+ * VBlank after this frame's own.  The pass is sandboxed and rolled back, so
+ * the game itself runs as it always does: judgements, life, the dancer and
+ * every effect keep their timing (the in-between shows the effects a frame
+ * on).
  *
- * The clock.  The system update after the pad read (0x8002BC5C ->
- * 0x8002C928) adds the VBlanks since its last call to the song counters
- * 0x800B5C10 / 0x800B5C14; the frame then turns the counter into the clock
- * (0x8002BE7C, 1/75 s ticks) and the clock into each player's scroll
- * position (stored at 0x800488D4, `sw v0, 4(s0)`, s0 = the player's record
- * at 0x800BB4AC + ...; position by the tempo table).  A pass adds the last
- * frame's advance to both counters.  The clock has whole ticks, three a
- * frame, so a half-frame clock would scroll by one and two ticks in turn;
- * instead the pass works out the next frame's position and stores the point
- * `alpha` of the way to it from the shown frame's (an instruction plugin,
- * game.toml mod_instruction_sites).
+ * The clock stays: replayed at a later clock the frame would judge the
+ * shown frame's presses again, later (a GOOD flashing over the PERFECT the
+ * game gives), and steps due by then as missed.  The scroll position is
+ * worked out at 0x800488D4 (`sw v0, 4(s0)`, s0 = the player's record at
+ * 0x800BB4AC + ..., the position from the clock by the tempo table): each
+ * frame's store is recorded, and a pass stores `alpha` of a frame past it,
+ * by the last frame's advance (an instruction plugin, game.toml
+ * mod_instruction_sites).  Standing still (a stop) stays still.  The
+ * frames are counted by the song counter 0x800B5C10, which the system
+ * update after the pad read (0x8002BC5C -> 0x8002C928) advances.
  *
  * The pads.  The last pad read's pressed edges ([0x80092A28] + 0x54 + 0x10p)
  * were judged by the shown frame; the pass clears them (a held panel stays
@@ -75,6 +75,24 @@ int32_t g_step = 0, g_step2 = 0;
 bool g_have_last = false;
 uint32_t g_pass_alpha = 0;		/* Q16 while a pass replays the frame */
 
+/* Each player's scroll position as the last two frames stored it. */
+struct Scroll { uint32_t record; int32_t before, last; };
+Scroll g_scroll[4];
+
+Scroll *scroll_of( uint32_t record )
+{
+	for( Scroll &s: g_scroll )
+		if( s.record == record )
+			return &s;
+	for( Scroll &s: g_scroll )
+		if( !s.record )
+		{
+			s.record = record;
+			return &s;
+		}
+	return nullptr;
+}
+
 bool smooth_on()
 {
 	DsfCoreSetting s;
@@ -98,8 +116,6 @@ void song_summary()
 
 int draw_next_frame( CPUState *cpu, void *, uint32_t alpha_q16 )
 {
-	psx_mod_write_word( SONG_COUNTER, uint32_t(int32_t(psx_mod_read_word(SONG_COUNTER)) + g_step) );
-	psx_mod_write_word( SONG_COUNTER2, uint32_t(int32_t(psx_mod_read_word(SONG_COUNTER2)) + g_step2) );
 	const uint32_t pads = psx_mod_read_word( PADS_PTR );
 	for( uint32_t p = 0; p < 2; ++p )
 		psx_mod_write_word( pads + PAD_PRESSED + PAD_STRIDE * p, 0 );
@@ -154,15 +170,25 @@ void on_vsync( CPUState *cpu, uint32_t )
 	psx_mod_counter_add( kept ? "dsf.smooth.passes" : "dsf.smooth.refused", kept ? kept : 1 );
 }
 
-/* sw v0, 4(s0): the player's scroll position, `alpha` of the way from the
- * shown frame's to the next one's while a pass replays the frame. */
+/* sw v0, 4(s0): the player's scroll position.  A frame stores it; a pass,
+ * replaying that frame at the same clock, stores it `alpha` of a frame on,
+ * by the last frame's advance. */
 void on_scroll( CPUState *cpu, uint32_t )
 {
-	if( !g_pass_alpha )
+	Scroll *sc = scroll_of( cpu->gpr[16] );
+	if( !sc )
 		return;
-	const int32_t shown = int32_t( psx_mod_read_word(cpu->gpr[16] + 4) );
-	const int32_t next = int32_t( cpu->gpr[2] );
-	cpu->gpr[2] = uint32_t( shown + int32_t((int64_t(next - shown) * g_pass_alpha) >> 16) );
+	const int32_t pos = int32_t( cpu->gpr[2] );
+	if( !g_pass_alpha )
+	{
+		sc->before = sc->last;
+		sc->last = pos;
+		return;
+	}
+	const int32_t advance = sc->last - sc->before;
+	if( pos != sc->last || advance <= 0 )
+		return;	/* not the frame we know, or the field stands still */
+	cpu->gpr[2] = uint32_t( pos + int32_t((int64_t(advance) * g_pass_alpha) >> 16) );
 }
 
 } // namespace

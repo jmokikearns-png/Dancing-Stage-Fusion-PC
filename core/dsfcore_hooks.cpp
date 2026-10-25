@@ -34,6 +34,9 @@
  *   its time + DSF_AUTOPLAY_OFFSET ticks (the clock moves 1.5 ticks a
  *   frame).  The default -4 is the middle of the PERFECT window (about
  *   -7.25 to -0.7 ticks; see dsfcore_timing.cpp).
+ *   For tests that need a player's sloppiness: DSF_AUTOPLAY_JITTER=j moves
+ *   each step by a fixed pseudo-random -j .. +j ticks, DSF_AUTOPLAY_HOLD=n
+ *   keeps each panel held for n pad reads.
  */
 #include "dsfcore_host.h"
 #include "dsfcore_timing.h"
@@ -57,6 +60,9 @@ const int STEP_SIZE = 16, MAX_STEPS = 4096, MAX_PATTERNS = 64;
 const uint16_t PANEL_BIT[4] = { 1u << 7, 1u << 6, 1u << 4, 1u << 5 };	/* Left, Down, Up, Right */
 int g_autoplay = -1;		/* -1: not read yet */
 double g_autoplay_offset = -4.0;
+double g_autoplay_jitter = 0.0;
+int g_autoplay_hold = 1;
+uint8_t g_held[2][16];			/* pad reads each bit stays pressed */
 bool g_autoplay_raw = false;	/* DSF_AUTOPLAY_RAW=1: ignore TIMING, like a player with a fixed delay (tests) */
 bool g_playing = false;
 int g_next_step = 0;
@@ -92,6 +98,10 @@ bool autoplay_pads( uint16_t pads[2] )
 		g_autoplay = e && *e && *e != '0';
 		if( const char *o = std::getenv("DSF_AUTOPLAY_OFFSET") )
 			g_autoplay_offset = std::atof( o );
+		if( const char *j = std::getenv("DSF_AUTOPLAY_JITTER") )
+			g_autoplay_jitter = std::atof( j );
+		if( const char *h = std::getenv("DSF_AUTOPLAY_HOLD") )
+			g_autoplay_hold = std::atoi( h ) > 0 ? std::atoi( h ) : 1;
 		const char *r = std::getenv( "DSF_AUTOPLAY_RAW" );
 		g_autoplay_raw = r && *r && *r != '0';
 	}
@@ -111,6 +121,13 @@ bool autoplay_pads( uint16_t pads[2] )
 	pads[0] = 0xFFFF;
 	if( g_double )
 		pads[1] = 0xFFFF;
+	for( int pad = 0; pad < 2; ++pad )
+		for( int b = 0; b < 16; ++b )
+			if( g_held[pad][b] )
+			{
+				--g_held[pad][b];
+				pads[pad] &= uint16_t( ~(1u << b) );
+			}
 	for( ; g_next_step < MAX_STEPS; ++g_next_step )
 	{
 		const uint32_t e = STEP_LIST + STEP_SIZE * uint32_t(g_next_step);
@@ -120,6 +137,11 @@ bool autoplay_pads( uint16_t pads[2] )
 		if( pattern < 0 || pattern >= g_patterns )
 			continue;
 		double t = int16_t( psx_mod_read_half(e + 8) ) + g_autoplay_offset;
+		if( g_autoplay_jitter > 0 )
+		{
+			const uint32_t hsh = uint32_t(g_next_step) * 2654435761u;
+			t += g_autoplay_jitter * ( double(hsh >> 16) / 32768.0 - 1.0 );
+		}
 		if( g_autoplay_raw )	/* the step's time without the game's TIMING (system data + 0x52) */
 			t -= int8_t( psx_mod_read_byte(psx_mod_read_word(0x800B1AFCu) + 0x52u) );
 		if( t > clock + 0.75 )	/* nearer the next frame's clock (+1.5) */
@@ -131,6 +153,10 @@ bool autoplay_pads( uint16_t pads[2] )
 			pads[1] = 0xFFFF;
 		}
 		pads[1] &= uint16_t( ~g_pattern_bits[pattern][1] );
+		for( int pad = 0; pad < 2; ++pad )
+			for( int b = 0; b < 16; ++b )
+				if( g_pattern_bits[pattern][pad] & (1u << b) )
+					g_held[pad][b] = uint8_t( g_autoplay_hold - 1 );
 	}
 	return true;
 }
