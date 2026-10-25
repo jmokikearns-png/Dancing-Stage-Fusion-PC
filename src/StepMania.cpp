@@ -961,6 +961,21 @@ int main(int argc, char* argv[])
 	g_argc = argc;
 	g_argv = argv;
 
+#if defined(WIN32) && !defined(XBOX)
+	/* DSF PC: pin this process as DPI-unaware (what it always was) before
+	 * anything else can declare otherwise.  The PS1 core's SDL would make
+	 * the process per-monitor DPI-aware when it starts, and on a scaled
+	 * display Windows would then stop enlarging our window: it shrank when
+	 * the game started.  A process's DPI awareness can be set only once. */
+	{
+		typedef BOOL (WINAPI *SetContextFn)( HANDLE );
+		HMODULE hUser = GetModuleHandleA( "user32.dll" );
+		SetContextFn pSet = hUser? (SetContextFn) GetProcAddress( hUser, "SetProcessDpiAwarenessContext" ): NULL;
+		if( pSet )
+			pSet( (HANDLE) -1 );	/* DPI_AWARENESS_CONTEXT_UNAWARE */
+	}
+#endif
+
 	/* Set up arch hooks first.  This may set up crash handling. */
 	HOOKS = MakeArchHooks();
 
