@@ -12,6 +12,8 @@
 #include "dsfcore_api.h"	/* keep in sync with port/core/dsfcore_api.h */
 
 #include <windows.h>
+#include <math.h>
+#include <algorithm>
 
 PS1Core *PS1CORE = NULL;
 
@@ -161,6 +163,9 @@ PS1Core::PS1Core():
 	m_Ring.resize( m_iRingFrames * 2 );
 	m_iAudioWritten = m_iAudioRead = 0;
 	m_fQueueAverage = 0;
+	m_iCalib = 0;
+	m_iTaps = 0;
+	m_iClicksSent = 0;
 	m_iUnderruns = m_iOverruns = 0;
 	m_fStatsSeconds = 0;
 	m_iStatsFrames = m_iStatsAudio = 0;
@@ -602,16 +607,133 @@ int PS1Core::CoreMeasureLatency( void *pUser, DsfCoreLatency *pOut )
 	PS1Core *p = (PS1Core *) pUser;
 	if( p->m_bClockPaced )
 		return 0;	/* no sound device */
-	const double fSound = p->m_fQueueAverage / SAMPLE_RATE + SOUNDMAN->GetPlayLatency();
 	const RageDisplay::VideoModeParams vp = DISPLAY->GetVideoModeParams();
 	const int iRate = vp.rate > 20 && vp.rate < 500? vp.rate: 60;
-	pOut->sound_ms = int( fSound * 1000 + 0.5 );
+	const double fQueue = p->m_fQueueAverage / SAMPLE_RATE;
+	int iTapMs = 0, iTaps = 0;
+	const bool bTapped = p->RunCalibration( iTapMs, iTaps );
+	/* Tapped: what the device and the player add after a sound leaves the
+	 * mixer, measured.  Else the device's own figure (its buffer only). */
+	const double fAfterMix = bTapped? iTapMs / 1000.0: SOUNDMAN->GetPlayLatency();
+	pOut->sound_ms = int( (fQueue + fAfterMix) * 1000 + 0.5 );
 	pOut->picture_ms = int( (vp.vsync? 2.0: 1.0) * 1000.0 / iRate + 0.5 );
 	pOut->refresh_hz = vp.rate > 20 && vp.rate < 500? vp.rate: 0;
-	LOG->Trace( "PS1Core: AUTO TIMING scan: sound %i ms (queue %.1f ms, device %.1f ms), picture %i ms (%i Hz, vsync %s)",
-		pOut->sound_ms, p->m_fQueueAverage * 1000.0 / SAMPLE_RATE, SOUNDMAN->GetPlayLatency() * 1000.0,
-		pOut->picture_ms, iRate, vp.vsync? "on": "off" );
+	pOut->taps = bTapped? iTaps: 0;
+	LOG->Trace( "PS1Core: AUTO TIMING: sound %i ms (queue %.1f ms, %s %.1f ms), picture %i ms (%i Hz, vsync %s)",
+		pOut->sound_ms, fQueue * 1000.0, bTapped? ssprintf("tap test, %i taps,", iTaps).c_str(): "device estimate",
+		fAfterMix * 1000.0, pOut->picture_ms, iRate, vp.vsync? "on": "off" );
 	return 1;
+}
+
+/* The tap test, on the core thread (the game waits in its OPTIONS meanwhile).
+ * Clicks go through the very path the game's sound takes -- this ring, the
+ * mixer, the device -- every half second: CALIB_LEAD to get the beat, then
+ * the rest, whose taps are timed against the moment the mixer handed the
+ * click to the device.  What is left is the device's delay (speakers, TV,
+ * headphones) and the player's own.  Returns false with too few taps. */
+bool PS1Core::RunCalibration( int &iOffsetMsOut, int &iTapsOut )
+{
+	const int INTERVAL = SAMPLE_RATE / 2;
+	const int CLICK = SAMPLE_RATE / 60;	/* ~17 ms */
+	const int64_t iStart = AtomicLoad( m_iAudioWritten ) + SAMPLE_RATE;	/* a second to read the text */
+	const int64_t iEnd = iStart + int64_t(CALIB_CLICKS) * INTERVAL + SAMPLE_RATE / 2;
+	for( int k = 0; k < CALIB_CLICKS; ++k )
+	{
+		m_aClickFrame[k] = iStart + int64_t(k) * INTERVAL;
+		AtomicStore( m_aClickTicks[k], 0 );
+	}
+	m_iTaps = 0;
+	m_iClicksSent = 0;
+	m_iCalib = 1;
+
+	vector<int16_t> buf( 512 * 2 );
+	for( ;; )
+	{
+		const int64_t iWritten = AtomicLoad( m_iAudioWritten );
+		if( iWritten >= iEnd )
+			break;
+		if( !m_bRunning || Now() - AtomicLoad(m_iLastMixTicks) > m_iTicksPerSecond / 2 )
+		{
+			m_iCalib = 0;	/* the screen went away or the device stopped */
+			return false;
+		}
+		if( iWritten - AtomicLoad(m_iAudioRead) >= AUDIO_QUEUE_TARGET )
+		{
+			WaitForSingleObject( (HANDLE) m_hAudioEvent, 5 );
+			continue;
+		}
+		for( int i = 0; i < 512; ++i )
+		{
+			const int64_t f = iWritten + i;
+			double v = 0;
+			if( f >= iStart )
+			{
+				const int64_t k = (f - iStart) / INTERVAL, t = (f - iStart) % INTERVAL;
+				if( k < CALIB_CLICKS && t < CLICK )
+				{
+					const double hz = k < CALIB_LEAD? 1320.0: 880.0;
+					v = 0.45 * sin( 2 * M_PI * hz * t / SAMPLE_RATE ) * exp( -double(t) / (CLICK / 4.0) );
+				}
+			}
+			buf[i*2] = buf[i*2+1] = int16_t( v * 32767 );
+		}
+		CoreAudio( this, &buf[0], 512 );
+	}
+	/* Let the last click play and its tap arrive. */
+	const int64_t iWaitUntil = Now() + m_iTicksPerSecond * 3 / 4 + int64_t( m_fQueueAverage / SAMPLE_RATE * m_iTicksPerSecond );
+	while( Now() < iWaitUntil )
+		Sleep( 10 );
+	m_iCalib = 0;
+
+	/* Each measured click's nearest tap within a quarter beat. */
+	vector<double> vOffsets;
+	const int iTaps = min( (int) m_iTaps, (int) CALIB_MAX_TAPS );
+	for( int k = CALIB_LEAD; k < CALIB_CLICKS; ++k )
+	{
+		const int64_t iClick = AtomicLoad( m_aClickTicks[k] );
+		if( iClick == 0 )
+			continue;
+		double fBest = 1e9;
+		for( int t = 0; t < iTaps; ++t )
+		{
+			const double d = double( m_aTapTicks[t] - iClick ) / m_iTicksPerSecond;
+			if( fabs(d) < fabs(fBest) )
+				fBest = d;
+		}
+		if( fabs(fBest) < 0.25 )
+			vOffsets.push_back( fBest );
+	}
+	iTapsOut = (int) vOffsets.size();
+	if( iTapsOut < (CALIB_CLICKS - CALIB_LEAD) / 2 )
+	{
+		LOG->Trace( "PS1Core: AUTO TIMING tap test: %i of %i taps on the beat, not enough", iTapsOut, CALIB_CLICKS - CALIB_LEAD );
+		return false;
+	}
+	sort( vOffsets.begin(), vOffsets.end() );
+	iOffsetMsOut = int( vOffsets[vOffsets.size() / 2] * 1000 + (vOffsets[vOffsets.size() / 2] >= 0? 0.5: -0.5) );
+	LOG->Trace( "PS1Core: AUTO TIMING tap test: %i taps, median %i ms after the click left the mixer (spread %.0f .. %.0f ms)",
+		iTapsOut, iOffsetMsOut, vOffsets.front() * 1000, vOffsets.back() * 1000 );
+	return true;
+}
+
+void PS1Core::CalibrationTap( float fAgo )
+{
+	const int i = m_iTaps;
+	if( !m_iCalib || i >= CALIB_MAX_TAPS )
+		return;
+	m_aTapTicks[i] = Now() - int64_t( fAgo * m_iTicksPerSecond );
+	m_iTaps = i + 1;
+}
+
+CString PS1Core::CalibrationText() const
+{
+	int iHeard = 0;
+	for( int k = 0; k < CALIB_CLICKS; ++k )
+		if( m_aClickTicks[k] != 0 )
+			++iHeard;
+	if( iHeard < CALIB_LEAD )
+		return ssprintf( "AUTO TIMING\n\nListen: tap any arrow on every click.\nThe first %i high clicks are the count-in.", (int) CALIB_LEAD );
+	return ssprintf( "AUTO TIMING\n\nTap on every click.\n\n%i / %i", max(0, iHeard - CALIB_LEAD), CALIB_CLICKS - CALIB_LEAD );
 }
 
 /* Return when the next guest frame should run. */
@@ -667,6 +789,14 @@ int PS1Core::MixAudio( int16_t *pBuf, int iFrames )
 	 * about the middle of the queue before and after this read. */
 	const double fQueued = double(iWritten - iRead) - iGot / 2.0;
 	m_fQueueAverage = m_fQueueAverage == 0? fQueued: m_fQueueAverage * 0.98 + fQueued * 0.02;
+	if( m_iCalib )
+	{
+		/* Stamp the clicks this read hands to the device. */
+		const int64_t iNow = Now();
+		for( int k = 0; k < CALIB_CLICKS; ++k )
+			if( m_aClickFrame[k] >= iRead && m_aClickFrame[k] < iRead + iGot && AtomicLoad(m_aClickTicks[k]) == 0 )
+				AtomicStore( m_aClickTicks[k], iNow + (m_aClickFrame[k] - iRead) * m_iTicksPerSecond / SAMPLE_RATE );
+	}
 	for( int i = 0; i < iGot; ++i )
 	{
 		const int iPos = int( (iRead + i) % m_iRingFrames );

@@ -72,6 +72,13 @@ public:
 	 * first frame.  fU/fV: the image's extent in texture coordinates. */
 	RageTexture *GetFrameTexture( float &fUOut, float &fVOut );
 
+	/* AUTO TIMING's tap test (CoreMeasureLatency): the screen shows
+	 * CalibrationText() while it runs and hands it the player's presses.
+	 * fAgo: how long ago the press happened, in seconds. */
+	bool CalibrationActive() const { return m_iCalib != 0; }
+	void CalibrationTap( float fAgo );
+	CString CalibrationText() const;
+
 	/* Diagnostics for the screen's status line and the log. */
 	CString GetStats() const;
 
@@ -149,6 +156,17 @@ private:
 	int64_t m_iStatsGuestTicks, m_iStatsCaptureTicks, m_iStatsTimedFrames;
 
 	volatile uint32_t m_iPads;	/* port 1 in the low half, port 2 in the high half */
+
+	/* Tap test (core thread writes the clicks, the mixer stamps when each
+	 * goes to the sound device, the main thread records the taps). */
+	enum { CALIB_LEAD = 4, CALIB_CLICKS = 20, CALIB_MAX_TAPS = 64 };
+	bool RunCalibration( int &iOffsetMsOut, int &iTapsOut );	/* core thread */
+	volatile int m_iCalib;		/* 0 idle, 1 running */
+	int64_t m_aClickFrame[CALIB_CLICKS];	/* audio frame each click starts at */
+	volatile int64_t m_aClickTicks[CALIB_CLICKS];	/* when it went to the device (0: not yet) */
+	int64_t m_aTapTicks[CALIB_MAX_TAPS];
+	volatile int m_iTaps;
+	volatile int m_iClicksSent;
 
 	/* The PC settings rows in the game's OPTIONS screens. */
 	PS1Settings m_Settings;

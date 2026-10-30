@@ -117,6 +117,15 @@ void ScreenPS1Game::Update( float fDeltaTime )
 		return;
 	}
 
+	/* AUTO TIMING's tap test runs while the game waits in its OPTIONS. */
+	if( PS1CORE->CalibrationActive() )
+	{
+		m_textMessage.SetText( PS1CORE->CalibrationText() );
+		m_textMessage.SetHidden( false );
+	}
+	else if( !m_textMessage.GetHidden() )
+		m_textMessage.SetHidden( true );
+
 	SendPads();
 	PS1CORE->Update( fDeltaTime );
 }
@@ -161,6 +170,13 @@ void ScreenPS1Game::Input( const DeviceInput& DeviceI, const InputEventType type
 	/* A key capture for the game's KEY CONFIG takes everything (Esc cancels). */
 	if( PS1CORE && !m_bFailed && PS1CORE->CaptureInput(DeviceI, type) )
 		return;
+
+	if( PS1CORE && !m_bFailed && PS1CORE->CalibrationActive() )
+	{
+		if( type == IET_FIRST_PRESS && GameI.IsValid() )
+			PS1CORE->CalibrationTap( DeviceI.ts.Ago() );
+		return;
+	}
 
 	/* Everything belongs to the PlayStation (sampled in Update): the game
 	 * has its own OPTIONS for the PC settings and QUIT on its main menu.  Back
