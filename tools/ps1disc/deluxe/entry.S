@@ -65,3 +65,79 @@ dlx_build2_site:
 dlx_step_mark_site:
 	j dlx_step_mark_text
 	move $5, $16
+
+	.globl dlx_kind_site, dlx_avail_site, dlx_records_site
+
+/* 0x8002C398 (j here; nop): music id -> v0 2 stream / 1 XA, a0 = id < 25. */
+dlx_kind_site:
+	addiu $sp, $sp, -24
+	sw $31, 20($sp)
+	jal dlx_kind
+	sw $4, 16($sp)
+	lw $4, 16($sp)
+	lw $31, 20($sp)
+	andi $4, $4, 0xffff
+	sltiu $4, $4, 25
+	jr $31
+	addiu $sp, $sp, 24
+
+/* 0x80050C40 (j here; nop): v0 = a1 = listed, v1 = the play style. */
+dlx_avail_site:
+	addiu $sp, $sp, -24
+	sw $31, 20($sp)
+	jal dlx_avail
+	nop
+	lui $3, 0x800c
+	lb $3, -0x5cd8($3)
+	move $5, $2
+	lw $31, 20($sp)
+	nop
+	jr $31
+	addiu $sp, $sp, 24
+
+/* RECORDS overlay 0x800E90BC (jal here instead of the LZ decoder): place
+ * the slot s0 points to, then decode (a0, a1) as the game would. */
+dlx_records_site:
+	addiu $sp, $sp, -32
+	sw $31, 28($sp)
+	sw $4, 16($sp)
+	sw $5, 20($sp)
+	jal dlx_records_slot
+	move $4, $16
+	lw $4, 16($sp)
+	lw $5, 20($sp)
+	lw $31, 28($sp)
+	j 0x8002E6F0
+	addiu $sp, $sp, 32
+
+	.globl dlx_load_site
+
+/* 0x80023FC0, the READ_DT loader (a0 = its table-of-contents entry), first
+ * two words (j here; nop).  The menus' packs that now hold the extra songs'
+ * pictures (music select 201-210 with the results, workout results 181,
+ * RECORDS 28-32) reach past where the stock ones end, over memory where the
+ * game keeps its dancers between songs (loaded at 0x80160000 / 0x8016A000,
+ * decoded at 0x8018C000 / 0x801A8000); it skips their load while
+ * [0x800BA335] / [0x800BB599] still name them.  Loading one of those packs
+ * forgets both, so they load again. */
+dlx_load_site:
+	lui $24, 0x8009
+	ori $24, $24, 0x2b50
+	subu $24, $4, $24
+	srl $24, $24, 3			/* the entry; huge below the table */
+	addiu $25, $24, -28
+	sltiu $25, $25, 5
+	bnez $25, 1f
+	addiu $25, $24, -181
+	beqz $25, 1f
+	addiu $25, $24, -201
+	sltiu $25, $25, 10
+	beqz $25, 2f
+	nop
+1:	lui $25, 0x800c
+	addiu $24, $zero, -1
+	sb $24, -0x5ccb($25)
+	sb $24, -0x4a67($25)
+2:	lui $2, 0x8009			/* the loader's own first two words */
+	j 0x80023FC8
+	lw $2, 0x1dac($2)
