@@ -33,11 +33,12 @@
 extern "C" {
 #endif
 
-#define DSFCORE_API_VERSION 8
+#define DSFCORE_API_VERSION 9
 
 enum {
 	DSFCORE_FRAME_BLANK = 1,	/* display disabled: show black */
-	DSFCORE_FRAME_24BIT = 2		/* 24-bit (movie) scanout at native size */
+	DSFCORE_FRAME_24BIT = 2,	/* 24-bit (movie) scanout at native size */
+	DSFCORE_FRAME_REPEAT = 4	/* v9: the previous frame's picture again; no pixels */
 };
 
 /* PC settings shown in the game's OPTIONS screens. */
