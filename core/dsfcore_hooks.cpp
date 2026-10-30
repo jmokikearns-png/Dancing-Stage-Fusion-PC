@@ -41,6 +41,7 @@
 #include "dsfcore_host.h"
 #include "dsfcore_timing.h"
 #include "mod_plugins.h"
+#include "psx_cycle_freeze.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -161,8 +162,30 @@ bool autoplay_pads( uint16_t pads[2] )
 	return true;
 }
 
+uint16_t g_last_pads[2] = { 0xFFFF, 0xFFFF };
+bool g_have_last_pads = false;
+
+void write_pads( const uint16_t pads[2] )
+{
+	for( int i = 0; i < 2; ++i )
+	{
+		/* A digital pad's reply: status ok, ID 0x41, button bytes as sent. */
+		const uint8_t reply[4] = { 0x00, 0x41, uint8_t(pads[i] & 0xFF), uint8_t(pads[i] >> 8) };
+		psx_mod_host_write_ram( PAD_RECV_BUFFER[i], reply, sizeof(reply) );
+	}
+}
+
 void on_game_pad_read( struct CPUState *, uint32_t )
 {
+	/* A render pass (SMOOTH ARROWS) replays the loop, this read with it: it
+	 * gets the last real read's pads, so it takes no press from the host's
+	 * latches (the pass is thrown away) and AUTO TIMING counts nothing. */
+	if( g_psx_render_pass_active )
+	{
+		if( g_have_last_pads )
+			write_pads( g_last_pads );
+		return;
+	}
 	dsf_auto_timing_frame();	/* before this read: the last read's presses */
 	uint16_t pads[2] = { 0xFFFF, 0xFFFF };	/* active-low: nothing pressed */
 	const bool host = dsfcore_host_read_pads( pads ) != 0;
@@ -174,12 +197,10 @@ void on_game_pad_read( struct CPUState *, uint32_t )
 		g_bLoggedPads = true;
 		std::fprintf( stdout, "[dsf.stepmania] pad read hook active: the game reads StepMania's input\n" );
 	}
-	for( int i = 0; i < 2; ++i )
-	{
-		/* A digital pad's reply: status ok, ID 0x41, button bytes as sent. */
-		const uint8_t reply[4] = { 0x00, 0x41, uint8_t(pads[i] & 0xFF), uint8_t(pads[i] >> 8) };
-		psx_mod_host_write_ram( PAD_RECV_BUFFER[i], reply, sizeof(reply) );
-	}
+	write_pads( pads );
+	g_last_pads[0] = pads[0];
+	g_last_pads[1] = pads[1];
+	g_have_last_pads = true;
 }
 
 } // namespace
