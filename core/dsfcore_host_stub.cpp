@@ -163,6 +163,8 @@ extern "C" int dsfcore_host_measure_latency( DsfCoreLatency *out )
 	out->sound_ms = a? std::atoi( a ): 60;
 	out->picture_ms = b? std::atoi( b ): 33;
 	out->refresh_hz = 60;
+	const char *t = std::getenv( "DSF_STUB_TAPS" );
+	out->taps = t? std::atoi( t ): 0;
 	return 1;
 }
 

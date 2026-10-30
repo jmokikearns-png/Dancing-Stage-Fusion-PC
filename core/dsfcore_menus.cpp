@@ -233,11 +233,11 @@ const Row SOUND_ROWS[] = {
 	     "Retrasa la imagen esta cantidad. Prueba de +10\na +40 ms si las flechas van adelantadas." }}, true },
 	{ ROW_SETTING, DSFCORE_SETTING_AUTO_TIMING,
 	  {{ "AUTO TIMING", "TEMPS AUTO", "AUTO-TIMING", "TEMPO AUTO", "SINCRO. AUTO" }},
-	  {{ "ON: measures this PC's sound and picture delay,\nsets TIMING and PICTURE SYNC, then fine-tunes\nTIMING from your steps after every song.",
-	     "ACTIV" LE "E : mesure le retard du son et de l'image,\nr" e2 "gle TEMPS et SYNCHRO IMAGE, puis ajuste\nTEMPS d'apr" e2 "s vos pas apr" e2 "s chaque chanson.",
-	     "EIN: misst Ton- und Bildverz" o3 "gerung, stellt\nTIMING und BILD-SYNC ein und passt TIMING\nnach jedem Song an deine Schritte an.",
-	     "ON: misura il ritardo di audio e immagine,\nimposta TEMPO e SINCRO IMMAGINE, poi regola\nTEMPO dai tuoi passi dopo ogni brano.",
-	     "ACTIVAR: mide el retardo de sonido e imagen,\najusta SINCRONIZACI" LO "N y SINCRO. IMAGEN y\nla afina con tus pasos tras cada canci" o1 "n." }}, false },
+	  {{ "ON: plays clicks - tap any arrow on each one.\nSets TIMING and PICTURE SYNC from your taps,\nthen fine-tunes TIMING from every song.",
+	     "ACTIV" LE "E : des clics - tape une fl" e2 "che " a2 " chacun.\nR" e2 "gle TEMPS et SYNCHRO IMAGE d'apr" e2 "s tes\nfrappes, puis TEMPS apr" e2 "s chaque chanson.",
+	     "EIN: spielt Klicks - tippe zu jedem einen Pfeil.\nStellt TIMING und BILD-SYNC danach ein und\npasst TIMING nach jedem Song an.",
+	     "ON: suona dei clic - premi una freccia a ognuno.\nImposta TEMPO e SINCRO IMMAGINE dai colpi,\npoi regola TEMPO dopo ogni brano.",
+	     "ACTIVAR: suenan clics; pulsa una flecha en cada\nuno. Ajusta SINCRONIZACI" LO "N y SINCRO. IMAGEN\ncon tus toques y la afina en cada canci" o1 "n." }}, false },
 };
 
 enum { PAGE_DISPLAY, PAGE_KEYS_1P, PAGE_KEYS_2P, NUM_PAGES };
@@ -538,12 +538,27 @@ void show_scan_result()
 		set_help( STR_SCAN );
 		return;
 	}
-	const Text fmt = {{ "Sound %d ms, picture %d ms. Set: TIMING %+d,\nPICTURE SYNC ON, PICTURE DELAY %+d ms.\nTIMING keeps adjusting to your steps.",
-		"Son %d ms, image %d ms. R" e1 "glages : TEMPS %+d,\nSYNCHRO IMAGE ACTIV" LE "E, D" LE "LAI %+d ms.\nTEMPS continue de s'adapter " a2 " vos pas.",
-		"Ton %d ms, Bild %d ms. Gesetzt: TIMING %+d,\nBILD-SYNC EIN, BILDVERZ" LOE "GERUNG %+d ms.\nTIMING passt sich weiter deinen Schritten an.",
-		"Audio %d ms, immagine %d ms. Impostati: TEMPO\n%+d, SINCRO IMMAGINE ON, RITARDO %+d ms.\nTEMPO continua ad adattarsi ai tuoi passi.",
-		"Sonido %d ms, imagen %d ms. Ajuste: SINCRONIZACI" LO "N\n%+d, SINCRO. IMAGEN ACTIVAR, RETARDO %+d ms.\nSe seguir" "\xE1" " ajustando con tus pasos." }};
-	std::snprintf( g_scan_text, sizeof(g_scan_text), tr(fmt), r.sound_ms, r.picture_ms, r.timing, r.picture_delay_ms );
+	const Text fmt = {{ "Sound %d ms, picture %d ms. Set: TIMING %+d,\nPICTURE SYNC ON, PICTURE DELAY %+d ms.\n%s",
+		"Son %d ms, image %d ms. R" e1 "glages : TEMPS %+d,\nSYNCHRO IMAGE ACTIV" LE "E, D" LE "LAI %+d ms.\n%s",
+		"Ton %d ms, Bild %d ms. Gesetzt: TIMING %+d,\nBILD-SYNC EIN, BILDVERZ" LOE "GERUNG %+d ms.\n%s",
+		"Audio %d ms, immagine %d ms. Impostati: TEMPO\n%+d, SINCRO IMMAGINE ON, RITARDO %+d ms.\n%s",
+		"Sonido %d ms, imagen %d ms. Ajuste: SINCRONIZACI" LO "N\n%+d, SINCRO. IMAGEN ACTIVAR, RETARDO %+d ms.\n%s" }};
+	const Text tapped = {{ "Measured from %d taps; adjusts to your steps.",
+		"Mesur" e1 " sur %d frappes ; s'adapte " a2 " vos pas.",
+		"Aus %d Schl" a3 "gen gemessen; passt sich an.",
+		"Misurato da %d colpi; si adatta ai tuoi passi.",
+		"Medido con %d toques; se ajusta a tus pasos." }};
+	const Text estimated = {{ "Too few taps: estimated. Turn ON again to retry.",
+		"Trop peu de frappes : estim" e1 ". R" e1 "essaie.",
+		"Zu wenige Schl" a3 "ge: gesch" a3 "tzt. Erneut EIN.",
+		"Pochi colpi: stimato. Riattiva per riprovare.",
+		"Pocos toques: estimado. Act" i1 "valo de nuevo." }};
+	char last[96];
+	if( r.taps )
+		std::snprintf( last, sizeof(last), tr(tapped), r.taps );
+	else
+		std::snprintf( last, sizeof(last), "%s", tr(estimated) );
+	std::snprintf( g_scan_text, sizeof(g_scan_text), tr(fmt), r.sound_ms, r.picture_ms, r.timing, r.picture_delay_ms, last );
 	set_help( STR_SCAN );
 }
 

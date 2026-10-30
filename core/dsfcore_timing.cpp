@@ -173,6 +173,7 @@ bool dsf_auto_timing_scan( AutoTimingScan &out )
 	if( !dsfcore_host_measure_latency(&l) )
 		return false;
 	out.sound_ms = l.sound_ms;
+	out.taps = l.taps;
 	out.picture_ms = l.picture_ms;
 	/* The picture with its sound, shown early by the screen's own delay. */
 	dsfcore_host_set_setting( DSFCORE_SETTING_SYNC_PICTURE, 1 );
@@ -190,8 +191,8 @@ bool dsf_auto_timing_scan( AutoTimingScan &out )
 	set_timing( int(std::lround(l.sound_ms / MS_PER_TICK)) );
 	out.timing = timing_now();
 	psx_mod_counter_add( "dsf.timing.scans", 1 );
-	std::fprintf( stdout, "[dsf.timing] scan: sound %d ms, picture %d ms (%d Hz): PICTURE SYNC ON, PICTURE DELAY %+d ms, TIMING %+d\n",
-		l.sound_ms, l.picture_ms, l.refresh_hz, out.picture_delay_ms, out.timing );
+	std::fprintf( stdout, "[dsf.timing] scan: sound %d ms (%s), picture %d ms (%d Hz): PICTURE SYNC ON, PICTURE DELAY %+d ms, TIMING %+d\n",
+		l.sound_ms, l.taps ? "tap test" : "estimate", l.picture_ms, l.refresh_hz, out.picture_delay_ms, out.timing );
 	std::fflush( stdout );
 	return true;
 }

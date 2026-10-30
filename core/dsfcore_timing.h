@@ -8,6 +8,7 @@ struct AutoTimingScan
 	int sound_ms, picture_ms;	/* measured delays */
 	int timing;			/* the game's TIMING now (-8..8, 1/75 s) */
 	int picture_delay_ms;		/* PICTURE DELAY now */
+	int taps;			/* the tap test's taps; 0: the sound delay is the PC's estimate */
 };
 
 /* Measure the PC's delays and set PICTURE SYNC, PICTURE DELAY and TIMING

@@ -33,7 +33,7 @@
 extern "C" {
 #endif
 
-#define DSFCORE_API_VERSION 7
+#define DSFCORE_API_VERSION 8
 
 enum {
 	DSFCORE_FRAME_BLANK = 1,	/* display disabled: show black */
@@ -78,6 +78,7 @@ typedef struct DsfCoreLatency
 	int32_t sound_ms;
 	int32_t picture_ms;
 	int32_t refresh_hz;		/* 0 when unknown */
+	int32_t taps;			/* v8: sound_ms from a tap test with this many taps; 0: estimated */
 } DsfCoreLatency;
 
 /* Buttons of the KEY CONFIG pages: the PS1 pad.  PC_MENU is StepMania's Back,
@@ -142,7 +143,8 @@ typedef struct DsfCoreHost
 	/* The player chose QUIT on the game's main menu: leave the program as
 	 * the host's own exit does.  The core keeps running until then. */
 	void (*quit)( void *user );
-	/* v6: the delays as measured now; 0 when the host can't tell. */
+	/* v6: the delays as measured now; 0 when the host can't tell.  v8: the
+	 * host may run a tap test first (the call then takes some seconds). */
 	int (*measure_latency)( void *user, DsfCoreLatency *out );
 } DsfCoreHost;
 
