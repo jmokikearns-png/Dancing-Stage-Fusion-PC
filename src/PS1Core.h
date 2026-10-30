@@ -63,6 +63,9 @@ public:
 
 	/* Main thread, every StepMania update while the game screen is up. */
 	void SetPads( uint16_t iPad1, uint16_t iPad2 );
+	/* Main thread, from input events: a button pressed or released, kept
+	 * until the game's next pad read so no step is lost between reads. */
+	void LatchPad( int iController, int iBit, bool bPressed );
 	/* Main thread: the game's KEY CONFIG capture (see PS1Settings). */
 	bool CaptureInput( const DeviceInput &DeviceI, InputEventType type ) { return m_Settings.CaptureInput( DeviceI, type ); }
 	bool HoldGameInput() { return m_Settings.HoldGameInput(); }
@@ -161,6 +164,12 @@ private:
 	int64_t m_iStatsGuestTicks, m_iStatsCaptureTicks, m_iStatsTimedFrames;
 
 	volatile uint32_t m_iPads;	/* port 1 in the low half, port 2 in the high half */
+	/* Pressed-bit masks (1 = pressed), same halves: presses and releases seen
+	 * since the game's last read (main thread sets, core thread takes), and on
+	 * the core thread what the last read reported and a press held over. */
+	volatile uint32_t m_iPressedSince, m_iReleasedSince;
+	uint32_t m_iLastReported, m_iPendingPress;
+	uint32_t TakePads();		/* core thread, at the game's pad read */
 
 	/* Tap test (core thread writes the clicks, the mixer stamps when each
 	 * goes to the sound device, the main thread records the taps). */

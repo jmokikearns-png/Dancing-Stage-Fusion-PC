@@ -172,6 +172,8 @@ PS1Core::PS1Core():
 	m_fStatsSeconds = 0;
 	m_iStatsFrames = m_iStatsAudio = 0;
 	m_iPads = 0xFFFFFFFF;
+	m_iPressedSince = m_iReleasedSince = 0;
+	m_iLastReported = m_iPendingPress = 0;
 	for( int i = 0; i < MAX_QUEUED_FRAMES + 2; ++i )
 		m_Free.push_back( new Frame );
 }
@@ -327,6 +329,30 @@ void PS1Core::SetRunning( bool bRunning )
 void PS1Core::SetPads( uint16_t iPad1, uint16_t iPad2 )
 {
 	__atomic_store_n( &m_iPads, uint32_t(iPad1) | (uint32_t(iPad2) << 16), __ATOMIC_RELEASE );
+}
+
+void PS1Core::LatchPad( int iController, int iBit, bool bPressed )
+{
+	const uint32_t iMask = 1u << (iBit + 16 * iController);
+	__atomic_fetch_or( bPressed ? &m_iPressedSince : &m_iReleasedSince, iMask, __ATOMIC_ACQ_REL );
+}
+
+/* What the game's pad read sees (active-low words): the buttons held now,
+ * plus any pressed since the last read even if already let go (a quick step
+ * between two reads, 40 ms apart at the game's 25 frames a second).  A
+ * button the last read saw down that was let go and pressed again since
+ * reads up now and down at the next read, so the game sees both steps. */
+uint32_t PS1Core::TakePads()
+{
+	const uint32_t iHeld = ~__atomic_load_n( &m_iPads, __ATOMIC_ACQUIRE );
+	const uint32_t iPressed = __atomic_exchange_n( &m_iPressedSince, 0, __ATOMIC_ACQ_REL );
+	const uint32_t iReleased = __atomic_exchange_n( &m_iReleasedSince, 0, __ATOMIC_ACQ_REL );
+	uint32_t iDown = iHeld | iPressed | m_iPendingPress;
+	const uint32_t iAgain = m_iLastReported & iReleased & iPressed & ~m_iPendingPress;
+	iDown &= ~iAgain;
+	m_iPendingPress = iAgain;
+	m_iLastReported = iDown;
+	return ~iDown;
 }
 
 void PS1Core::Update( float fDeltaTime )
@@ -577,7 +603,7 @@ void PS1Core::CoreFrameDone( void *pUser, uint16_t aPadsOut[2] )
 void PS1Core::CoreReadPads( void *pUser, uint16_t aPadsOut[2] )
 {
 	PS1Core *p = (PS1Core *) pUser;
-	const uint32_t iPads = __atomic_load_n( &p->m_iPads, __ATOMIC_ACQUIRE );
+	const uint32_t iPads = p->TakePads();
 	aPadsOut[0] = uint16_t( iPads & 0xFFFF );
 	aPadsOut[1] = uint16_t( iPads >> 16 );
 }

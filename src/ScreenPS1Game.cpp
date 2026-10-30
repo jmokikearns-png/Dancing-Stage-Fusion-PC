@@ -178,6 +178,11 @@ void ScreenPS1Game::Input( const DeviceInput& DeviceI, const InputEventType type
 		return;
 	}
 
+	/* A pad button: held for the game's next read (sampled in Update too). */
+	if( PS1CORE && !m_bFailed && GameI.IsValid() && GameI.controller < 2 && GameI.button < NUM_PS1PAD_PS1_BUTTONS &&
+	    !PS1CORE->HoldGameInput() && (type == IET_FIRST_PRESS || type == IET_RELEASE) )
+		PS1CORE->LatchPad( GameI.controller, PS1_PAD_BIT[GameI.button], type == IET_FIRST_PRESS );
+
 	/* Everything belongs to the PlayStation (sampled in Update): the game
 	 * has its own OPTIONS for the PC settings and QUIT on its main menu.  Back
 	 * only leaves the error message when the game couldn't start. */
