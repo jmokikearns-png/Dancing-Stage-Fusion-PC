@@ -145,6 +145,8 @@ PS1Core::PS1Core():
 	m_pfnState = m_pfnExitCode = NULL;
 	m_iFramesProduced = 0;
 	m_iShownSerial = -1;
+	m_iShownContent = -1;
+	m_iLastContent = -1;
 	m_uRShift = m_uGShift = m_uBShift = m_uAShift = 0;
 	m_pTexture = NULL;
 	m_fU = m_fV = 1;
@@ -368,14 +370,31 @@ int64_t PS1Core::HeardAudioPosition() const
 	return iRead - iLatency;
 }
 
+/* Drop the oldest queued frame.  A repeat behind it that shows its picture
+ * takes the pixels over, so no repeat is left without them. */
+void PS1Core::FreeOldest()
+{
+	Frame *f = m_Ready.front();
+	m_Ready.pop_front();
+	if( !f->bRepeat && !m_Ready.empty() && m_Ready.front()->bRepeat && m_Ready.front()->iContent == f->iContent &&
+	    f->iContent != m_iShownContent )
+	{
+		Frame *n = m_Ready.front();
+		n->pixels.swap( f->pixels );
+		n->iWidth = f->iWidth;
+		n->iHeight = f->iHeight;
+		n->bBlank = f->bBlank;
+		n->bRepeat = false;
+	}
+	m_Free.push_back( f );
+}
+
 PS1Core::Frame *PS1Core::GetFreeFrame()
 {
 	if( m_Free.empty() )
 	{
-		/* Drop the oldest queued frame. */
 		ASSERT( !m_Ready.empty() );
-		m_Free.push_back( m_Ready.front() );
-		m_Ready.pop_front();
+		FreeOldest();
 	}
 	Frame *f = m_Free.back();
 	m_Free.pop_back();
@@ -394,10 +413,7 @@ const PS1Core::Frame *PS1Core::PickFrameToShow()
 		const int64_t iLimit = m_Ready.back()->iAudioEnd -
 			int64_t( max(0, PREFSMAN->m_iPS1SyncOffsetMs.Get()) * (SAMPLE_RATE / 1000) );
 		while( m_Ready.size() > 1 && m_Ready[1]->iAudioEnd <= iLimit )
-		{
-			m_Free.push_back( m_Ready.front() );
-			m_Ready.pop_front();
-		}
+			FreeOldest();
 		return m_Ready.front();
 	}
 
@@ -408,10 +424,7 @@ const PS1Core::Frame *PS1Core::PickFrameToShow()
 		int64_t( PREFSMAN->m_iPS1SyncOffsetMs * (SAMPLE_RATE / 1000) );
 	while( m_Ready.size() > 1 &&
 		   m_Ready[1]->iAudioEnd - PAL_AUDIO_FRAMES_PER_VIDEO_FRAME <= iHeard )
-	{
-		m_Free.push_back( m_Ready.front() );
-		m_Ready.pop_front();
-	}
+		FreeOldest();
 	return m_Ready.front();
 }
 
@@ -423,7 +436,11 @@ RageTexture *PS1Core::GetFrameTexture( float &fU, float &fV )
 		if( f != NULL && f->iSerial != m_iShownSerial )
 		{
 			m_iShownSerial = f->iSerial;
-			Upload( *f );
+			if( !f->bRepeat && f->iContent != m_iShownContent )
+			{
+				m_iShownContent = f->iContent;
+				Upload( *f );
+			}
 		}
 	}
 	fU = m_fU;
@@ -462,11 +479,12 @@ void PS1Core::CoreVideo( void *pUser, const uint32_t *pARGB, int iWidth, int iHe
 {
 	PS1Core *p = (PS1Core *) pUser;
 	const int64_t iStart = p->Now();
-	const bool bBlank = (iFlags & DSFCORE_FRAME_BLANK) || pARGB == NULL || iWidth <= 0 || iHeight <= 0;
+	const bool bRepeat = (iFlags & DSFCORE_FRAME_REPEAT) != 0;
+	const bool bBlank = !bRepeat && ((iFlags & DSFCORE_FRAME_BLANK) || pARGB == NULL || iWidth <= 0 || iHeight <= 0);
 
 	/* Convert outside the lock into a buffer of our own, then queue it. */
 	static vector<uint32_t> buf;
-	if( !bBlank )
+	if( !bBlank && !bRepeat )
 	{
 		buf.resize( size_t(iWidth) * iHeight );
 		const uint32_t rs = p->m_uRShift, gs = p->m_uGShift, bs = p->m_uBShift, as = p->m_uAShift;
@@ -497,13 +515,21 @@ void PS1Core::CoreVideo( void *pUser, const uint32_t *pARGB, int iWidth, int iHe
 
 	LockMut( p->m_FrameLock );
 	Frame *f = p->GetFreeFrame();
-	f->bBlank = bBlank;
-	f->iWidth = bBlank ? 0 : iWidth;
-	f->iHeight = bBlank ? 0 : iHeight;
-	if( !bBlank )
-		f->pixels.swap( buf );
-	f->iAudioEnd = AtomicLoad( p->m_iAudioWritten );
 	f->iSerial = p->m_iFramesProduced++;
+	f->bRepeat = bRepeat && p->m_iFramesProduced > 1;
+	if( f->bRepeat )
+		f->iContent = p->m_iLastContent;	/* no pixels: those of the frame it repeats */
+	else
+	{
+		f->bBlank = bBlank;
+		f->iWidth = bBlank ? 0 : iWidth;
+		f->iHeight = bBlank ? 0 : iHeight;
+		if( !bBlank )
+			f->pixels.swap( buf );
+		f->iContent = f->iSerial;
+		p->m_iLastContent = f->iSerial;
+	}
+	f->iAudioEnd = AtomicLoad( p->m_iAudioWritten );
 	p->m_Ready.push_back( f );
 	(void) iScale;
 

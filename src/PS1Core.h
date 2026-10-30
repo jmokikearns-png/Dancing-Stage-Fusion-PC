@@ -106,10 +106,13 @@ private:
 		vector<uint32_t> pixels;	/* in the display's FMT_RGBA8 layout */
 		int iWidth, iHeight;
 		bool bBlank;
+		bool bRepeat;		/* shows the picture of frame iContent, pixels not here */
+		int64_t iContent;	/* the frame whose picture this shows */
 		int64_t iAudioEnd;	/* audio frames produced when this frame was finished */
 		int64_t iSerial;
 	};
 	Frame *GetFreeFrame();		/* m_FrameLock held */
+	void FreeOldest();		/* m_FrameLock held */
 	const Frame *PickFrameToShow();	/* m_FrameLock held */
 	void Upload( const Frame &f );
 	int64_t HeardAudioPosition() const;
@@ -128,6 +131,8 @@ private:
 	vector<Frame*> m_Free;
 	int64_t m_iFramesProduced;
 	int64_t m_iShownSerial;
+	int64_t m_iShownContent;	/* the picture in the texture now */
+	int64_t m_iLastContent;		/* core thread: the newest frame with pixels */
 	uint32_t m_uRShift, m_uGShift, m_uBShift, m_uAShift;
 
 	PS1FrameTexture *m_pTexture;
