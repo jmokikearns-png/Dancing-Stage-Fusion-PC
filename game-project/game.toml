@@ -1,0 +1,70 @@
+# Autofilled by tools/new_project_layout/probe_disc.py from your legal dump.
+# Review before shipping. Runtime quirks / overlay seeds still need hand work.
+
+[game]
+name = "Dancing Stage Fusion"
+id = "SLES-04163"
+players = 2
+exe = "disc_exe/SLES_041.63"
+disc = "/home/user/work/original/disc/Dancing Stage Fusion (Europe) (En,Fr,De,Es,It).cue"
+load_address = "0x8001A000"
+entry_pc = "0x8002397C"
+text_size = "0x0009B000"
+stack_base = "0x801FFFF0"
+
+# Digests are for data Track 01 (first BINARY FILE / TRACK 01).
+[prepare_disc]
+out_dir = "disc"
+bin_name = "Dancing Stage Fusion (Europe) (En,Fr,De,Es,It).bin"
+cue_name = "Dancing Stage Fusion (Europe) (En,Fr,De,Es,It).cue"
+boot_exe = "SLES_041.63"
+known_sizes = [248103072]
+known_md5 = [
+  "9cdceb1ee8e0748835b41c66af5565f1",
+]
+known_sha1 = [
+  "1cd6d58620f8d1825126740b14e11612fb1628d3",
+]
+known_crc32 = [
+  "78592e6b",
+]
+
+[recompiler]
+seeds = "seeds/ghidra_funcs.txt"
+out_dir = "generated"
+strict = true
+# Dancing Stage Fusion PC: functions the port's StepMania integration hooks
+# (port/core/dsfcore_hooks.cpp).  0x800243FC = the game's per-frame pad read
+# (decodes the two LIBPAD receive buffers at 0x800B4DB8 / 0x800B4DEC).
+# 0x80037ED8 = VSync, where SMOOTH ARROWS (dsfcore_smooth.cpp) draws each
+# song frame's in-between.
+mod_function_entry_funcs = ["0x800243FC", "0x80037ED8"]
+# STEP MARK COLORS TYPE3 (port/core/dsfcore_stepcolors.cpp): the three
+# `== TYPE2` tests, the note's palette choice, the two palette builders'
+# exits and the save check.  0x800488D4: SMOOTH ARROWS, the scroll position.
+mod_instruction_sites = ["0x80051950", "0x80054D24", "0x800556FC", "0x800519F0",
+                         "0x8005517C", "0x80055A7C", "0x80084BC0", "0x800488D4"]
+
+[runtime]
+window_title = "Dancing Stage Fusion Recompiled"
+memcard_dir = "saves"
+overlay_cache = true
+
+[video]
+renderer = "opengl"
+aspect_ratio = "4:3"
+
+[controller]
+default_mode = "digital"
+
+# Online mount gate: digests + track count + optional TOC fingerprint
+# (see docs/NETPLAY.md).
+[netplay]
+require_cue = true
+required_tracks = 1
+required_disc_fp = "3fd751ac50155177c6e702b2311ff887a393174fe00dcfd73e424317f2071584"
+
+[audio]
+# Host playback cushion. Rhythm game: keep it low (default 180 ms put the music ~0.2 s behind the arrows).
+# 30..500; raise to 60-80 only if you hear crackling.
+buffer_ms = 50

@@ -1,0 +1,22 @@
+format_version = 5
+id = "dsf.input.stepmania"
+version = "1.0.0"
+name = "StepMania Input Mapping"
+author = "Dancing Stage Fusion PC"
+description = "Keyboard, dance pad and joystick input through StepMania 2005's DirectInput layer, with per-player bindings in config/Data/Keymaps.ini (edit them with DSF-ControllerSetup.exe). Replaces the runtime's own keyboard and controller mapping for both players; the game still sees a standard PlayStation digital pad."
+resolver = "declarative"
+save_compatibility = "shared"
+
+[[target]]
+game_id = "SLES-04163"
+
+[[feature]]
+id = "stepmania-input"
+name = "StepMania input mapping"
+description = "Reads keyboards, dance pads and joysticks through StepMania's input code and maps them to the two PlayStation controller ports. Turn off to fall back to the runtime's own keyboard/gamepad controls."
+group = "Controls"
+default_enabled = true
+
+[[plugin]]
+feature = "stepmania-input"
+id = "dsf.input.stepmania"

@@ -1,0 +1,947 @@
+From f1cb453067e007485ee0230c6bcfdc8de8295de9 Mon Sep 17 00:00:00 2001
+From: DSF PC Port <jmokikearns@gmail.com>
+Date: Sat, 24 Oct 2026 19:38:07 +0000
+Subject: [PATCH 05/11] Render passes for embedding hosts; SPU register reads
+ inside passes
+
+An embedding host (PSX_EMBED) is handed one image per VBlank, so temporal
+passes there are presented by render_pass_embed.c: a pass image replaces
+the readout on its VBlank once the display flips to its rect, at least
+shown_after_vblanks after the plan. The VRAM transaction is the OpenGL
+renderer's own (gl_renderer_embed_pass_*, no presenter needed) or, with the
+software renderer, a whole-VRAM backup plus the hi-res rect.
+
+SPU registers are read in a pass as of its start: the SPU is caught up on
+the live clock before the freeze and spu_read() does not catch up while a
+pass runs. The transfer FIFO is still refused.
+
+Tests: render_pass_abort/sandbox link again (g_boot_state_cpu_timing_restored
+stub) and cover SPU reads; SPU tests define g_psx_render_pass_active.
+---
+ runtime/include/gpu_gl_renderer.h           |   7 +
+ runtime/include/gpu_sw_renderer.h           |   6 +
+ runtime/include/render_pass_embed.h         |  66 ++++
+ runtime/runtime.cmake                       |   1 +
+ runtime/src/gpu_gl_renderer.c               |  38 ++-
+ runtime/src/gpu_sw_renderer.c               |   8 +
+ runtime/src/main.cpp                        |  18 +-
+ runtime/src/render_pass.c                   |  39 ++-
+ runtime/src/render_pass_embed.c             | 315 ++++++++++++++++++++
+ runtime/src/spu.c                           |   5 +-
+ runtime/tests/test_render_pass_abort.c      |  36 +++
+ runtime/tests/test_render_pass_sandbox.c    |  11 +
+ runtime/tests/test_spu_end_without_repeat.c |   2 +
+ runtime/tests/test_spu_fidelity.c           |   2 +
+ runtime/tests/test_spu_guest_clock.c        |   2 +
+ runtime/tests/test_spu_pitch_zero.c         |   2 +
+ runtime/tests/test_spu_sample_banks.c       |   2 +
+ 17 files changed, 544 insertions(+), 16 deletions(-)
+ create mode 100644 runtime/include/render_pass_embed.h
+ create mode 100644 runtime/src/render_pass_embed.c
+
+diff --git a/runtime/include/gpu_gl_renderer.h b/runtime/include/gpu_gl_renderer.h
+index a506078f..1ae26a2c 100644
+--- a/runtime/include/gpu_gl_renderer.h
++++ b/runtime/include/gpu_gl_renderer.h
+@@ -131,6 +131,13 @@ void     gl_renderer_pass_dump_arm(const char *dir, int generations);
+ uint32_t gl_renderer_local_view_unavailable(void);
+ int gl_renderer_local_view_begin(int x, int y, int w, int h);
+ int gl_renderer_local_view_end(int keep);
++/* Embedding host passes (render_pass_embed.c): the VRAM transaction with no
++ * generation and no presenter. end() captures the rect at the internal scale
++ * into argb (pitch in bytes) when keep, restores, and returns the pixels
++ * captured (0 when not kept or the readout failed). */
++uint32_t gl_renderer_embed_pass_unavailable(void);
++int gl_renderer_embed_pass_begin(int x, int y, int w, int h);
++int gl_renderer_embed_pass_end(uint32_t *argb, int pitch, int keep);
+ /* Stereo shares the VRAM transaction, not the temporal generation/schedule. */
+ uint32_t gl_renderer_stereo_unavailable(void);
+ int gl_renderer_stereo_begin(int x, int y, int w, int h, int reuse_backup);
+diff --git a/runtime/include/gpu_sw_renderer.h b/runtime/include/gpu_sw_renderer.h
+index 6525c2ab..a5253a72 100644
+--- a/runtime/include/gpu_sw_renderer.h
++++ b/runtime/include/gpu_sw_renderer.h
+@@ -23,6 +23,12 @@ void sw_renderer_rebind_vram(uint16_t* vram);
+  * Must be called once after sw_renderer_init, before drawing begins. */
+ void sw_renderer_set_scale(int scale);
+ int  sw_renderer_scale(void);
++/* The supersampled mirror (sw_renderer_scale() > 1) and its size in texels,
++ * or NULL at 1x: a render pass backs up and restores rects of it
++ * (render_pass_embed.c). */
++uint16_t *sw_renderer_hires(int *w, int *h);
++/* Native-wide mirror surfaces in use (a render pass does not restore them). */
++int  sw_renderer_wide_active(void);
+ 
+ /* Visual-only high-resolution vertex override for the next triangle. Values
+  * are signed 16.16 screen coordinates; native VRAM still uses the integer GP0
+diff --git a/runtime/include/render_pass_embed.h b/runtime/include/render_pass_embed.h
+new file mode 100644
+index 00000000..3b083ec4
+--- /dev/null
++++ b/runtime/include/render_pass_embed.h
+@@ -0,0 +1,66 @@
++#ifndef PSX_RENDER_PASS_EMBED_H
++#define PSX_RENDER_PASS_EMBED_H
++
++/* Render passes presented by an embedding host (PSX_EMBED builds): the host
++ * is handed one image per VBlank (main.cpp embed_vblank), so a pass image
++ * replaces the live readout on the VBlank its phase falls on. No presenter of
++ * the runtime's own is involved. See docs/RENDER_PASSES.md, "Embedded hosts".
++ *
++ * render_pass.c routes the temporal pass (psx_mod_render_pass_plan /
++ * psx_mod_render_pass) here while render_pass_embed_enabled(); stereo and the
++ * netplay local view stay on the OpenGL presenter. */
++
++#include <stdint.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++/* main.cpp, embedded mode: the host presents what embed_vblank hands it. */
++void render_pass_embed_enable(int on);
++int render_pass_embed_enabled(void);
++
++/* PSX_MOD_RENDER_PASS_* reason, renderer side (READY = passes can run). */
++uint32_t render_pass_embed_unavailable(void);
++/* Phases k / period_vblanks, k = 1 .. period_vblanks - 1 (at most max): the
++ * host shows every VBlank, so no phase is shed. shown_after_vblanks: see
++ * render_pass_embed_present(). */
++uint32_t render_pass_embed_plan(uint32_t period_vblanks, uint32_t shown_after_vblanks,
++                                uint32_t *alpha_q16, uint32_t max, uint32_t *wanted);
++/* The VRAM transaction: back up the rect (VRAM x, y, w, h), and at the end
++ * capture it into the frame's slot when keep, then restore everything the
++ * pass drew (the rect, and VRAM outside it). */
++int render_pass_embed_begin(int x, int y, int w, int h);
++int render_pass_embed_end(uint32_t alpha_q16, int keep);
++
++/* Each embedded VBlank, before its readout: the display shows VRAM rect
++ * (x, y, w, h) at `scale`. Returns the pass image to hand the host instead of
++ * the readout (w * scale by h * scale ARGB, pitch w * scale), or NULL.
++ *
++ * A frame's images wait from their plan for a flip of the display to their
++ * rect (another rect than the one shown before) at least the plan's
++ * shown_after_vblanks VBlanks later: the frame they belong to is on screen
++ * from there. Phase k is shown from the k-th VBlank after that flip, the
++ * last one also on the VBlank after the frame's period (a frame the game is
++ * late with) and never later. */
++const uint32_t *render_pass_embed_present(int x, int y, int w, int h, int scale);
++
++typedef struct RenderPassEmbedStats {
++    uint64_t captured;   /* pass images kept */
++    uint64_t shown;      /* VBlanks that handed the host a pass image */
++    uint64_t flips;      /* display flips seen */
++    uint64_t expired;    /* frames flipped to with no armed images */
++    uint64_t rebuilt_rows; /* hi-res mirror rows rebuilt after a pass wrote VRAM outside its rect */
++    uint64_t plan;         /* plans so far */
++    uint64_t shown_plan;   /* the plan of the last image shown */
++    int32_t  shown_y;      /* its rect's VRAM y */
++    int32_t  display_y;    /* the display's VRAM y at the last VBlank */
++    uint64_t vblanks;      /* VBlanks presented */
++} RenderPassEmbedStats;
++void render_pass_embed_get_stats(RenderPassEmbedStats *out);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif
+diff --git a/runtime/runtime.cmake b/runtime/runtime.cmake
+index dd7f6bf3..89384ddf 100644
+--- a/runtime/runtime.cmake
++++ b/runtime/runtime.cmake
+@@ -406,6 +406,7 @@ set(PSXRECOMP_RUNTIME_SOURCES
+     ${PSXRECOMP_ROOT}/runtime/src/render_pass_motion.c
+     ${PSXRECOMP_ROOT}/runtime/src/render_pass_projection.cpp
+     ${PSXRECOMP_ROOT}/runtime/src/render_pass_frame.c
++    ${PSXRECOMP_ROOT}/runtime/src/render_pass_embed.c
+     ${PSXRECOMP_ROOT}/runtime/src/dynamic_resolution.c
+     ${PSXRECOMP_ROOT}/runtime/src/host_time.c
+     ${PSXRECOMP_ROOT}/runtime/src/psx_fiber.c
+diff --git a/runtime/src/gpu_gl_renderer.c b/runtime/src/gpu_gl_renderer.c
+index 1767ac14..479de713 100644
+--- a/runtime/src/gpu_gl_renderer.c
++++ b/runtime/src/gpu_gl_renderer.c
+@@ -8195,12 +8195,13 @@ static void pass_journal_rollback(void) {
+ /* kind: 0 temporal pass, 1 stereo eye, 2 netplay local view. */
+ static int transaction_begin(int x, int y, int w, int h, int open_gen,
+                               uint32_t period_vblanks, int reuse_backup, int kind) {
+-    const int stereo = kind == 1, local = kind == 2;
++    const int stereo = kind == 1, local = kind == 2, embed = kind == 3;
+     int S = s_hr_scale, gi, wide, tw, th;
+     PassGen *g;
+     memset(&s_pass_begin_diag, 0, sizeof s_pass_begin_diag);
+     s_pass_begin_diag.status = local ? gl_renderer_local_view_unavailable()
+                              : stereo ? gl_renderer_stereo_unavailable()
++                             : embed ? gl_renderer_embed_pass_unavailable()
+                                       : gl_renderer_pass_unavailable();
+     s_pass_begin_diag.active = s_pass_active;
+     s_pass_begin_diag.open_gen = open_gen;
+@@ -8239,7 +8240,7 @@ static int transaction_begin(int x, int y, int w, int h, int open_gen,
+      * (the VRAM path) applied to the pass rect. Temporal passes only: a
+      * stereo pair and the netplay local view keep the plugin's rect. */
+     int cx = x, cy = y, cw = w, ch = h;
+-    if (!local && !stereo && !wide && s_present_crop_w > 0 && s_present_crop_h > 0) {
++    if (!local && !stereo && !embed && !wide && s_present_crop_w > 0 && s_present_crop_h > 0) {
+         cx = x + s_present_crop_dx; cy = y + s_present_crop_dy;
+         cw = s_present_crop_w;      ch = s_present_crop_h;
+         if (cx < x || cy < y || cx + cw > x + w || cy + ch > y + h)
+@@ -8252,8 +8253,9 @@ static int transaction_begin(int x, int y, int w, int h, int open_gen,
+     s_pass_begin_diag.requested_h = th;
+     gi = s_pgen_write;
+     g = &s_pgen[gi];
+-    if (local) {
+-        /* No generation: the image stays in the presenter surface. */
++    if (local || embed) {
++        /* No generation: the image stays in the presenter surface, or the
++         * embedding host is handed it at the end. */
+     } else if (stereo) {
+         StereoPair *pair = &s_stereo_pair[1 - s_stereo_current];
+         pair->x = x; pair->y = y; pair->w = w; pair->h = h;
+@@ -8411,6 +8413,34 @@ static void transaction_restore_ex(int keep_color) {
+ 
+ static void transaction_restore(void) { transaction_restore_ex(0); }
+ 
++/* Embedding host passes (render_pass_embed.c): the VRAM transaction with no
++ * generation and no presenter; end() reads the rect back as the embedded
++ * frame readout does (gl_renderer_capture_display_hires) before the restore. */
++uint32_t gl_renderer_embed_pass_unavailable(void) {
++    GL_RT_SYNC("embed_pass_unavailable");
++    pass_refusal_init();
++    if (!s_ctx || !s_raster_ok || !s_hr_fbo || ctx_depth24())
++        return PSX_MOD_RENDER_PASS_NO_PRESENTER;
++    if (s_cpu_auth_dual || s_hd_native_authority || s_hiw || g_wide_w > 0 || s_pass_force_refuse > 0)
++        return PSX_MOD_RENDER_PASS_BACKEND;
++    return PSX_MOD_RENDER_PASS_READY;
++}
++int gl_renderer_embed_pass_begin(int x, int y, int w, int h) {
++    GL_RT_SYNC("embed_pass_begin");
++    return transaction_begin(x, y, w, h, 0, 0, 0, 3);
++}
++int gl_renderer_embed_pass_end(uint32_t *argb, int pitch, int keep) {
++    int n = 0;
++    GL_RT_SYNC("embed_pass_end");
++    if (!s_pass_active) return 0;
++    flush_flat_batch(); flush_tex_batch(); flush_cpu_upload();
++    if (keep && argb)
++        n = gl_renderer_capture_display_hires(argb, pitch, s_pass_x, s_pass_y,
++                                              s_pass_w, s_pass_h);
++    transaction_restore();
++    return n;
++}
++
+ uint32_t gl_renderer_local_view_unavailable(void) {
+     pass_refusal_init();
+     if (!s_ctx || !s_raster_ok || !s_hr_fbo || gpu_display_is_depth24())
+diff --git a/runtime/src/gpu_sw_renderer.c b/runtime/src/gpu_sw_renderer.c
+index e472a06e..70b1b6f9 100644
+--- a/runtime/src/gpu_sw_renderer.c
++++ b/runtime/src/gpu_sw_renderer.c
+@@ -519,6 +519,14 @@ void sw_renderer_set_scale(int scale) {
+ 
+ int sw_renderer_scale(void) { return g_scale; }
+ 
++uint16_t *sw_renderer_hires(int *w, int *h) {
++    if (w) *w = g_hr_w;
++    if (h) *h = g_hr_h;
++    return g_scale > 1 ? g_hr : NULL;
++}
++
++int sw_renderer_wide_active(void) { return g_wide_w > 0; }
++
+ /* Faithful authority (netplay): while this rasterizer writes the guest's
+  * authoritative VRAM -- the netplay dual-raster SW@1x mirror or the netplay
+  * software GPU -- it draws exactly what hardware draws. The PGXP overrides and
+diff --git a/runtime/src/main.cpp b/runtime/src/main.cpp
+index ad24c3de..4442d5b4 100644
+--- a/runtime/src/main.cpp
++++ b/runtime/src/main.cpp
+@@ -60,6 +60,7 @@ extern "C" void psx_event_step_conservative_env_init(void);
+ #include "gpu_render.h"
+ #include "gpu_gl_renderer.h"
+ #include "render_pass.h"
++#include "render_pass_embed.h"
+ /* Declarations only: STB_IMAGE_IMPLEMENTATION lives in psx_window_icon.cpp. */
+ #define STBI_NO_STDIO
+ #include "../third_party/stb_image.h"
+@@ -8329,8 +8330,9 @@ static bool local_mouse_live(int override_word) {
+ 
+ #if defined(PSX_EMBED)
+ /* Embedded VBlank: give the host the displayed frame (software renderer,
+- * hi-res mirror at the internal scale), wait for the host's go-ahead, and
+- * apply the host's pads for the next frame. */
++ * hi-res mirror at the internal scale) or, on the VBlanks a render pass
++ * drew for (render_pass_embed.h), the pass image; wait for the host's
++ * go-ahead, and apply the host's pads for the next frame. */
+ static void embed_vblank(void) {
+     static std::vector<uint32_t> buf;
+     static bool pads_connected = false;
+@@ -8344,7 +8346,9 @@ static void embed_vblank(void) {
+     int w = 0, h = 0, scale = 1, flags = 0;
+     if (di.disabled || di.width == 0 || di.height == 0) {
+         flags = PSX_EMBED_FRAME_BLANK;
++        (void)render_pass_embed_present(-1, -1, 0, 0, 1);
+     } else if (di.depth24) {
++        (void)render_pass_embed_present(-1, -1, 0, 0, 1);
+         w = (int)di.width;
+         h = (int)di.screen_height;
+         if (h <= 0) h = (int)di.height;
+@@ -8357,7 +8361,11 @@ static void embed_vblank(void) {
+         w = (int)di.width * scale;
+         h = (int)di.height * scale;
+         buf.resize((size_t)w * (size_t)h);
+-        if (g_headless_opengl && g_gl_active) {
++        const uint32_t *pass = render_pass_embed_present((int)di.display_x, (int)di.display_y,
++                                                         (int)di.width, (int)di.height, scale);
++        if (pass) {
++            std::memcpy(buf.data(), pass, (size_t)w * (size_t)h * sizeof(uint32_t));
++        } else if (g_headless_opengl && g_gl_active) {
+             /* The internal resolution lives in the GL FBO; the generic
+              * readout is native there. */
+             if (gl_renderer_capture_display_hires(buf.data(), w * (int)sizeof(uint32_t),
+@@ -16160,9 +16168,11 @@ int main(int argc, char** argv) {
+         }
+     }
+ #if defined(PSX_EMBED)
+-    /* No window, audio device or input of our own: the host provides them. */
++    /* No window, audio device or input of our own: the host provides them.
++     * It presents every VBlank we hand it, render pass images included. */
+     g_headless = 1;
+     force_no_launcher = true;
++    render_pass_embed_enable(1);
+ #endif
+     if (const char *e = std::getenv("PSX_HEADLESS")) {
+         if (e[0] && e[0] != '0') {
+diff --git a/runtime/src/render_pass.c b/runtime/src/render_pass.c
+index fdeb5a6a..992b0f10 100644
+--- a/runtime/src/render_pass.c
++++ b/runtime/src/render_pass.c
+@@ -14,9 +14,12 @@
+  * refuses in netplay without explicit plugin opt-in, rollback resimulation,
+  * rewind, fast-forward, self-check
+  * resimulation, or without the OpenGL presenter's flip-aware interpolation
+- * (psx_mod_render_pass_status says which). */
++ * (psx_mod_render_pass_status says which). An embedding host presents
++ * temporal passes itself (render_pass_embed.c): while it does, their VRAM
++ * transaction, plan and images go there instead. */
+ 
+ #include "render_pass.h"
++#include "render_pass_embed.h"
+ 
+ #include <setjmp.h>
+ #include <stdio.h>
+@@ -92,6 +95,7 @@ extern uint32_t g_dirty_safe_resume_pc;
+ extern uint32_t cdrom_snapshot_bytes(void);
+ extern void     cdrom_snapshot_write(uint8_t *p);
+ extern uint32_t spu_snapshot_bytes(void);
++extern void     spu_catch_up(void);
+ extern void     spu_snapshot_write(uint8_t *p);
+ extern uint32_t sio_snapshot_bytes(void);
+ extern void     sio_snapshot_write(uint8_t *p);
+@@ -375,7 +379,9 @@ static uint32_t transaction_status(int kind) {
+     if (kind == 2 && psx_netplay_local_view_shed())
+         return PSX_MOD_RENDER_PASS_FAST_FORWARD;
+     gl = kind == 2 ? gl_renderer_local_view_unavailable()
+-       : kind == 1 ? gl_renderer_stereo_unavailable() : gl_renderer_pass_unavailable();
++       : kind == 1 ? gl_renderer_stereo_unavailable()
++       : render_pass_embed_enabled() ? render_pass_embed_unavailable()
++                                     : gl_renderer_pass_unavailable();
+     if (gl != PSX_MOD_RENDER_PASS_READY) return gl;
+     if (s_nesting || g_psx_guest_time_frozen || psx_get_in_exception() ||
+         dma_gpu_linked_list_active())
+@@ -439,8 +445,11 @@ uint32_t psx_mod_render_pass_plan(uint32_t period_vblanks,
+         shown_after_vblanks > 8)
+         return 0;
+     if (!passes_allowed()) return 0;
+-    n = gl_renderer_pass_plan(period_vblanks, shown_after_vblanks,
+-                              alpha_q16, max, &wanted);
++    n = render_pass_embed_enabled()
++        ? render_pass_embed_plan(period_vblanks, shown_after_vblanks,
++                                 alpha_q16, max, &wanted)
++        : gl_renderer_pass_plan(period_vblanks, shown_after_vblanks,
++                                alpha_q16, max, &wanted);
+     s_stats.wanted += wanted;
+     if (!n) {
+         if (wanted) s_stats.refused++;
+@@ -619,6 +628,14 @@ static void watchdog_overrun(void) {
+ 
+ int render_pass_mmio_read_allowed(uint32_t phys, uint32_t width) {
+     if (!g_psx_render_pass_active) return 1;
++    /* The SPU's registers are a register file: the SPU is caught up to the
++     * live clock before the freeze (render_transaction) and spu_read() does
++     * not catch up while a pass runs, so a pass reads them as of its start
++     * and the SPU does not move. Its transfer FIFO (1F801DA8h) is no such
++     * register. */
++    if (phys >= 0x1F801C00u && phys <= 0x1F801FFFu &&
++        !(phys <= 0x1F801DA9u && phys + width > 0x1F801DA8u))
++        return 1;
+     if (!((phys >= 0x1F801040u && phys <= 0x1F80105Fu) || /* SIO */
+           (phys >= 0x1F801800u && phys <= 0x1F801803u) || /* CD */
+           (phys >= 0x1F801820u && phys <= 0x1F801827u) || /* MDEC */
+@@ -673,6 +690,7 @@ static int transaction_kind(int eye) {
+ static int transaction_end(int eye, uint32_t alpha, int keep) {
+     if (eye >= 0) return gl_renderer_stereo_end((uint32_t)eye, keep);
+     if (eye == RP_EYE_LOCAL) return gl_renderer_local_view_end(keep);
++    if (render_pass_embed_enabled()) return render_pass_embed_end(alpha, keep);
+     gl_renderer_pass_end(alpha, keep);
+     return 1;
+ }
+@@ -733,6 +751,8 @@ static int render_transaction(struct CPUState *cpu, const PSXModRenderPass *pass
+                                                pass->h, reuse)
+           : eye == RP_EYE_LOCAL ? gl_renderer_local_view_begin(pass->x, pass->y,
+                                                                pass->w, pass->h)
++                    : render_pass_embed_enabled()
++                    ? render_pass_embed_begin(pass->x, pass->y, pass->w, pass->h)
+                     : gl_renderer_pass_begin(pass->x, pass->y, pass->w,
+                                                pass->h, open, s_plan_period, reuse))) {
+         gl_renderer_pass_begin_diag(&s_attempt.gl);
+@@ -761,6 +781,8 @@ static int render_transaction(struct CPUState *cpu, const PSXModRenderPass *pass
+         s_stereo.eye_cycle[eye] = cycles_before;
+         s_stereo.eye_hash[eye] = verify_on() ? hash_before : 0;
+     }
++    /* SPU register reads in the pass see the SPU at this cycle. */
++    spu_catch_up();
+     (void)psx_cycle_freeze_begin(&s_freeze, watchdog_cycles(),
+                                  watchdog_overrun);
+     /* A netplay local view is the one place a peer's presentation-only mods
+@@ -828,7 +850,8 @@ static int render_transaction(struct CPUState *cpu, const PSXModRenderPass *pass
+     if (verify_on()) {
+         hash_after = state_hash(cpu);
+         s_stats.verify_checks++;
+-        if (hash_after != hash_before || !gl_renderer_pass_verify_vram()) {
++        if (hash_after != hash_before ||
++            (!render_pass_embed_enabled() && !gl_renderer_pass_verify_vram())) {
+             s_stats.verify_mismatch++;
+             if (eye >= 0) { ok = 0; s_stereo.last_failure = "restore_verify"; }
+             if (s_stats.verify_mismatch <= 8)
+@@ -847,7 +870,8 @@ static int render_transaction(struct CPUState *cpu, const PSXModRenderPass *pass
+         s_stats.avg_pass_ms = s_stats.avg_pass_ms > 0.0
+             ? s_stats.avg_pass_ms * 0.9 + ms * 0.1 : ms;
+     }
+-    if (eye == RP_EYE_PASS) gl_renderer_pass_note_cost(t1 - t0);
++    if (eye == RP_EYE_PASS && !render_pass_embed_enabled())
++        gl_renderer_pass_note_cost(t1 - t0);
+     if (ok && eye == RP_EYE_LOCAL) {
+         s_stats.local_views++;
+         /* The peer's own image supersedes a crop of the canonical frame. */
+@@ -858,7 +882,8 @@ static int render_transaction(struct CPUState *cpu, const PSXModRenderPass *pass
+     else if (s_device_read_fault) note_fault("read from an uncheckpointed device");
+     s_stats.watchdog_flag = 0;
+     /* Present anything that fell due while the pass ran. */
+-    if (eye == RP_EYE_PASS) gl_renderer_pass_service_presents();
++    if (eye == RP_EYE_PASS && !render_pass_embed_enabled())
++        gl_renderer_pass_service_presents();
+     return ok;
+ }
+ 
+diff --git a/runtime/src/render_pass_embed.c b/runtime/src/render_pass_embed.c
+new file mode 100644
+index 00000000..a0a6abdc
+--- /dev/null
++++ b/runtime/src/render_pass_embed.c
+@@ -0,0 +1,315 @@
++/* render_pass_embed.c - render passes presented by an embedding host. See
++ * render_pass_embed.h and docs/RENDER_PASSES.md ("Embedded hosts").
++ *
++ * The host is handed one image per VBlank (main.cpp embed_vblank). A frame
++ * the game shows for P VBlanks gets P - 1 pass images; each is kept in the
++ * slot of the VRAM rect the frame is drawn in (double buffering alternates
++ * two) and shown on its VBlank once the display flips to that rect.
++ *
++ * The VRAM transaction is the OpenGL renderer's own when it draws
++ * (gl_renderer_embed_pass_begin/_end: rect backup, out-of-rect journal);
++ * with the software renderer it is here: canonical VRAM is backed up whole
++ * (1 MiB) and the rect of the supersampled mirror; afterwards any VRAM row
++ * the pass changed outside the rect is put back and its mirror row rebuilt
++ * from VRAM, as an upload would have left it. */
++
++#include "render_pass_embed.h"
++
++#include <stdlib.h>
++#include <string.h>
++
++#include "gpu.h"
++#include "gpu_gl_renderer.h"
++#include "gpu_render.h"
++#include "gpu_sw_renderer.h"
++#include "gpu_vram_dirty.h"
++#include "mod_plugins.h"
++
++extern uint16_t *gpu_get_vram_ptr(void);
++
++#define VRAM_W 1024
++#define VRAM_H 512
++#define RPE_SLOTS 4
++#define RPE_GENS 3
++#define RPE_MAX_PHASES 8
++
++/* One frame's images. */
++typedef struct EmbedGen {
++    uint64_t plan;       /* the plan whose frame the images show */
++    uint64_t vblank;     /* s_stats.vblanks when it was planned */
++    uint32_t period, shown_after;
++    int scale;
++    int armed;           /* waiting for its flip */
++    uint32_t mask;       /* phases captured: bit k */
++    uint32_t *img[RPE_MAX_PHASES];
++    size_t cap[RPE_MAX_PHASES];
++} EmbedGen;
++
++/* A VRAM rect frames are drawn in: the frame on screen there (live) and up
++ * to two waiting for later flips to it (a game may draw a frame's passes
++ * before the flip that shows the rect's previous frame). */
++typedef struct EmbedSlot {
++    int used, x, y, w, h;
++    uint64_t last_use;
++    int live;            /* gen index, or -1 */
++    EmbedGen gen[RPE_GENS];
++} EmbedSlot;
++
++static int s_enabled;
++static EmbedSlot s_slot[RPE_SLOTS];
++static uint64_t s_plan, s_use;
++static uint32_t s_plan_period = 1, s_plan_shown_after;
++static RenderPassEmbedStats s_stats;
++
++/* The open transaction. */
++static int s_open, s_gl, s_x, s_y, s_w, s_h;
++static uint16_t *s_vram_backup;
++static uint16_t *s_hr_backup;
++static size_t s_hr_backup_cap;
++
++/* The display last handed to the host. */
++static int s_cur_x = -1, s_cur_y = -1, s_cur_w, s_cur_h;
++static uint32_t s_since_flip;
++
++void render_pass_embed_enable(int on) { s_enabled = on ? 1 : 0; }
++int render_pass_embed_enabled(void) { return s_enabled; }
++
++void render_pass_embed_get_stats(RenderPassEmbedStats *out) {
++    s_stats.plan = s_plan;
++    if (out) *out = s_stats;
++}
++
++static int gl_draws(void) { return gr_backend() == GR_BACKEND_OPENGL; }
++
++uint32_t render_pass_embed_unavailable(void) {
++    if (!s_enabled) return PSX_MOD_RENDER_PASS_NO_PRESENTER;
++    if (gl_draws()) return gl_renderer_embed_pass_unavailable();
++    if (gpu_display_is_depth24()) return PSX_MOD_RENDER_PASS_NO_PRESENTER;
++    if (sw_renderer_wide_active()) return PSX_MOD_RENDER_PASS_BACKEND;
++    return PSX_MOD_RENDER_PASS_READY;
++}
++
++uint32_t render_pass_embed_plan(uint32_t period_vblanks, uint32_t shown_after_vblanks,
++                                uint32_t *alpha_q16, uint32_t max, uint32_t *wanted) {
++    uint32_t n = period_vblanks > 1u ? period_vblanks - 1u : 0u;
++    if (n > RPE_MAX_PHASES - 1u) n = RPE_MAX_PHASES - 1u;
++    if (wanted) *wanted = n;
++    if (n > max) n = max;
++    for (uint32_t k = 0; k < n; k++)
++        alpha_q16[k] = (uint32_t)(((uint64_t)(k + 1u) << 16) / period_vblanks);
++    s_plan++;
++    s_plan_period = period_vblanks;
++    s_plan_shown_after = shown_after_vblanks;
++    return n;
++}
++
++static EmbedSlot *slot_for(int x, int y, int w, int h, int make) {
++    EmbedSlot *lru = &s_slot[0];
++    for (int i = 0; i < RPE_SLOTS; i++) {
++        EmbedSlot *s = &s_slot[i];
++        if (s->used && s->x == x && s->y == y && s->w == w && s->h == h) return s;
++        if (!s->used || (lru->used && s->last_use < lru->last_use)) lru = s;
++    }
++    if (!make) return NULL;
++    lru->used = 1;
++    lru->x = x; lru->y = y; lru->w = w; lru->h = h;
++    lru->live = -1;
++    for (int i = 0; i < RPE_GENS; i++) {
++        lru->gen[i].plan = 0;
++        lru->gen[i].armed = 0;
++        lru->gen[i].mask = 0;
++    }
++    return lru;
++}
++
++int render_pass_embed_begin(int x, int y, int w, int h) {
++    if (s_open || x < 0 || y < 0 || w <= 0 || h <= 0 || x + w > VRAM_W || y + h > VRAM_H)
++        return 0;
++    if (render_pass_embed_unavailable() != PSX_MOD_RENDER_PASS_READY) return 0;
++    s_gl = gl_draws();
++    if (s_gl) {
++        if (!gl_renderer_embed_pass_begin(x, y, w, h)) return 0;
++    } else {
++        int hw = 0, hh = 0;
++        const uint16_t *hr = sw_renderer_hires(&hw, &hh);
++        const uint16_t *vram = gpu_get_vram_ptr();
++        if (!s_vram_backup) {
++            s_vram_backup = (uint16_t *)malloc((size_t)VRAM_W * VRAM_H * sizeof(uint16_t));
++            if (!s_vram_backup) return 0;
++        }
++        memcpy(s_vram_backup, vram, (size_t)VRAM_W * VRAM_H * sizeof(uint16_t));
++        if (hr) {
++            const int sc = hw / VRAM_W;
++            const size_t rw = (size_t)w * sc, n = rw * (size_t)h * sc;
++            if (s_hr_backup_cap < n) {
++                uint16_t *p = (uint16_t *)realloc(s_hr_backup, n * sizeof(uint16_t));
++                if (!p) return 0;
++                s_hr_backup = p;
++                s_hr_backup_cap = n;
++            }
++            for (int r = 0; r < h * sc; r++)
++                memcpy(s_hr_backup + (size_t)r * rw,
++                       hr + (size_t)(y * sc + r) * hw + (size_t)x * sc, rw * sizeof(uint16_t));
++        }
++    }
++    s_open = 1;
++    s_x = x; s_y = y; s_w = w; s_h = h;
++    return 1;
++}
++
++/* Rebuild mirror row y, VRAM columns [x0, x1), from canonical VRAM. */
++static void hr_rebuild_span(uint16_t *hr, int hw, int sc, const uint16_t *vram, int y, int x0, int x1) {
++    for (int dy = 0; dy < sc; dy++) {
++        uint16_t *d = hr + (size_t)(y * sc + dy) * hw;
++        for (int x = x0; x < x1; x++) {
++            const uint16_t p = vram[(size_t)y * VRAM_W + x];
++            for (int dx = 0; dx < sc; dx++) d[x * sc + dx] = p;
++        }
++    }
++}
++
++/* Put VRAM row y's columns [x0, x1) back if the pass changed them. */
++static void sw_restore_span(uint16_t *vram, uint16_t *hr, int hw, int sc, int y, int x0, int x1) {
++    const size_t o = (size_t)y * VRAM_W;
++    if (x1 <= x0 || !memcmp(vram + o + x0, s_vram_backup + o + x0, (size_t)(x1 - x0) * sizeof(uint16_t)))
++        return;
++    memcpy(vram + o + x0, s_vram_backup + o + x0, (size_t)(x1 - x0) * sizeof(uint16_t));
++    if (hr) hr_rebuild_span(hr, hw, sc, vram, y, x0, x1);
++    gpu_vram_dirty_mark_row((uint32_t)y);
++    s_stats.rebuilt_rows++;
++}
++
++static void sw_restore(void) {
++    int hw = 0, hh = 0, sc = 1;
++    uint16_t *hr = sw_renderer_hires(&hw, &hh);
++    uint16_t *vram = gpu_get_vram_ptr();
++    if (hr) sc = hw / VRAM_W;
++    for (int y = 0; y < VRAM_H; y++) {
++        if (y >= s_y && y < s_y + s_h) {
++            sw_restore_span(vram, hr, hw, sc, y, 0, s_x);
++            sw_restore_span(vram, hr, hw, sc, y, s_x + s_w, VRAM_W);
++            memcpy(vram + (size_t)y * VRAM_W + s_x, s_vram_backup + (size_t)y * VRAM_W + s_x,
++                   (size_t)s_w * sizeof(uint16_t));
++        } else {
++            sw_restore_span(vram, hr, hw, sc, y, 0, VRAM_W);
++        }
++    }
++    if (hr) {
++        const size_t rw = (size_t)s_w * sc;
++        for (int r = 0; r < s_h * sc; r++)
++            memcpy(hr + (size_t)(s_y * sc + r) * hw + (size_t)s_x * sc,
++                   s_hr_backup + (size_t)r * rw, rw * sizeof(uint16_t));
++    }
++    gpu_vram_dirty_mark_rect(s_x, s_y, s_w, s_h);
++}
++
++/* The rect as embed_vblank reads the display out, at `scale`. */
++static int sw_capture(uint32_t *out, int scale) {
++    if (scale > 1)
++        return gr_render_display_hires(out, s_w * scale * (int)sizeof(uint32_t), s_x, s_y, s_w, s_h);
++    GpuDisplayInfo di;
++    gpu_get_display_info(&di);
++    di.display_x = (uint32_t)s_x;
++    di.display_y = (uint32_t)s_y;
++    di.width = (uint32_t)s_w;
++    di.height = (uint32_t)s_h;
++    for (int y = 0; y < s_h; y++)
++        for (int x = 0; x < s_w; x++)
++            out[(size_t)y * s_w + x] = gpu_display_pixel_argb(&di, (uint32_t)x, (uint32_t)y);
++    return s_w * s_h;
++}
++
++int render_pass_embed_end(uint32_t alpha_q16, int keep) {
++    EmbedSlot *slot = NULL;
++    EmbedGen *g = NULL;
++    uint32_t *img = NULL;
++    int ok = 0, k = 0;
++    const int scale = gr_scale() < 1 ? 1 : gr_scale();
++    if (!s_open) return 0;
++    if (keep && s_plan_period > 1u) {
++        k = (int)((((uint64_t)alpha_q16 * s_plan_period) + 32768u) >> 16);
++        if (k >= 1 && k < RPE_MAX_PHASES && (uint32_t)k < s_plan_period) {
++            slot = slot_for(s_x, s_y, s_w, s_h, 1);
++            for (int i = 0; i < RPE_GENS && !g; i++)
++                if (slot->gen[i].armed && slot->gen[i].plan == s_plan) g = &slot->gen[i];
++            if (!g) {
++                /* A free generation, else the oldest waiting one. */
++                for (int i = 0; i < RPE_GENS; i++) {
++                    EmbedGen *c = &slot->gen[i];
++                    if (i == slot->live) continue;
++                    if (!g || (g->armed && (!c->armed || c->vblank < g->vblank))) g = c;
++                }
++                g->plan = s_plan;
++                g->vblank = s_stats.vblanks;
++                g->period = s_plan_period;
++                g->shown_after = s_plan_shown_after;
++                g->scale = scale;
++                g->armed = 1;
++                g->mask = 0;
++            }
++            const size_t n = (size_t)s_w * scale * (size_t)s_h * scale;
++            if (g->cap[k] < n) {
++                uint32_t *p = (uint32_t *)realloc(g->img[k], n * sizeof(uint32_t));
++                if (p) { g->img[k] = p; g->cap[k] = n; }
++            }
++            if (g->cap[k] >= n && g->scale == scale) img = g->img[k];
++        }
++    }
++    if (s_gl) {
++        const int got = gl_renderer_embed_pass_end(img, s_w * scale * (int)sizeof(uint32_t), img != NULL);
++        ok = img && got == s_w * scale * s_h * scale;
++    } else {
++        if (img) ok = sw_capture(img, scale) == s_w * scale * s_h * scale;
++        sw_restore();
++    }
++    s_open = 0;
++    if (ok) {
++        g->mask |= 1u << k;
++        slot->last_use = ++s_use;
++        s_stats.captured++;
++    }
++    return keep ? ok : 1;
++}
++
++const uint32_t *render_pass_embed_present(int x, int y, int w, int h, int scale) {
++    EmbedSlot *slot;
++    s_stats.vblanks++;
++    s_stats.display_y = y;
++    if (x != s_cur_x || y != s_cur_y || w != s_cur_w || h != s_cur_h) {
++        s_cur_x = x; s_cur_y = y; s_cur_w = w; s_cur_h = h;
++        s_since_flip = 0;
++        s_stats.flips++;
++        for (int i = 0; i < RPE_SLOTS; i++) s_slot[i].live = -1;
++        slot = slot_for(x, y, w, h, 0);
++        if (slot) {
++            /* The newest frame due by now goes live; older ones are stale. */
++            int best = -1;
++            for (int i = 0; i < RPE_GENS; i++) {
++                const EmbedGen *c = &slot->gen[i];
++                if (c->armed && c->mask && s_stats.vblanks - c->vblank >= c->shown_after &&
++                    (best < 0 || c->vblank > slot->gen[best].vblank))
++                    best = i;
++            }
++            for (int i = 0; best >= 0 && i < RPE_GENS; i++)
++                if (slot->gen[i].armed && slot->gen[i].vblank <= slot->gen[best].vblank)
++                    slot->gen[i].armed = 0;
++            slot->live = best;
++            if (best < 0) s_stats.expired++;
++        }
++        return NULL;
++    }
++    s_since_flip++;
++    slot = slot_for(x, y, w, h, 0);
++    if (!slot || slot->live < 0) return NULL;
++    const EmbedGen *g = &slot->gen[slot->live];
++    if (g->scale != scale || s_since_flip > g->period) return NULL;
++    for (int k = (int)(s_since_flip < g->period ? s_since_flip : g->period - 1u); k >= 1; k--) {
++        if (g->mask & (1u << k)) {
++            s_stats.shown++;
++            s_stats.shown_plan = g->plan;
++            s_stats.shown_y = slot->y;
++            return g->img[k];
++        }
++    }
++    return NULL;
++}
+diff --git a/runtime/src/spu.c b/runtime/src/spu.c
+index cd0d2189..5e16b3ea 100644
+--- a/runtime/src/spu.c
++++ b/runtime/src/spu.c
+@@ -22,6 +22,7 @@
+ #include "audio_trace.h"
+ #include "crc32.h"
+ #include "psx_cycles.h"
++#include "psx_cycle_freeze.h"
+ 
+ #include <stdio.h>
+ #include <stdlib.h>
+@@ -1547,7 +1548,9 @@ void spu_debug_info(SpuDebugInfo* out) {
+ }
+ 
+ uint32_t spu_read(uint32_t addr) {
+-    spu_catch_up();
++    /* A render pass reads the SPU as of its start (render_pass.c caught it up
++     * before the freeze); the pass's own cycles never reach it. */
++    if (!g_psx_render_pass_active) spu_catch_up();
+     if (addr >= 0x1F801C00u && addr <= 0x1F801DFFu) {
+         uint32_t idx = reg_index(addr);
+         if (idx < SPU_REG_COUNT) {
+diff --git a/runtime/tests/test_render_pass_abort.c b/runtime/tests/test_render_pass_abort.c
+index 9a2abd1c..f0b65ab7 100644
+--- a/runtime/tests/test_render_pass_abort.c
++++ b/runtime/tests/test_render_pass_abort.c
+@@ -98,7 +98,12 @@ void timers_set_snapshot(const uint16_t c[3], const uint32_t m[3],
+ }
+ uint32_t cdrom_snapshot_bytes(void) { return 0; }
+ void cdrom_snapshot_write(uint8_t *p) { (void)p; }
++/* psx_cycles.c: set by a boot-state restore (boot_state.c). */
++int g_boot_state_cpu_timing_restored;
+ uint32_t spu_snapshot_bytes(void) { return 0; }
++/* render_pass.c catches the SPU up before the freeze. */
++static int s_spu_catch_ups, s_spu_catch_up_frozen;
++void spu_catch_up(void) { s_spu_catch_ups++; if (g_psx_guest_time_frozen) s_spu_catch_up_frozen++; }
+ void spu_snapshot_write(uint8_t *p) { (void)p; }
+ uint32_t sio_snapshot_bytes(void) { return 0; }
+ void sio_snapshot_write(uint8_t *p) { (void)p; }
+@@ -204,6 +209,14 @@ int gl_renderer_local_view_begin(int x, int y, int w, int h) {
+ }
+ int gl_renderer_local_view_end(int keep) { gl_renderer_pass_end(0, keep); return 1; }
+ uint32_t gl_renderer_stereo_unavailable(void) { return 0; }
++/* No embedding host here (render_pass_embed.c): the presenter's passes. */
++int render_pass_embed_enabled(void) { return 0; }
++uint32_t render_pass_embed_unavailable(void) { return 1; }
++uint32_t render_pass_embed_plan(uint32_t p, uint32_t d, uint32_t *a, uint32_t m, uint32_t *w) {
++    (void)p; (void)d; (void)a; (void)m; if (w) *w = 0; return 0;
++}
++int render_pass_embed_begin(int x, int y, int w, int h) { (void)x; (void)y; (void)w; (void)h; return 0; }
++int render_pass_embed_end(uint32_t a, int keep) { (void)a; (void)keep; return 0; }
+ int gl_renderer_stereo_begin(int x, int y, int w, int h, int reuse) {
+     return gl_renderer_pass_begin(x, y, w, h, 0, 0, reuse);
+ }
+@@ -342,6 +355,14 @@ static int device_read_pass_fn(struct CPUState *cpu, void *user, uint32_t alpha_
+     return 1;
+ }
+ 
++static int spu_read_pass_fn(struct CPUState *cpu, void *user, uint32_t alpha_q16) {
++    (void)cpu; (void)user; (void)alpha_q16;
++    CHECK(render_pass_mmio_read_allowed(0x1F801C1Cu, 2), "an SPU voice register reads in a pass");
++    CHECK(render_pass_mmio_read_allowed(0x1F801DAEu, 2), "SPUSTAT reads in a pass");
++    CHECK(render_pass_mmio_read_allowed(0x1F801D9Cu, 4), "ENDX reads in a pass");
++    return 1;
++}
++
+ static int pass_fn(struct CPUState *cpu, void *user, uint32_t alpha_q16) {
+     (void)alpha_q16;
+     guest_frame(cpu, (const Frames *)user, 0);
+@@ -619,6 +640,21 @@ int main(void) {
+               "normal drawing recovers after a rejected device read");
+     }
+ 
++    /* The SPU's register file reads as of the pass's start: caught up once
++     * before the freeze, nothing refused. Its transfer FIFO is refused above. */
++    {
++        render_pass_reset_session();
++        s_spu_catch_ups = s_spu_catch_up_frozen = 0;
++        snap(&live);
++        CHECK(psx_mod_render_pass(&cpu,&pass,spu_read_pass_fn,NULL)==1,
++              "SPU register reads keep the image");
++        render_pass_get_stats(&st);
++        CHECK(st.device_reads==0 && st.aborted==0, "no device-read fault for SPU registers");
++        CHECK(s_spu_catch_ups==1 && s_spu_catch_up_frozen==0,
++              "the SPU was caught up once, on the live clock, before the freeze");
++        check_live(&live,"after a pass that read SPU registers");
++    }
++
+     printf(failures ? "FAILED (%d)\n" : "ALL PASS\n", failures);
+     return failures ? 1 : 0;
+ }
+diff --git a/runtime/tests/test_render_pass_sandbox.c b/runtime/tests/test_render_pass_sandbox.c
+index 74fb1384..12279c7d 100644
+--- a/runtime/tests/test_render_pass_sandbox.c
++++ b/runtime/tests/test_render_pass_sandbox.c
+@@ -149,7 +149,10 @@ void event_ring_record_aux(int ev, uint8_t src, uint32_t aux) {
+ }
+ uint32_t cdrom_snapshot_bytes(void) { return 0; }
+ void cdrom_snapshot_write(uint8_t *p) { (void)p; }
++/* psx_cycles.c: set by a boot-state restore (boot_state.c). */
++int g_boot_state_cpu_timing_restored;
+ uint32_t spu_snapshot_bytes(void) { return 0; }
++void spu_catch_up(void) {}
+ void spu_snapshot_write(uint8_t *p) { (void)p; }
+ uint32_t sio_snapshot_bytes(void) { return 0; }
+ void sio_snapshot_write(uint8_t *p) { (void)p; }
+@@ -269,6 +272,14 @@ static uint32_t s_stereo_mask;
+ static uint64_t s_stereo_published;
+ static int s_capture_fail_eye = -1;
+ uint32_t gl_renderer_stereo_unavailable(void) { return s_gl_status; }
++/* No embedding host here (render_pass_embed.c): the presenter's passes. */
++int render_pass_embed_enabled(void) { return 0; }
++uint32_t render_pass_embed_unavailable(void) { return 1; }
++uint32_t render_pass_embed_plan(uint32_t p, uint32_t d, uint32_t *a, uint32_t m, uint32_t *w) {
++    (void)p; (void)d; (void)a; (void)m; if (w) *w = 0; return 0;
++}
++int render_pass_embed_begin(int x, int y, int w, int h) { (void)x; (void)y; (void)w; (void)h; return 0; }
++int render_pass_embed_end(uint32_t a, int keep) { (void)a; (void)keep; return 0; }
+ int gl_renderer_stereo_begin(int x, int y, int w, int h, int reuse) {
+     return gl_renderer_pass_begin(x, y, w, h, 0, 0, reuse);
+ }
+diff --git a/runtime/tests/test_spu_end_without_repeat.c b/runtime/tests/test_spu_end_without_repeat.c
+index 65d12a42..f218d2c4 100644
+--- a/runtime/tests/test_spu_end_without_repeat.c
++++ b/runtime/tests/test_spu_end_without_repeat.c
+@@ -12,6 +12,8 @@
+ #include <stdio.h>
+ 
+ #include "../src/spu.c"
++/* psx_cycles.c: set while a render pass runs (spu_read does not catch up). */
++int g_psx_render_pass_active;
+ 
+ /* Dependencies owned by the surrounding runtime are inert in this unit test. */
+ uint64_t s_frame_count;
+diff --git a/runtime/tests/test_spu_fidelity.c b/runtime/tests/test_spu_fidelity.c
+index a0d1069e..413ba679 100644
+--- a/runtime/tests/test_spu_fidelity.c
++++ b/runtime/tests/test_spu_fidelity.c
+@@ -17,6 +17,8 @@
+ #include <stdbool.h>
+ 
+ #include "../src/spu.c"
++/* psx_cycles.c: set while a render pass runs (spu_read does not catch up). */
++int g_psx_render_pass_active;
+ 
+ /* ---- stubs for spu.c externs -------------------------------------------- */
+ uint64_t s_frame_count = 0;
+diff --git a/runtime/tests/test_spu_guest_clock.c b/runtime/tests/test_spu_guest_clock.c
+index cf6eb6ff..e97f9db5 100644
+--- a/runtime/tests/test_spu_guest_clock.c
++++ b/runtime/tests/test_spu_guest_clock.c
+@@ -15,6 +15,8 @@
+ #include <stdio.h>
+ 
+ #include "../src/spu.c"
++/* psx_cycles.c: set while a render pass runs (spu_read does not catch up). */
++int g_psx_render_pass_active;
+ 
+ uint64_t s_frame_count;
+ static uint64_t g_cycle;
+diff --git a/runtime/tests/test_spu_pitch_zero.c b/runtime/tests/test_spu_pitch_zero.c
+index cde2ca04..1e385abe 100644
+--- a/runtime/tests/test_spu_pitch_zero.c
++++ b/runtime/tests/test_spu_pitch_zero.c
+@@ -23,6 +23,8 @@
+ #include <stdio.h>
+ 
+ #include "../src/spu.c"
++/* psx_cycles.c: set while a render pass runs (spu_read does not catch up). */
++int g_psx_render_pass_active;
+ 
+ /* Dependencies owned by the surrounding runtime are inert in this unit test. */
+ uint64_t s_frame_count;
+diff --git a/runtime/tests/test_spu_sample_banks.c b/runtime/tests/test_spu_sample_banks.c
+index 31af6834..90b04a3e 100644
+--- a/runtime/tests/test_spu_sample_banks.c
++++ b/runtime/tests/test_spu_sample_banks.c
+@@ -4,6 +4,8 @@
+ #include <stdint.h>
+ #include <stdio.h>
+ #include "../src/spu.c"
++/* psx_cycles.c: set while a render pass runs (spu_read does not catch up). */
++int g_psx_render_pass_active;
+ uint64_t s_frame_count;
+ uint64_t psx_get_cycle_count(void) {return 0;}
+ void audio_trace_pcm(int t,const int16_t *s,int n) {(void)t;(void)s;(void)n;}
+-- 
+2.43.0
+

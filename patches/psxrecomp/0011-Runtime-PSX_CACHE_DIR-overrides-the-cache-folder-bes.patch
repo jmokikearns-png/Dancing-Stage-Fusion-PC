@@ -1,0 +1,26 @@
+From 45127682d23d20dbee3851e9618a044b22508642 Mon Sep 17 00:00:00 2001
+From: DSF PC Port <jmokikearns@gmail.com>
+Date: Sat, 31 Oct 2026 00:56:11 +0000
+Subject: [PATCH 11/11] Runtime: PSX_CACHE_DIR overrides the cache folder
+ beside the program
+
+---
+ runtime/src/main.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/runtime/src/main.cpp b/runtime/src/main.cpp
+index 03f36211..6fbcce32 100644
+--- a/runtime/src/main.cpp
++++ b/runtime/src/main.cpp
+@@ -17277,6 +17277,8 @@ int main(int argc, char** argv) {
+         PSXRecompV4::HostLaunchTimingScope timing(HOST_LAUNCH_OVERLAY_WORKER);
+         std::filesystem::path exe_dir = exe_dir_from_argv(argv[0]);
+         std::string cache_dir = (exe_dir / "cache").string();
++        if (const char* e = std::getenv("PSX_CACHE_DIR"))	/* a host that keeps its files elsewhere */
++            if (*e) cache_dir = e;
+         std::filesystem::path captures_path =
+             resolve_overlay_capture_path(deferred_overlay_project_root, exe_dir, game_id);
+         if (!overlay_capture_set_path(captures_path.string().c_str())) {
+-- 
+2.43.0
+

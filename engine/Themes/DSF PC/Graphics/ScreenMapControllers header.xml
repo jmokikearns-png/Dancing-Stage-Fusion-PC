@@ -1,0 +1,6 @@
+<ActorFrame>
+<children>
+	<Layer1 Class="Sprite" Texture="_shared menu header (res 640x44).png" />
+	<Layer2 Class="BitmapText" Font="Common Normal" Text="KEY / JOY MAPPINGS" OnCommand="y,-1;zoom,0.82;diffuse,1,0.85,0.3,1;shadowlength,0" />
+</children>
+</ActorFrame>

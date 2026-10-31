@@ -1,0 +1,39 @@
+From bfc331e45f4b8ea489f06a2b3a356383ead30053 Mon Sep 17 00:00:00 2001
+From: DSF PC Port <jmokikearns@gmail.com>
+Date: Sat, 17 Oct 2026 00:59:03 +0000
+Subject: [PATCH 03/11] embed: anchor the runtime's files on its own DLL, not
+ the host exe
+
+Embedded (PSX_EMBED) the runtime is a DLL loaded by a host program that
+can live in another folder; mods/, cache/ and settings belong beside the
+game's DLL.
+---
+ runtime/src/main.cpp | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/runtime/src/main.cpp b/runtime/src/main.cpp
+index 4c744893..0312844d 100644
+--- a/runtime/src/main.cpp
++++ b/runtime/src/main.cpp
+@@ -2724,9 +2724,17 @@ static std::filesystem::path exe_dir_from_argv(const char* argv0) {
+     fs::path exe_dir;
+ #ifdef _WIN32
+     // Authoritative: the real image path, regardless of how we were invoked.
++    // Embedded (PSX_EMBED) the runtime is a DLL inside a host program; its
++    // own image's directory is the game's, so anchor on the DLL, not the host.
+     {
++        HMODULE image = NULL;
++#if defined(PSX_EMBED)
++        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
++                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
++                           (LPCWSTR)(void *)&exe_dir_from_argv, &image);
++#endif
+         wchar_t buf[MAX_PATH * 4];
+-        DWORD n = GetModuleFileNameW(NULL, buf, (DWORD)(sizeof(buf) / sizeof(buf[0])));
++        DWORD n = GetModuleFileNameW(image, buf, (DWORD)(sizeof(buf) / sizeof(buf[0])));
+         if (n > 0 && n < (DWORD)(sizeof(buf) / sizeof(buf[0]))) {
+             exe_dir = fs::path(std::wstring(buf, buf + n)).parent_path();
+         }
+-- 
+2.43.0
+

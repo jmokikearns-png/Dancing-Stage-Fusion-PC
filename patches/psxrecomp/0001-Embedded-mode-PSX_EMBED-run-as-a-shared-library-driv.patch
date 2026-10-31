@@ -1,0 +1,238 @@
+From caf4c91f449fd28d81e3ed09767989f1d49a44fe Mon Sep 17 00:00:00 2001
+From: DSF PC Port <jmokikearns@gmail.com>
+Date: Fri, 16 Oct 2026 20:53:31 +0000
+Subject: [PATCH 01/11] Embedded mode (PSX_EMBED): run as a shared library
+ driven by a host program
+
+Headless runtime on a host-created thread; at each VBlank the displayed
+frame goes to the host, which then releases the next frame and supplies the
+pads; SPU output goes to the host instead of an SDL device.  No crash
+handlers or freeze heartbeat of our own in this mode.
+---
+ runtime/include/psx_embed.h | 37 +++++++++++++++++
+ runtime/runtime.cmake       | 14 +++++++
+ runtime/src/main.cpp        | 79 ++++++++++++++++++++++++++++++++++++-
+ 3 files changed, 129 insertions(+), 1 deletion(-)
+ create mode 100644 runtime/include/psx_embed.h
+
+diff --git a/runtime/include/psx_embed.h b/runtime/include/psx_embed.h
+new file mode 100644
+index 00000000..ae40b16a
+--- /dev/null
++++ b/runtime/include/psx_embed.h
+@@ -0,0 +1,37 @@
++/* psx_embed.h -- run the runtime inside another program (PSX_EMBED builds).
++ *
++ * The host owns the window, sound output, input and pacing.  The runtime runs
++ * headless on its own thread; at every guest VBlank it hands the host the
++ * displayed frame, then waits until the host lets the next frame run and
++ * takes the pad words to use for it.  SPU output (44.1 kHz S16 stereo) is
++ * handed over as it is produced.  The functions below are implemented by the
++ * embedding layer, not by the runtime.
++ */
++#ifndef PSX_EMBED_H
++#define PSX_EMBED_H
++
++#include <stdint.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++enum {
++    PSX_EMBED_FRAME_BLANK = 1,   /* display disabled or zero-sized: show black */
++    PSX_EMBED_FRAME_24BIT = 2,   /* 24-bit (FMV) scanout, always native size */
++};
++
++/* Displayed frame, 0xAARRGGBB, row pitch in pixels.  Core thread. */
++void psx_embed_video(const uint32_t *argb, int width, int height, int pitch_px,
++                     int scale, int flags);
++/* SPU output.  Core thread. */
++void psx_embed_audio(const int16_t *stereo, int frames);
++/* Block until the host allows the next frame; fill the active-low pad words
++ * for ports 1 and 2.  Core thread. */
++void psx_embed_frame_done(uint16_t pads_out[2]);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif
+diff --git a/runtime/runtime.cmake b/runtime/runtime.cmake
+index fb0b1988..dd7f6bf3 100644
+--- a/runtime/runtime.cmake
++++ b/runtime/runtime.cmake
+@@ -1607,12 +1607,26 @@ function(psxrecomp_add_runtime_target target)
+         set(mode_source ${PSXRECOMP_ROOT}/runtime/src/stub_interpreter.c)
+     endif()
+ 
++    # PSX_EMBED: a shared library run by a host program (window, sound, input
++    # and pacing are the host's; see runtime/include/psx_embed.h). The host
++    # side of psx_embed.h must be added to the target by the game project.
++    option(PSX_EMBED "Build the runtime as a shared library driven by a host program" OFF)
++    if(PSX_EMBED)
++        add_library(${target} SHARED
++            ${PSXRECOMP_RUNTIME_SOURCES}
++            ${mode_source}
++            ${generated_sources}
++            ${PSXRT_EXTRAS_SOURCES}
++        )
++        target_compile_definitions(${target} PRIVATE PSX_EMBED=1)
++    else()
+     add_executable(${target}
+         ${PSXRECOMP_RUNTIME_SOURCES}
+         ${mode_source}
+         ${generated_sources}
+         ${PSXRT_EXTRAS_SOURCES}
+     )
++    endif()
+     target_link_libraries(${target} PRIVATE chdr-static psx_texture_image_decode)
+     psxrecomp_sha256_file(${target})
+     set(_execution_contract
+diff --git a/runtime/src/main.cpp b/runtime/src/main.cpp
+index cf33df28..5c7f22b9 100644
+--- a/runtime/src/main.cpp
++++ b/runtime/src/main.cpp
+@@ -159,8 +159,14 @@ extern "C" void psx_game_codegen_forward_if_built(int argc, char** argv);
+  * translation unit that defines main(); including it through psx_sdl.h makes
+  * every SDL-using source emit WinMain under MinGW.
+  */
++#if defined(PSX_EMBED)
++#define SDL_MAIN_HANDLED   /* the host program owns main(); see psx_embed.h */
++#endif
+ #include <SDL3/SDL_main.h>
+ #endif
++#if defined(PSX_EMBED)
++#include "psx_embed.h"
++#endif
+ #include "psx_sdl_audio.h"
+ #if defined(PSX_WEB)
+ #include <emscripten/emscripten.h>
+@@ -4129,6 +4135,11 @@ static void sdl_audio_pump(bool discard_output = false) {
+     }
+     if (discard_output)
+         return;
++#if defined(PSX_EMBED)
++    /* Embedded: the host plays the samples (and paces the guest by them). */
++    psx_embed_audio(sdl_audio_buf, host_frames);
++    return;
++#endif
+     if (!host_queue_ok || !sdl_audio_device)
+         return;
+ 
+@@ -8309,6 +8320,54 @@ static bool local_mouse_live(int override_word) {
+     return pad_ext_live(&g) != 0;
+ }
+ 
++#if defined(PSX_EMBED)
++/* Embedded VBlank: give the host the displayed frame (software renderer,
++ * hi-res mirror at the internal scale), wait for the host's go-ahead, and
++ * apply the host's pads for the next frame. */
++static void embed_vblank(void) {
++    static std::vector<uint32_t> buf;
++    static bool pads_connected = false;
++    if (!pads_connected) {
++        sio_set_pad_connected(0, 1);
++        sio_set_pad_connected(1, 1);
++        pads_connected = true;
++    }
++    GpuDisplayInfo di;
++    gpu_get_display_info(&di);
++    int w = 0, h = 0, scale = 1, flags = 0;
++    if (di.disabled || di.width == 0 || di.height == 0) {
++        flags = PSX_EMBED_FRAME_BLANK;
++    } else if (di.depth24) {
++        w = (int)di.width;
++        h = (int)di.screen_height;
++        if (h <= 0) h = (int)di.height;
++        buf.resize((size_t)w * (size_t)h);
++        depth24_stage_scanout(&di, buf.data(), (uint32_t)w);
++        flags = PSX_EMBED_FRAME_24BIT;
++    } else {
++        scale = gr_scale();
++        if (scale < 1) scale = 1;
++        w = (int)di.width * scale;
++        h = (int)di.height * scale;
++        buf.resize((size_t)w * (size_t)h);
++        if (scale > 1) {
++            gr_render_display_hires(buf.data(), w * (int)sizeof(uint32_t),
++                                    (int)di.display_x, (int)di.display_y,
++                                    (int)di.width, (int)di.height);
++        } else {
++            for (int y = 0; y < h; y++)
++                for (int x = 0; x < w; x++)
++                    buf[(size_t)y * w + x] = gpu_display_pixel_argb(&di, (uint32_t)x, (uint32_t)y);
++        }
++    }
++    psx_embed_video(buf.empty() ? nullptr : buf.data(), w, h, w, scale, flags);
++    uint16_t pads[2] = {0xFFFFu, 0xFFFFu};
++    psx_embed_frame_done(pads);
++    sio_set_pad_state_slot(0, pads[0]);
++    sio_set_pad_state_slot(1, pads[1]);
++}
++#endif
++
+ static NetplayVblankEpilogue sdl_vblank_present_body(void) {
+     NetplayVblankEpilogue ep{};
+     /* Guest quantum for this vblank is complete. Drop top-level-resume armed
+@@ -8690,6 +8749,9 @@ static NetplayVblankEpilogue sdl_vblank_present_body(void) {
+     if (g_headless) {
+ #ifndef PSX_NO_DEBUG_TOOLS
+         headless_present_image_ring_capture();
++#endif
++#if defined(PSX_EMBED)
++        embed_vblank();
+ #endif
+         ep.skip_pace = 1;
+         return ep;
+@@ -15873,7 +15935,12 @@ static uint32_t gcs_gate_read_ram(uint32_t phys, uint32_t size) {
+     return v;
+ }
+ 
++#if defined(PSX_EMBED)
++/* The host program calls this on a thread with a 64 MiB stack. */
++extern "C" int psx_embed_runtime_main(int argc, char** argv) {
++#else
+ int main(int argc, char** argv) {
++#endif
+     /* Force line-buffered output so messages appear even if killed. */
+     std::setvbuf(stdout, nullptr, _IOLBF, BUFSIZ);
+     std::setvbuf(stderr, nullptr, _IOLBF, BUFSIZ);
+@@ -15919,7 +15986,9 @@ int main(int argc, char** argv) {
+ 
+     /* Install crash handlers early so they catch issues during init too.
+      * Writes psx_last_run_report.json on signal/SEH/atexit/fail-fast. */
++#if !defined(PSX_EMBED)   /* the host program has its own crash handler */
+     psx_crash_trace_install_handlers();
++#endif
+ #if defined(RECOMP_LAUNCHER)
+     launcher_boot_timing_mark("host:crash_handlers");
+ #endif
+@@ -16076,6 +16145,11 @@ int main(int argc, char** argv) {
+             }
+         }
+     }
++#if defined(PSX_EMBED)
++    /* No window, audio device or input of our own: the host provides them. */
++    g_headless = 1;
++    force_no_launcher = true;
++#endif
+     if (const char *e = std::getenv("PSX_HEADLESS")) {
+         if (e[0] && e[0] != '0') {
+             g_headless = 1;
+@@ -19067,8 +19141,11 @@ session_reboot:
+ #ifdef PSX_COSIM
+         cosim_init();  /* first-divergence oracle server */
+ #endif
+-        /* Heartbeat always on — see freeze_heartbeat.c rationale. */
++        /* Heartbeat always on — see freeze_heartbeat.c rationale.  Not when
++         * embedded: the host parks the guest whenever its menus are open. */
++#if !defined(PSX_EMBED)
+         freeze_heartbeat_start("psx-runtime");
++#endif
+     } else {
+ #ifndef PSX_NO_DEBUG_TOOLS
+         (void)debug_port;
+-- 
+2.43.0
+
