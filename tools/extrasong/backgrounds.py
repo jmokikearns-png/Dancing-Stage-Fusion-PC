@@ -15,7 +15,7 @@ import math
 import os
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 
 import banner_lettering
 
@@ -99,9 +99,12 @@ def vignette(rgb, size, start, colour):
 	return rgb * (1 - k) + np.array([r, g, b], float) * k
 
 
-def compose(name, banner):
+def compose(name, banner, jacket=None):
 	"""Background `name`, its lettering cut from `banner` (a PIL image), as
-	a 1280x960 RGB picture; None if the banner has no such lettering."""
+	a 1280x960 RGB picture; None if the banner has no such lettering.
+	BgToughEnough takes the song's jacket picture instead."""
+	if name == 'BgToughEnough':
+		return compose_tough(jacket) if jacket is not None else None
 	spec = SPECS[name]
 	canvas = Image.open(os.path.join(HERE, 'art', name + '.png')).convert('RGBA')
 	if spec.get('banner_scale'):
@@ -116,4 +119,104 @@ def compose(name, banner):
 	if spec['halftone']:
 		rgb = halftone(rgb, *spec['halftone'])
 	rgb = vignette(rgb, *spec['vignette'])
+	return Image.fromarray(np.clip(rgb + 0.5, 0, 255).astype(np.uint8), 'RGB')
+
+
+# ---- Tough Enough (graphics: SongBackground with the band's logos) ----
+# Our art in three layers (BgToughEnough-under/-rays/-over: the graphics'
+# BgToughEnough-* stills); the player's jacket picture gives the photo and
+# both logos.
+TE_CROP = (-190, 92, 470, 352)		# photoCrop: of the jacket, fills the frame
+TE_STAMP = dict(box=(255, 240, 430, 345), key='red', min_part=0.002)
+TE_SCRIPT = dict(box=(100, 316, 398, 385), key='white', rotate=4, on_dark=7, min_part=0.008,
+                 exclude=[(0, 300, 112, 360), (385, 330, 512, 380), (250, 300, 312, 327)],
+                 drop_at=[(300, 246), (270, 20), (358, 23)])
+
+
+def gradient(w, h, angle, stops):
+	"""CSS linear-gradient(angle deg, stops) over a w x h box, as float RGB."""
+	a = math.radians(angle)
+	dx, dy = math.sin(a), -math.cos(a)
+	length = abs(w * dx) + abs(h * dy)
+	yy, xx = np.mgrid[0:h, 0:w].astype(float)
+	t = ((xx + 0.5 - w / 2) * dx + (yy + 0.5 - h / 2) * dy) / length + 0.5
+	pos = [p for p, _ in stops]
+	cols = np.array([[int(c[1:3], 16), int(c[3:5], 16), int(c[5:7], 16)] for _, c in stops], float)
+	return np.stack([np.interp(t, pos, cols[:, i]) for i in range(3)], -1)
+
+
+def filled(matte, w, h, rgb):
+	"""A matte stretched to w x h, filled with the colours rgb (h x w x 3)."""
+	a = np.asarray(matte.getchannel('A').resize((w, h), Image.BILINEAR)).astype(float)
+	return Image.fromarray(np.dstack([np.clip(rgb + 0.5, 0, 255), a]).astype(np.uint8), 'RGBA')
+
+
+def put_rotated(canvas, layer, cx, cy, rot):
+	"""layer rotated rot degrees clockwise about its centre, centred at (cx, cy)."""
+	layer = layer.rotate(-rot, resample=Image.BICUBIC, expand=True)
+	canvas.alpha_composite(layer, (round(cx - layer.width / 2), round(cy - layer.height / 2)))
+
+
+def compose_tough(jacket):
+	"""Tough Enough's background from the jacket picture (a PIL image); None
+	if its logos aren't where they are on the jacket this was made for."""
+	from logo_matte import cut_matte
+	stamp, script = cut_matte(jacket, **TE_STAMP), cut_matte(jacket, **TE_SCRIPT)
+	if stamp is None or script is None:
+		return None
+	art = lambda n: Image.open(os.path.join(HERE, 'art', 'BgToughEnough-%s.png' % n)).convert('RGBA')
+	rgb = np.asarray(art('under').convert('RGB')).astype(float)
+
+	# the photo as a four-tone screen print, a dot screen on it, faded at the edges
+	cx_, cy_, cw, ch = TE_CROP
+	photo = jacket.convert('RGB')
+	yy, xx = np.mgrid[0:H, 0:W].astype(float)
+	px, py = cx_ + (xx + 0.5) * cw / W, cy_ + (yy + 0.5) * ch / H
+	inside = (px >= 0) & (py >= 0) & (px < photo.width) & (py < photo.height)
+	big = np.asarray(photo.transform((W, H), Image.AFFINE, (cw / W, 0, cx_, 0, ch / H, cy_), Image.BILINEAR)).astype(float) / 255
+	lum = big @ [0.2126, 0.7152, 0.0722]
+	lum = np.clip(lum * 1.55 - 0.22, 0, 1)
+	k = np.minimum((lum * 4).astype(int), 3)
+	tones = np.array([[0.08, 0.02, 0.04], [0.30, 0.00, 0.07], [0.80, 0.07, 0.19], [1.00, 0.86, 0.76]])
+	print_rgb = tones[k] * 255
+	dx, dy = (xx % 12) + 0.5 - 6, (yy % 12) + 0.5 - 6
+	dot = np.clip((0.34 - np.hypot(dx, dy) / (12 * math.sqrt(2) / 2)) / 0.12, 0, 1)
+	print_rgb = print_rgb * (1 - 0.35 * dot)[..., None]
+	fade = np.clip((1 - np.hypot((xx + 0.5 - 0.66 * W) / (0.70 * W), (yy + 0.5 - 0.46 * H) / (0.85 * H))) / 0.45, 0, 1)
+	left = max(0.0, -cx_ / cw * W)
+	side = np.clip((xx + 0.5 - (left + 10)) / 210, 0, 1)
+	a = (fade * side * inside)[..., None]
+	rgb = rgb * (1 - a) + print_rgb * a
+
+	# the spotlight rays, by screen
+	rays = np.asarray(art('rays')).astype(float) / 255
+	ra = rays[..., 3:4]
+	rgb = rgb + ra * rays[..., :3] * 255 * (1 - rgb / 255)
+
+	canvas = Image.fromarray(np.clip(rgb + 0.5, 0, 255).astype(np.uint8), 'RGB').convert('RGBA')
+	canvas.alpha_composite(art('over'))
+
+	# the stamp, red, on its label (in 'over'), 520x292 at the starburst
+	sw, sh = 520, 292
+	put_rotated(canvas, filled(stamp, sw, sh, gradient(sw, sh, 170, [(0, '#ff3a2e'), (0.5, '#d80c1a'), (1, '#a8000c')])), 390, 258, -7)
+
+	# the script, silver with a dark outline and a red shadow, over the ribbon
+	sw, sh, m = 820, 190, 24
+	fill = filled(script, sw, sh, gradient(sw, sh, 180, [(0, '#ffffff'), (0.45, '#f2f4ff'), (0.70, '#b9c2dc'), (1, '#ffffff')]))
+	local = Image.new('RGBA', (sw + 2 * m, sh + 2 * m), (0, 0, 0, 0))
+	local.alpha_composite(fill, (m, m))
+	ring = local.getchannel('A').filter(ImageFilter.MaxFilter(13))
+	edged = Image.new('RGBA', local.size, (0x14, 0x04, 0x0a, 0))
+	edged.putalpha(ring)
+	edged.alpha_composite(local)
+	shadow = Image.new('RGBA', local.size, (0xc8, 0x10, 0x2e, 0))
+	shadow.putalpha(edged.getchannel('A'))
+	out = Image.new('RGBA', (local.width + 8, local.height + 8), (0, 0, 0, 0))
+	out.alpha_composite(shadow, (6, 7))
+	out.alpha_composite(edged, (0, 0))
+	# out's centre is the box centre shifted by the shadow's growth (+4, +4)
+	put_rotated(canvas, out, 430 + 4, 540 + 4, -6)
+
+	rgb = np.asarray(canvas.convert('RGB')).astype(float)
+	rgb = vignette(rgb, 0.85, 0.60, 'rgba(10,0,4,0.65)')
 	return Image.fromarray(np.clip(rgb + 0.5, 0, 255).astype(np.uint8), 'RGB')

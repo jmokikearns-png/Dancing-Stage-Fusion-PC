@@ -20,7 +20,8 @@ import argparse
 
 import numpy as np
 from PIL import Image, ImageFilter
-from scipy import ndimage
+
+from banner_lettering import dilate, part_sizes
 
 
 def matte(rgb, key):
@@ -32,6 +33,50 @@ def matte(rgb, key):
 	lum = (r * 0.3 + g * 0.59 + b * 0.11) / 255.0
 	sat = (np.maximum(np.maximum(r, g), b) - np.minimum(np.minimum(r, g), b)) / 255.0
 	return np.clip((lum - 0.42) / 0.22, 0, 1) * np.clip((0.35 - sat) / 0.15, 0, 1)
+
+
+def cut_matte(img, box, key, scale=4, rotate=0.0, exclude=(), on_dark=0, min_part=0.0, drop_at=()):
+	"""The logo in `box` of `img` (a PIL image) as a white-on-transparent
+	RGBA matte, `scale` times larger; None if there is nothing there."""
+	src = np.asarray(img.convert('RGB'))
+	m = matte(src, key)
+	if on_dark:
+		lum = src.astype(float) @ [0.3, 0.59, 0.11] / 255.0
+		dark = Image.fromarray(((lum < 0.24) * 255).astype(np.uint8), 'L')
+		k = 2 * on_dark + 1
+		surface = dark.filter(ImageFilter.MaxFilter(k)).filter(ImageFilter.MinFilter(k)).filter(ImageFilter.MinFilter(5))
+		m = m * (np.asarray(surface) > 0)
+	for x0, y0, x1, y1 in exclude:
+		m[y0:y1, x0:x1] = 0
+	x0, y0, x1, y1 = box
+	m = m[y0:y1, x0:x1]
+	im = Image.fromarray((m * 255).astype(np.uint8), 'L')
+	im = im.resize((im.width * scale, im.height * scale), Image.BICUBIC)
+	im = im.filter(ImageFilter.GaussianBlur(scale * 0.45))
+	if rotate:
+		im = im.rotate(rotate, Image.BICUBIC, expand=True)
+	# a crisp edge: steepen the soft ramp around the half-way level
+	v = np.asarray(im).astype(float) / 255.0
+	v = np.clip((v - 0.5) * 4 + 0.5, 0, 1)
+	if min_part:
+		labels, sizes = part_sizes(v > 0.3)
+		if len(sizes):
+			keep = np.isin(labels, 1 + np.nonzero(sizes >= min_part * sizes.max())[0])
+			v = v * dilate(keep, 2)
+	ys, xs = np.nonzero(v > 0.02)
+	if not len(ys):
+		return None
+	pad = 2 * scale
+	v = v[max(0, ys.min() - pad):ys.max() + pad + 1, max(0, xs.min() - pad):xs.max() + pad + 1]
+	if drop_at:
+		labels, _ = part_sizes(v > 0.02)
+		for x, y in drop_at:
+			if y < labels.shape[0] and x < labels.shape[1] and labels[y, x]:
+				v = v * (labels != labels[y, x])
+	out = np.zeros(v.shape + (4,), np.uint8)
+	out[..., :3] = 255
+	out[..., 3] = (v * 255).astype(np.uint8)
+	return Image.fromarray(out, 'RGBA')
 
 
 def main():
@@ -46,46 +91,11 @@ def main():
 	ap.add_argument('--min-part', type=float, default=0.0, help='drop parts smaller than this fraction of the largest')
 	ap.add_argument('--drop-at', type=int, nargs=2, action='append', default=[], help='OUT point whose part to drop')
 	a = ap.parse_args()
-
-	src = np.asarray(Image.open(a.src).convert('RGB'))
-	m = matte(src, a.key)
-	if a.on_dark:
-		lum = src.astype(float) @ [0.3, 0.59, 0.11] / 255.0
-		dark = Image.fromarray(((lum < 0.24) * 255).astype(np.uint8), 'L')
-		k = 2 * a.on_dark + 1
-		surface = dark.filter(ImageFilter.MaxFilter(k)).filter(ImageFilter.MinFilter(k)).filter(ImageFilter.MinFilter(5))
-		m = m * (np.asarray(surface) > 0)
-	for x0, y0, x1, y1 in a.exclude:
-		m[y0:y1, x0:x1] = 0
-	x0, y0, x1, y1 = a.box
-	m = m[y0:y1, x0:x1]
-	im = Image.fromarray((m * 255).astype(np.uint8), 'L')
-	im = im.resize((im.width * a.scale, im.height * a.scale), Image.BICUBIC)
-	im = im.filter(ImageFilter.GaussianBlur(a.scale * 0.45))
-	if a.rotate:
-		im = im.rotate(a.rotate, Image.BICUBIC, expand=True)
-	# a crisp edge: steepen the soft ramp around the half-way level
-	v = np.asarray(im).astype(float) / 255.0
-	v = np.clip((v - 0.5) * 4 + 0.5, 0, 1)
-	if a.min_part:
-		labels, n = ndimage.label(v > 0.3)
-		if n:
-			sizes = ndimage.sum(np.ones_like(v), labels, range(1, n + 1))
-			keep = np.isin(labels, 1 + np.nonzero(sizes >= a.min_part * sizes.max())[0])
-			v = v * ndimage.binary_dilation(keep, iterations=2)
-	ys, xs = np.nonzero(v > 0.02)
-	pad = 2 * a.scale
-	v = v[max(0, ys.min() - pad):ys.max() + pad + 1, max(0, xs.min() - pad):xs.max() + pad + 1]
-	if a.drop_at:
-		labels, _ = ndimage.label(v > 0.02)
-		for x, y in a.drop_at:
-			if labels[y, x]:
-				v = v * (labels != labels[y, x])
-	out = np.zeros(v.shape + (4,), np.uint8)
-	out[..., :3] = 255
-	out[..., 3] = (v * 255).astype(np.uint8)
-	Image.fromarray(out, 'RGBA').save(a.out)
-	print('%s: %dx%d' % (a.out, out.shape[1], out.shape[0]))
+	out = cut_matte(Image.open(a.src), a.box, a.key, a.scale, a.rotate, a.exclude, a.on_dark, a.min_part, a.drop_at)
+	if out is None:
+		raise SystemExit('nothing found')
+	out.save(a.out)
+	print('%s: %dx%d' % (a.out, out.width, out.height))
 
 
 if __name__ == '__main__':

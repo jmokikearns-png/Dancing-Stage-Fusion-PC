@@ -288,6 +288,7 @@ def parse_sm(path):
 		sys.exit('%s: no tempo at beat 0' % path)
 	return dict(title=tags.get('TITLE', [''])[0].strip(), artist=tags.get('ARTIST', [''])[0].strip(),
 	            music=tags.get('MUSIC', [''])[0].strip(), banner=tags.get('BANNER', [''])[0].strip(),
+	            jacket=tags.get('JACKET', [''])[0].strip(),
 	            background=tags.get('BACKGROUND', [''])[0].strip(),
 	            offset=float(tags.get('OFFSET', ['0'])[0] or 0), bpms=bpms,
 	            stops=[s for s in pairs('STOPS') if s[1] > 0],
@@ -760,6 +761,7 @@ class Song:
 		bgv = self.cfg.get('background', '')
 		self.bg_png = bgv if bgv.startswith('@') else self.path('background') if bgv else own_bg
 		self.own_bg = own_bg
+		self.jacket = song_file(self.dir, stem, self.sm['jacket'], ('-jacket.png', '-jacket.jpg', ' jacket.png'), None)
 		if not self.banner_png or not self.bg_png:
 			sys.exit('%s: no %s picture (give it in songs.toml)' % (self.dir, 'banner' if not self.banner_png else 'background'))
 
@@ -835,12 +837,15 @@ class Song:
 			self.script = ('from stock song %d' % donor, len(parse_events(events)[1]),
 			               '%d past the end dropped' % dropped if dropped else '')
 		if self.bg_png.startswith('@'):	# one of the project's backgrounds, lettered from this song's banner
-			bg_img = backgrounds.compose(self.bg_png[1:], Image.open(self.banner_png))
+			bg_img = backgrounds.compose(self.bg_png[1:], Image.open(self.banner_png),
+			                             Image.open(self.jacket) if self.jacket else None)
 			if bg_img is None:
 				if not self.own_bg:
-					sys.exit('%s: no lettering on its banner for %s, and no background of its own' % (self.title, self.bg_png))
-				print('%s: no lettering on its banner for %s: its own background instead' % (self.title, self.bg_png))
+					sys.exit('%s: no lettering on its banner (or jacket) for %s, and no background of its own' % (self.title, self.bg_png))
+				print('%s: no lettering on its banner (or jacket) for %s: its own background instead' % (self.title, self.bg_png))
 				bg_img = Image.open(self.own_bg)
+			else:
+				print('%-34s new background %s' % (self.title, self.bg_png[1:]))
 		else:
 			bg_img = Image.open(self.bg_png)
 		bg = konami_lz.encode(background_tim(bg_img))
@@ -885,9 +890,10 @@ class Song:
 def main():
 	ap = argparse.ArgumentParser()
 	ap.add_argument('songs'); ap.add_argument('cue'); ap.add_argument('out')
+	ap.add_argument('--simfiles', help='the folder with the simfile packs (default: the song list\'s own)')
 	a = ap.parse_args()
 	cfg = tomllib.load(open(a.songs, 'rb'))
-	root = os.path.dirname(os.path.abspath(a.songs))
+	root = os.path.abspath(a.simfiles) if a.simfiles else os.path.dirname(os.path.abspath(a.songs))
 	index = None
 	found, missing = [], []
 	for c in cfg['song']:
@@ -998,7 +1004,7 @@ def main():
 			it = pack_items(entry(e))
 			assert len(it) == 4
 			packs[e] = build_pack(it[:2] + [bg, it[3]])
-		print('stock song %d: new background in %d language entries' % (k, len({exe.w(group + 4 * l) for l in range(6)})))
+		print('stock song %d: new background %s in %d language entries' % (k, st['background'].lstrip('@'), len({exe.w(group + 4 * l) for l in range(6)})))
 
 	# ---- media: the sectors appended after the disc ----
 	base = disc.sectors

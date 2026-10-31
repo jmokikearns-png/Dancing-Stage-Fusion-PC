@@ -33,6 +33,9 @@ T=$O/extrasong
 cp "$REPO/tools/extrasong/build_extrasong.py" "$REPO/tools/extrasong/konami_lz.py" "$REPO/tools/extrasong/plate_font.py" \
    "$REPO/tools/extrasong/backgrounds.py" "$REPO/tools/extrasong/banner_lettering.py" "$T/"
 cp -r "$REPO/tools/extrasong/art" "$T/art"	# our backgrounds, lettered at build time from the player's banners
+cp "$REPO/tools/extrasong/logo_matte.py" "$T/"
+# the song list: here, so every release brings its current one
+sed 's/$/\r/' "$REPO/tools/extrasong/songs.toml" > "$T/songs.toml"
 X=$(mktemp -d); trap 'rm -rf "${X:?}"' EXIT
 unzip -qo "$FFWHEEL" 'imageio_ffmpeg/binaries/*' -d "$X"
 cp "$X"/imageio_ffmpeg/binaries/ffmpeg-*.exe "$T/ffmpeg.exe"

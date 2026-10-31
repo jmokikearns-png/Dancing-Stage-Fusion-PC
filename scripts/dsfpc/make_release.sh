@@ -41,7 +41,6 @@ cp "$COMPILER/README.txt" "$D/licenses/GCC-and-Binutils-README.txt"
 bash "$REPO/scripts/dsfpc/make_songtools.sh" "$D/songtools"
 cp "$REPO/tools/setup/Build New Songs.bat" "$D/"
 mkdir -p "$D/simfiles"
-sed 's/$/\r/' "$REPO/tools/extrasong/songs.toml" > "$D/simfiles/songs.toml"
 {
   printf 'Put your simfile packs of the PlayStation 2 and arcade versions of\n'
   printf 'Dancing Stage Fusion in this folder, whole, as they come (unzipped).\n'
@@ -50,7 +49,8 @@ sed 's/$/\r/' "$REPO/tools/extrasong/songs.toml" > "$D/simfiles/songs.toml"
   printf '\nGo West, It'"'"'s Raining Men and PARANOIA survivor are in neither pack:\n'
   printf 'add a simfile of each (from another pack, or a song folder of its own)\n'
   printf 'anywhere in this folder.\n'
-  printf '\nThen run "Build New Songs.bat" in the game folder.\n'
+  printf '\nThen run "Build New Songs.bat" in the game folder. (The song list is\n'
+  printf 'songtools\\extrasong\\songs.toml.)\n'
 } | sed 's/$/\r/' > "$D/simfiles/PUT_YOUR_SIMFILES_HERE.txt"
 
 # Nothing from the game, the player's disc or a local setup in the release.

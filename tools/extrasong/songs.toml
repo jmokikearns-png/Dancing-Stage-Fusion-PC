@@ -17,7 +17,8 @@
 # 11, one song each).  script = N instead: stock song N's, fitted to it.
 # background / banner: your own picture instead of the simfile's;
 # background = "@Name": one of this project's backgrounds (tools/extrasong/
-# art), lettered from the song's own banner.
+# art), lettered from the song's own banner (Tough Enough's: photo and logos
+# from its jacket picture).
 [[song]]
 stage = 1			# its own background animation, on stage set 1
 # script = 18			# (or: 321STARS's, fitted to this song)
@@ -25,6 +26,7 @@ master_id = 0x8030
 # background = "my-art/background.png"
 title = "Tough Enough"
 artist = "Vanilla Ninja"
+background = "@BgToughEnough"	# our own background, with the photo and logos from its jacket picture
 
 [[song]]
 stage = 10			# its own background animation, on stage set 10

@@ -151,9 +151,12 @@ pack works for both the PC version and the Deluxe disc.
 and unzipped, add simfiles of Go West, It's Raining Men and PARANOIA survivor
 (in neither pack) anywhere in it, and run `Build New Songs.bat`. It finds each song in them by its
 title (and artist), with the music, banner and background its `.sm` names,
-runs the song builder with the tools in `songtools` (Python with numpy and
-Pillow, FFmpeg, and the PlayStation audio encoder), and installs the pack in
-the game. Nothing to install.
+runs the song builder with the tools and song list in `songtools` (Python
+with numpy and Pillow, FFmpeg, and the PlayStation audio encoder), and
+installs the pack in the game. It also gives five songs this project's own
+gameplay backgrounds (Go West, Kids in America, Heaven and Earth, Tough
+Enough and the stock song Mickey), finished with the lettering or photo from
+the player's own banners and jacket picture. Nothing to install.
 
 **From source:**
 
@@ -165,7 +168,8 @@ PlayStation audio encoder in `tools/extrasong/psxaudio.c`).
    [`tools/extrasong/songs.toml`](tools/extrasong/songs.toml) into it. It lists
    the 12 new songs in order, with their song IDs, background animations and
    Heaven and Earth's unlock.
-2. Put your PlayStation 2 and arcade simfile packs in that folder, whole,
+2. Put your PlayStation 2 and arcade simfile packs in that folder (or any
+   folder, given with `--simfiles DIR`), whole,
    and simfiles of Go West, It's Raining Men and PARANOIA survivor (in
    neither pack).
    Each song is found in them by its title and artist; to use a particular

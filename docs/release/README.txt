@@ -89,6 +89,11 @@ THE NEW SONGS
   2. Run "Build New Songs.bat" (after Setup.exe). It converts the charts,
      music and pictures to the game's own formats with the tools in
      "songtools" (about two minutes) and puts the song pack in the game.
+     Go West, Kids in America, Heaven and Earth, Tough Enough and Mickey
+     get this project's own gameplay backgrounds, finished with the lettering
+     and photo from your simfiles' banners and jacket picture. Run it again
+     after updating the game: it always uses the song list that came with it
+     (songtools\extrasong\songs.toml) and replaces the old song pack.
   The song pack holds your music and charts: for your own use only.
 
 FILES

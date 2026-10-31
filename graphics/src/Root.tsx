@@ -51,6 +51,18 @@ export const Root: React.FC = () => (
 			defaultProps={{photo: 'photo.png', photoCrop: {x: -190, y: 92, w: 470, h: 352}, titleLines: ['TOUGH', 'ENOUGH'],
 				artist: 'Vanilla Ninja', titleLogo: {src: 'logo_stamp.png', w: 520, h: 292},
 				artistLogo: {src: 'logo_script.png', w: 820, h: 190}} satisfies SongBackgroundProps} />
+		<Still id="BgToughEnough-under" component={SongBackground as React.FC<Record<string, unknown>>} width={1280} height={960}
+			defaultProps={{photo: 'photo.png', photoCrop: {x: -190, y: 92, w: 470, h: 352}, titleLines: ['TOUGH', 'ENOUGH'],
+				artist: 'Vanilla Ninja', titleLogo: {src: 'logo_stamp.png', w: 520, h: 292},
+				artistLogo: {src: 'logo_script.png', w: 820, h: 190}, layer: 'under'} satisfies SongBackgroundProps} />
+		<Still id="BgToughEnough-rays" component={SongBackground as React.FC<Record<string, unknown>>} width={1280} height={960}
+			defaultProps={{photo: 'photo.png', photoCrop: {x: -190, y: 92, w: 470, h: 352}, titleLines: ['TOUGH', 'ENOUGH'],
+				artist: 'Vanilla Ninja', titleLogo: {src: 'logo_stamp.png', w: 520, h: 292},
+				artistLogo: {src: 'logo_script.png', w: 820, h: 190}, layer: 'rays'} satisfies SongBackgroundProps} />
+		<Still id="BgToughEnough-over" component={SongBackground as React.FC<Record<string, unknown>>} width={1280} height={960}
+			defaultProps={{photo: 'photo.png', photoCrop: {x: -190, y: 92, w: 470, h: 352}, titleLines: ['TOUGH', 'ENOUGH'],
+				artist: 'Vanilla Ninja', titleLogo: {src: 'logo_stamp.png', w: 520, h: 292},
+				artistLogo: {src: 'logo_script.png', w: 820, h: 190}, layer: 'over'} satisfies SongBackgroundProps} />
 		{/* gameplay backgrounds without the artists' photos, PS1-version style */}
 		<Still id="BgKidsInAmerica" component={BgKidsInAmerica} width={1280} height={960} />
 		<Still id="BgKidsInAmericaBase" component={BgKidsInAmerica} width={1280} height={960} defaultProps={{base: true}} />

@@ -26,6 +26,12 @@ export type SongBackgroundProps = {
 	 * (port/tools/extrasong/logo_matte.py): used instead of the text */
 	titleLogo?: {src: string; w: number; h: number};
 	artistLogo?: {src: string; w: number; h: number};
+	/* one layer of it, for the release (tools/extrasong/backgrounds.py puts
+	 * the picture together on the player's PC from their own photo and
+	 * logos): 'under' the backdrop, 'rays' the spotlight rays alone (blended
+	 * by screen there), 'over' the rest without the photo, the logos and the
+	 * vignette; 'all' (default) the whole picture */
+	layer?: 'all' | 'under' | 'rays' | 'over';
 };
 
 const W = 1280, H = 960;
@@ -149,18 +155,19 @@ const sparkle = (x: number, y: number, s: number) =>
 	`M ${x} ${y - s} Q ${x + s * 0.12} ${y - s * 0.12} ${x + s} ${y} Q ${x + s * 0.12} ${y + s * 0.12} ${x} ${y + s} ` +
 	`Q ${x - s * 0.12} ${y + s * 0.12} ${x - s} ${y} Q ${x - s * 0.12} ${y - s * 0.12} ${x} ${y - s} Z`;
 
-export const SongBackground: React.FC<SongBackgroundProps> = ({photo, photoCrop, titleLines, artist, titleLogo, artistLogo}) => {
+export const SongBackground: React.FC<SongBackgroundProps> = ({photo, photoCrop, titleLines, artist, titleLogo, artistLogo, layer = 'all'}) => {
 	useFonts();
 	const BX = 390, BY = 268;	/* the starburst's centre: behind the title */
+	const all = layer === 'all', over = all || layer === 'over';
 	return (
-		<AbsoluteFill style={{background: `radial-gradient(ellipse 80% 75% at 50% 30%, #ff3b4e 0%, ${RED} 38%, ${DEEP} 78%, ${INK} 100%)`}}>
-			<ScreenPrintPhoto photo={photo} photoCrop={photoCrop} />
+		<AbsoluteFill style={{background: all || layer === 'under' ? `radial-gradient(ellipse 80% 75% at 50% 30%, #ff3b4e 0%, ${RED} 38%, ${DEEP} 78%, ${INK} 100%)` : 'transparent'}}>
+			{all && <ScreenPrintPhoto photo={photo} photoCrop={photoCrop} />}
 			<OutlineFilters />
 			{/* spotlight rays from above */}
-			<AbsoluteFill style={{mixBlendMode: 'screen', background: 'repeating-conic-gradient(from -6deg at 50% -8%, rgba(255,190,140,0.22) 0deg 5deg, rgba(255,214,150,0) 5deg 15deg)',
+			{(all || layer === 'rays') && <AbsoluteFill style={{mixBlendMode: 'screen', background: 'repeating-conic-gradient(from -6deg at 50% -8%, rgba(255,190,140,0.22) 0deg 5deg, rgba(255,214,150,0) 5deg 15deg)',
 				maskImage: 'radial-gradient(ellipse 90% 95% at 50% 0%, #000 30%, transparent 85%)',
-				WebkitMaskImage: 'radial-gradient(ellipse 90% 95% at 50% 0%, #000 30%, transparent 85%)'}} />
-			<svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{position: 'absolute', inset: 0}}>
+				WebkitMaskImage: 'radial-gradient(ellipse 90% 95% at 50% 0%, #000 30%, transparent 85%)'}} />}
+			{over && <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{position: 'absolute', inset: 0}}>
 				<defs>
 					<radialGradient id="burst" cx="0.5" cy="0.45" r="0.6">
 						<stop offset="0" stopColor="#fff07a" />
@@ -186,15 +193,15 @@ export const SongBackground: React.FC<SongBackgroundProps> = ({photo, photoCrop,
 				{[[1150, 120, 44], [1220, 250, 24], [760, 90, 26], [1060, 820, 34], [70, 130, 22], [690, 560, 22]].map(([x, y, s], i) => (
 					<path key={i} d={sparkle(x, y, s)} fill="#fff" opacity={0.95} />
 				))}
-			</svg>
-			{titleLogo ? (
+			</svg>}
+			{!over ? null : titleLogo ? (
 				/* the band's stamp, red on a cream paper label pinned on the starburst */
 				<div style={{position: 'absolute', left: BX - titleLogo.w / 2, top: BY - titleLogo.h / 2 - 10, width: titleLogo.w, height: titleLogo.h,
 					transform: 'rotate(-7deg)'}}>
 					<div style={{position: 'absolute', inset: -22, borderRadius: 12, border: `9px solid ${INK}`,
 						background: 'linear-gradient(165deg, #fff8e6 0%, #f6e3b8 60%, #e9c98e 100%)', boxShadow: '14px 16px 0 rgba(10,0,4,0.55)'}} />
-					<Matte src={titleLogo.src} w={titleLogo.w} h={titleLogo.h} style={{position: 'absolute', left: 0, top: 0}}
-						fill="linear-gradient(170deg, #ff3a2e 0%, #d80c1a 50%, #a8000c 100%)" />
+					{all && <Matte src={titleLogo.src} w={titleLogo.w} h={titleLogo.h} style={{position: 'absolute', left: 0, top: 0}}
+						fill="linear-gradient(170deg, #ff3a2e 0%, #d80c1a 50%, #a8000c 100%)" />}
 				</div>
 			) : (
 				/* title: stencil letters, gold to white, inked outline, red block shadow */
@@ -215,15 +222,15 @@ export const SongBackground: React.FC<SongBackgroundProps> = ({photo, photoCrop,
 			</div>
 			)}
 			{/* the artist on a slanted ribbon */}
-			<div style={{position: 'absolute', left: 40, top: 500, width: artistLogo ? 800 : 660, height: artistLogo ? 110 : 96, transform: 'rotate(-7deg) skewX(-14deg)',
+			{over && <div style={{position: 'absolute', left: 40, top: 500, width: artistLogo ? 800 : 660, height: artistLogo ? 110 : 96, transform: 'rotate(-7deg) skewX(-14deg)',
 				background: `linear-gradient(180deg, #2a0710 0%, ${INK} 100%)`, borderTop: `8px solid ${GOLD}`, borderBottom: `8px solid ${RED}`,
 				boxShadow: '10px 12px 0 rgba(0,0,0,0.5)'}}>
 				{artistLogo ? null : (
 					<div style={{fontFamily: 'BgArtist', fontSize: 74, color: '#fff', letterSpacing: 6, textAlign: 'center', lineHeight: '80px',
 						transform: 'skewX(4deg)', textShadow: `4px 4px 0 ${RED}`}}>{artist.toUpperCase()}</div>
 				)}
-			</div>
-			{artistLogo && (
+			</div>}
+			{all && artistLogo && (
 				/* the band's script, white and silver as on the banner, over the ribbon */
 				<div style={{position: 'absolute', left: 430 - artistLogo.w / 2, top: 540 - artistLogo.h / 2, transform: 'rotate(-6deg)',
 					filter: `url(#scriptEdge) drop-shadow(6px 7px 0 ${RED})`}}>
@@ -231,7 +238,7 @@ export const SongBackground: React.FC<SongBackgroundProps> = ({photo, photoCrop,
 						fill="linear-gradient(180deg, #ffffff 0%, #f2f4ff 45%, #b9c2dc 70%, #ffffff 100%)" />
 				</div>
 			)}
-			<AbsoluteFill style={{background: 'radial-gradient(ellipse 85% 85% at 50% 45%, transparent 60%, rgba(10,0,4,0.65) 100%)'}} />
+			{all && <AbsoluteFill style={{background: 'radial-gradient(ellipse 85% 85% at 50% 45%, transparent 60%, rgba(10,0,4,0.65) 100%)'}} />}
 		</AbsoluteFill>
 	);
 };
