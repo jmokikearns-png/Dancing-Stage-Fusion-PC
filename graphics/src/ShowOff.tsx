@@ -33,7 +33,7 @@ const GameSegment: React.FC<{seg: Segment}> = ({seg}) => {
 					textShadow: `0 3px 0 ${colors.red}`}}>DANCING STAGE<br />FUSION PC</div>
 				<div style={{height: 3, background: headerGradient, margin: '18px 0 0', borderRadius: 2, width: 120}} />
 				<div style={{position: 'absolute', left: 24, right: 24, bottom: 26, fontFamily: fonts.body, fontWeight: 500, fontSize: 14,
-					lineHeight: 1.4, color: colors.mute}}>Win64 build, recorded under Wine<br />(no graphics card: software renderer)</div>
+					lineHeight: 1.4, color: colors.mute}}>Win64 build<br />(no graphics card: software renderer)</div>
 				<div style={{position: 'absolute', left: 24, right: 24, top: 190}}>
 					{(seg.captions || []).map((c, i) => (
 						<Sequence key={i} from={sec(c.at)} durationInFrames={sec(c.dur)} layout="none">

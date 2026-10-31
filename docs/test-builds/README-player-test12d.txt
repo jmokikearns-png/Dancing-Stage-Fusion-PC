@@ -134,7 +134,7 @@ GRAPHICS
     refresh rate and VSync apply when you leave the page.
 
 NOT YET TESTED - PLEASE REPORT
-  Tested only in a Windows emulator (Wine) on a computer without a graphics
+  Tested only on a computer without a graphics
   card or sound card, and on the Linux test build of the same game core:
     - QUIT on the main menu (closes the program), the cursor wrapping round
       the seven entries, the other entries still opening their screens;

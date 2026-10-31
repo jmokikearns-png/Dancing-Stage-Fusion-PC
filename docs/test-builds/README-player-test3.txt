@@ -76,7 +76,7 @@ GRAPHICS
     apply immediately.
 
 NOT YET TESTED - PLEASE REPORT
-  This build was only tested in a Windows emulator (Wine) on a computer without
+  This build was only tested on a computer without
   a graphics card or sound card. Tested there:
     - menus, key mapping screen, the PC menu (pause/resume);
     - the game booting, its language and memory-card screens, keyboard input;

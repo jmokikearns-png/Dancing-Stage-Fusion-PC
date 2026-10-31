@@ -5,8 +5,7 @@
 #   make_songtools.sh OUT_DIR
 # Env: PYWIN (conda-forge's Windows python 3.12 package and its
 #      dependencies, unpacked), WHEELS (numpy 2.0.x and Pillow win_amd64
-#      wheels for cp312; numpy 2.1+ needs a C99 function Wine lacks, so it
-#      couldn't be tested), FFWHEEL (imageio-ffmpeg's win_amd64 wheel: a
+#      wheels for cp312; numpy 2.0 is the version tested), FFWHEEL (imageio-ffmpeg's win_amd64 wheel: a
 #      static ffmpeg), REPO, DSF_TC.
 set -euo pipefail
 O=$1

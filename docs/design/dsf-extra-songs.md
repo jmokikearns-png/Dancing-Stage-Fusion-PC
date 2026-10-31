@@ -14,7 +14,7 @@ Tested with "Tough Enough" (Vanilla Ninja):
   alphabetical list) with its banner, plate and difficulty stars. The
   preview plays. Gameplay runs: the stream comes from my sectors and the
   background shows. Failing a song and saving don't crash.
-- **Windows build (Wine, embedded dsfcore):** the music select and gameplay
+- **Windows build (embedded dsfcore):** the music select and gameplay
   both work, after the install race below was fixed.
 
 Also checked on the Linux build (life gauge 0x800BA33A held at 1000 to
@@ -26,7 +26,7 @@ below is of the runtime's own picture and sound).
 
 **Sync (fixed 2026-10-17).** The first pack had every step exactly one
 measure late (the player reported it as badly out of sync). How it was
-measured, under Wine with a debug core (`DSFCORE_DEBUG_PORT`): each frame's
+measured, on the Windows build with a debug core (`DSFCORE_DEBUG_PORT`): each frame's
 screenshot is tagged with the SPU output sample clock; the recorded audio
 is cross-correlated with the source song to place song time 0; an arrow
 counts as arriving when it covers the receptors' fixed outline pixels.
@@ -253,7 +253,7 @@ with `port/tools/extrasong/logo_matte.py`. For Tough Enough's jacket:
   three specks.
 
 The game runs its zoom, split and tile effects on it, as on the stock
-backgrounds (checked under Wine).
+backgrounds (checked on the Windows build).
 
 The builder also needs ffmpeg and ffprobe. The package targets the disc by
 SHA-256.
@@ -363,8 +363,8 @@ Chihuahua 2002 on k = 10, Danger! High Voltage on k = 9).
   for double): pressing each step on the
   frame nearest time - 3 ticks judges every step PERFECT (at offset 0 most
   are GREAT).  PARANOIA survivor EXPERT: 509 PERFECT, max combo 509,
-  10,000,000, AA, on Linux and on test8 + new core under Wine.
-- Recording under Wine in the cloud container: at PS1InternalResolution
+  10,000,000, AA, on Linux and on test8 + new core on the Windows build.
+- Recording on the build machine (no graphics card): at PS1InternalResolution
   1080p or 720p the game runs below full speed on llvmpipe while x11grab
   encodes (0.89 at 720p with veryfast, 0.96 with ultrafast); native with
   ultrafast is 0.997 (measured by aligning the recording's spectrogram

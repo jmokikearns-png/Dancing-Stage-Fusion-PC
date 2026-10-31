@@ -38,6 +38,6 @@ export const edit: {intro: number; outro: number; segments: Segment[]; outroPoin
 		'PC settings added to the game’s own OPTIONS menus',
 		'Timing paced by the sound card: no drift from the music',
 	],
-	outroNote: 'Recorded under Wine on a Linux machine with no graphics card, so the game is shown with its software renderer at native resolution. ' +
+	outroNote: 'Recorded on a machine with no graphics card, so the game is shown with its software renderer at native resolution. ' +
 		'With a graphics card its 3D renders at up to 1440p. Fan project, not affiliated with Konami. No game data is distributed.',
 };

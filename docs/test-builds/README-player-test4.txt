@@ -77,7 +77,7 @@ GRAPHICS
     refresh rate and VSync apply when you leave the page.
 
 NOT YET TESTED - PLEASE REPORT
-  This build was only tested in a Windows emulator (Wine) on a computer without
+  This build was only tested on a computer without
   a graphics card or sound card. Tested there:
     - the PC settings in the game's OPTIONS (values change, are saved, a new
       resolution applies), KEY CONFIG (a new key works in the game, clearing
