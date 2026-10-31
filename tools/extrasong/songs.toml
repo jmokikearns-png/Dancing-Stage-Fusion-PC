@@ -15,7 +15,9 @@
 #
 # stage = K: the song's own background animation on stage set K (1..17, not
 # 11, one song each).  script = N instead: stock song N's, fitted to it.
-# background / banner: your own picture instead of the simfile's.
+# background / banner: your own picture instead of the simfile's;
+# background = "@Name": one of this project's backgrounds (tools/extrasong/
+# art), lettered from the song's own banner.
 [[song]]
 stage = 1			# its own background animation, on stage set 1
 # script = 18			# (or: 321STARS's, fitted to this song)
@@ -53,6 +55,7 @@ master_id = 0x8034
 # (not in the PlayStation 2 or arcade pack: add a simfile of it to the folder)
 title = "Go West"
 artist = "Pet Shop Boys"
+background = "@BgGoWest"	# our own background, lettered from the song's banner
 
 [[song]]
 stage = 8			# its own background animation, on stage set 8
@@ -77,6 +80,7 @@ stage = 12			# its own background animation, on stage set 12
 master_id = 0x8037
 title = "Kids in America"
 artist = "Kim Wilde"
+background = "@BgKidsInAmerica"	# our own background, lettered from the song's banner
 
 # The simfile uses the DDR X scale; these are DDR EXTREME / Fusion's.
 [[song]]
@@ -114,3 +118,11 @@ master_id = 0x803b
 title = "Heaven and Earth"
 artist = "Pop!"
 unlock = { song = 0x8038, difficulties = ["Standard", "Heavy"] }
+
+background = "@BgHeavenEarth"	# our own background, lettered from the song's banner
+
+# New gameplay backgrounds for stock songs (no photographs of the artists),
+# lettered from the disc's own banner.
+[[stock]]
+index = 17			# Mickey (Toni Basil)
+background = "@BgMickey"

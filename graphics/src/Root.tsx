@@ -53,9 +53,13 @@ export const Root: React.FC = () => (
 				artistLogo: {src: 'logo_script.png', w: 820, h: 190}} satisfies SongBackgroundProps} />
 		{/* gameplay backgrounds without the artists' photos, PS1-version style */}
 		<Still id="BgKidsInAmerica" component={BgKidsInAmerica} width={1280} height={960} />
+		<Still id="BgKidsInAmericaBase" component={BgKidsInAmerica} width={1280} height={960} defaultProps={{base: true}} />
 		<Still id="BgGoWest" component={BgGoWest} width={1280} height={960} />
+		<Still id="BgGoWestBase" component={BgGoWest} width={1280} height={960} defaultProps={{base: true}} />
 		<Still id="BgHeavenEarth" component={BgHeavenEarth} width={1280} height={960} />
+		<Still id="BgHeavenEarthBase" component={BgHeavenEarth} width={1280} height={960} defaultProps={{base: true}} />
 		<Still id="BgMickey" component={BgMickey} width={1280} height={960} />
+		<Still id="BgMickeyBase" component={BgMickey} width={1280} height={960} defaultProps={{base: true}} />
 		<Still id="ThemeSplash" component={ThemeSplash} width={468} height={62} />
 	</>
 );

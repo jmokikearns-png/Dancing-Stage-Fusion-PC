@@ -12,6 +12,7 @@
  * left, and like the disc image it is the player's own, not to be shared.
  */
 #include <windows.h>
+#include <shlobj.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -363,6 +364,11 @@ static void set_icon( const uint8_t *exe )
 		                      group, 6 + 14 * NUM_ICON_SIZES );
 	if( h )
 		ok = EndUpdateResourceA( h, !ok ) && ok;
+	if( ok )	/* Explorer keeps showing a program's old icon from its cache: tell it */
+	{
+		SHChangeNotify( SHCNE_UPDATEITEM, SHCNF_PATHA, prog, NULL );
+		SHChangeNotify( SHCNE_ASSOCCHANGED, SHCNF_IDLIST, NULL, NULL );
+	}
 	printf( ok ? "  The program now has the game's icon.\n" : "  (Could not change the program's icon: it keeps its old one.)\n" );
 	for( i = 0; i < NUM_ICON_SIZES; ++i )
 		free( img[i] );

@@ -32,7 +32,7 @@ bash "$REPO/scripts/dsfpc/make_kit.sh" "$CB" "$S/kit"
 cp -r "$COMPILER" "$S/compiler"
 python3 "$REPO/tools/setup/make_badge.py" "$S/icon/badge.rgba"
 "$TC/bin/x86_64-w64-mingw32-gcc" -O2 -Wall -Wextra -Wno-format-truncation -static -s \
-  -o "$D/Setup.exe" "$REPO/tools/setup/setup.c"
+  -o "$D/Setup.exe" "$REPO/tools/setup/setup.c" -lshell32
 cp "$COMPILER/README.txt" "$D/licenses/GCC-and-Binutils-README.txt"
 
 # The new songs: "Build New Songs.bat" builds them from the player's

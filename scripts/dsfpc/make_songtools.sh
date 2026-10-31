@@ -31,7 +31,9 @@ rm -rf "${P:?}/include" "$P/libs" "$P/share" "$P/Tools" "$P/Scripts" "$P/etc" "$
        "$P/Lib/site-packages/numpy/"*/tests "$P/Lib/site-packages/numpy/tests" "$P/Lib/site-packages/numpy/f2py"
 
 T=$O/extrasong
-cp "$REPO/tools/extrasong/build_extrasong.py" "$REPO/tools/extrasong/konami_lz.py" "$REPO/tools/extrasong/plate_font.py" "$T/"
+cp "$REPO/tools/extrasong/build_extrasong.py" "$REPO/tools/extrasong/konami_lz.py" "$REPO/tools/extrasong/plate_font.py" \
+   "$REPO/tools/extrasong/backgrounds.py" "$REPO/tools/extrasong/banner_lettering.py" "$T/"
+cp -r "$REPO/tools/extrasong/art" "$T/art"	# our backgrounds, lettered at build time from the player's banners
 X=$(mktemp -d); trap 'rm -rf "${X:?}"' EXIT
 unzip -qo "$FFWHEEL" 'imageio_ffmpeg/binaries/*' -d "$X"
 cp "$X"/imageio_ffmpeg/binaries/ffmpeg-*.exe "$T/ffmpeg.exe"

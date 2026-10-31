@@ -60,6 +60,7 @@ from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import backgrounds
 import konami_lz
 import plate_font
 
@@ -69,6 +70,7 @@ EXE_SHA1 = 'ade130f4ab7cf5291e6a1606cb8d2fd51a01b1da'
 EXE_VBASE = 0x80019800			# vaddr = file offset + this
 TOC, TOC_N = 0x80092B50, 235
 SONGTAB, SONGS = 0x800AFE38, 20
+BANNER_TABLE = 0x800AA154		# per stock song: song id, its banner and plate items (music packs)
 MASTER, MASTER_N = 0x800A3EA0, 0x252
 PREVIEW_IDS = 50			# music ids: stock streams 1-23, stock previews 25-49
 STREAM_IDS = PREVIEW_IDS + 12		# extra streams after the extra previews (the plugin
@@ -127,6 +129,27 @@ def pack_items(b):
 		e = min([x for x in offs if x > s] + [len(b)])
 		out.append(b[s:e])
 	return out
+
+
+def stock_banner(exe, entry, k):
+	"""Stock song k's music-select banner, off the disc, as a PIL image."""
+	sid = exe.w(SONGTAB + 44 * k)
+	items = pack_items(entry(MUSIC_PACKS[0]))
+	for j in range(SONGS):
+		if exe.w(BANNER_TABLE + 12 * j) == sid:
+			t = konami_lz.decode(items[exe.w(BANNER_TABLE + 12 * j + 4)])
+			break
+	else:
+		sys.exit('stock song %d: no banner' % k)
+	clut = struct.unpack_from('<16H', t, 20)
+	off = 8 + struct.unpack_from('<I', t, 8)[0]
+	_, _, _, w, h = struct.unpack_from('<IHHHH', t, off)
+	w *= 4
+	px = t[off + 12:off + 12 + w * h // 2]
+	pal = [((c & 31) << 3, ((c >> 5) & 31) << 3, ((c >> 10) & 31) << 3) for c in clut]
+	img = Image.new('RGB', (w, h))
+	img.putdata([pal[(px[i >> 1] >> (4 * (i & 1))) & 15] for i in range(w * h)])
+	return img
 
 
 def build_pack(items):
@@ -733,8 +756,10 @@ class Song:
 		stem = os.path.basename(self.base)
 		self.banner_png = self.path('banner') if 'banner' in self.cfg else \
 			song_file(self.dir, stem, self.sm['banner'], ('.png', '-bn.png', '-banner.png', ' banner.png'), None)
-		self.bg_png = self.path('background') if 'background' in self.cfg else \
-			song_file(self.dir, stem, self.sm['background'], ('-bg.png', '-background.png', ' bg.png', ' background.png'), None)
+		own_bg = song_file(self.dir, stem, self.sm['background'], ('-bg.png', '-background.png', ' bg.png', ' background.png'), None)
+		bgv = self.cfg.get('background', '')
+		self.bg_png = bgv if bgv.startswith('@') else self.path('background') if bgv else own_bg
+		self.own_bg = own_bg
 		if not self.banner_png or not self.bg_png:
 			sys.exit('%s: no %s picture (give it in songs.toml)' % (self.dir, 'banner' if not self.banner_png else 'background'))
 
@@ -809,7 +834,16 @@ class Song:
 			events, dropped = retime_events(donor_entry[1], donor_entry[0], dens, float(self.length))
 			self.script = ('from stock song %d' % donor, len(parse_events(events)[1]),
 			               '%d past the end dropped' % dropped if dropped else '')
-		bg = konami_lz.encode(background_tim(Image.open(self.bg_png)))
+		if self.bg_png.startswith('@'):	# one of the project's backgrounds, lettered from this song's banner
+			bg_img = backgrounds.compose(self.bg_png[1:], Image.open(self.banner_png))
+			if bg_img is None:
+				if not self.own_bg:
+					sys.exit('%s: no lettering on its banner for %s, and no background of its own' % (self.title, self.bg_png))
+				print('%s: no lettering on its banner for %s: its own background instead' % (self.title, self.bg_png))
+				bg_img = Image.open(self.own_bg)
+		else:
+			bg_img = Image.open(self.bg_png)
+		bg = konami_lz.encode(background_tim(bg_img))
 		self.entries = [build_pack([slot0, events, bg, pack_items(entry(68 + 5 * UI_DONOR + k))[3]])
 		                for k in range(LANG_ENTRIES)]
 		# ---- graphics ----
@@ -950,7 +984,13 @@ def main():
 		if not 0 <= k < SONGS:
 			sys.exit('stock index %d is not one of the 20 songs' % k)
 		group = exe.w(SONGTAB + 44 * k + 36)
-		bg = konami_lz.encode(background_tim(Image.open(os.path.join(root, st['background']))))
+		if st['background'].startswith('@'):	# lettered from the disc's own banner of the song
+			bg_img = backgrounds.compose(st['background'][1:], stock_banner(exe, entry, k))
+			if bg_img is None:
+				sys.exit('stock song %d: no lettering on its banner for %s' % (k, st['background']))
+		else:
+			bg_img = Image.open(os.path.join(root, st['background']))
+		bg = konami_lz.encode(background_tim(bg_img))
 		for p in sorted({exe.w(group + 4 * l) for l in range(6)}):
 			if not (TOC <= p < TOC + 8 * TOC_N and (p - TOC) % 8 == 0):
 				sys.exit('stock song %d: its entries are not in the TOC' % k)

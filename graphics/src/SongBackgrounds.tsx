@@ -15,6 +15,11 @@ import chewy from '@fontsource/chewy/files/chewy-latin-400-normal.woff2';
  * banner_lettering.py) into lettering/ in the public dir, so render with
  * --public-dir pointing at the player's art.
  *
+ * base: without the banners' lettering and the finishing halftone and
+ * vignette - the art the release ships; Build New Songs.bat cuts the
+ * lettering from the player's banners and finishes the picture
+ * (tools/extrasong/backgrounds.py, which mirrors these numbers).
+ *
  * 1280x960, four times the game's 320x240; build_extrasong.py scales them
  * down and puts them on 256 colours, so shapes are bold and flat. */
 
@@ -82,7 +87,7 @@ const Halftone: React.FC<{opacity: number; size?: number; color?: string; mask?:
 
 /* ---- Kids in America (Kim Wilde, 1981): an American night drive, new-wave
  * style; chrome lettering split into red and cyan, the banner's red ellipse ---- */
-export const BgKidsInAmerica: React.FC = () => {
+export const BgKidsInAmerica: React.FC<{base?: boolean}> = ({base = false}) => {
 	useFonts();
 	const HZ = 610;	/* horizon */
 	const r = rng(7);
@@ -142,16 +147,16 @@ export const BgKidsInAmerica: React.FC = () => {
 				<ellipse cx={640} cy={190} rx={560} ry={140} fill="url(#kEllipse)" stroke="#0b0320" strokeWidth={10} />
 				<ellipse cx={600} cy={140} rx={420} ry={52} fill="#fff" opacity={0.18} />
 			</svg>
-			<Banner src="kia.png" x={150} y={58} w={980} shadow="rgba(11,3,32,0.85)" />
-			<Halftone opacity={0.22} size={10} mask="linear-gradient(180deg, transparent 55%, #000 100%)" />
-			<AbsoluteFill style={{background: 'radial-gradient(ellipse 85% 85% at 50% 45%, transparent 62%, rgba(4,0,16,0.6) 100%)'}} />
+			{!base && <Banner src="kia.png" x={150} y={58} w={980} shadow="rgba(11,3,32,0.85)" />}
+			{!base && <Halftone opacity={0.22} size={10} mask="linear-gradient(180deg, transparent 55%, #000 100%)" />}
+			{!base && <AbsoluteFill style={{background: 'radial-gradient(ellipse 85% 85% at 50% 45%, transparent 62%, rgba(4,0,16,0.6) 100%)'}} />}
 		</AbsoluteFill>
 	);
 };
 
 /* ---- Go West (Pet Shop Boys, 1993): a constructivist poster; red rays,
  * the star, the onion domes, everything pointing west ---- */
-export const BgGoWest: React.FC = () => {
+export const BgGoWest: React.FC<{base?: boolean}> = ({base = false}) => {
 	useFonts();
 	const CREAM = '#f3e6c6', RED = '#c8102e', INK = '#1a0b0b', GOLD = '#ffc21a';
 	const SX = 1010, SY = 300;	/* the star */
@@ -207,17 +212,17 @@ export const BgGoWest: React.FC = () => {
 			{/* the banner's wordmark, slanted upward over the rays */}
 			<div style={{position: 'absolute', left: 16, top: 150, width: 920, height: 190, background: CREAM, border: `12px solid ${INK}`,
 				transform: 'rotate(-7deg)', boxShadow: `16px 18px 0 ${RED}`}} />
-			<Banner src="gowest_title.png" x={46} y={196} w={860} rot={-7} shadow="rgba(26,11,11,0.6)" />
-			<Banner src="gowest_artist.png" x={590} y={555} w={660} rot={-7.6} shadow="rgba(0,0,0,0.6)" />
-			<Halftone opacity={0.18} size={12} color="#5a0a0a" />
-			<AbsoluteFill style={{background: 'radial-gradient(ellipse 90% 90% at 50% 45%, transparent 65%, rgba(40,8,8,0.45) 100%)'}} />
+			{!base && <Banner src="gowest_title.png" x={46} y={196} w={860} rot={-7} shadow="rgba(26,11,11,0.6)" />}
+			{!base && <Banner src="gowest_artist.png" x={590} y={555} w={660} rot={-7.6} shadow="rgba(0,0,0,0.6)" />}
+			{!base && <Halftone opacity={0.18} size={12} color="#5a0a0a" />}
+			{!base && <AbsoluteFill style={{background: 'radial-gradient(ellipse 90% 90% at 50% 45%, transparent 65%, rgba(40,8,8,0.45) 100%)'}} />}
 		</AbsoluteFill>
 	);
 };
 
 /* ---- Heaven and Earth (Pop!, 2004): the video's polka-dot set without the
  * dancers, clouds and light above; the banner's navy title and yellow POP! ---- */
-export const BgHeavenEarth: React.FC = () => {
+export const BgHeavenEarth: React.FC<{base?: boolean}> = ({base = false}) => {
 	useFonts();
 	const DOTS = ['#ff4f9a', '#ffcf2a', '#2fc6ff', '#7ad63a', '#ff8a2a', '#a66cff', '#ff3b3b', '#25d3a8'];
 	const WALL = 600;	/* wall meets floor */
@@ -275,16 +280,16 @@ export const BgHeavenEarth: React.FC = () => {
 			{/* the banner's HEAVEN AND EARTH and POP! on a white card */}
 			<div style={{position: 'absolute', left: 40, top: 330, width: 1200, height: 190, background: '#ffffff', borderRadius: 30,
 				border: '10px solid #0d1650', boxShadow: '14px 16px 0 rgba(13,22,80,0.55)'}} />
-			<Banner src="he_title.png" x={70} y={366} w={1140} shadow="rgba(13,22,80,0.35)" />
-			<Banner src="he_pop.png" x={810} y={672} w={440} rot={-8} shadow="rgba(13,22,80,0.6)" />
-			<AbsoluteFill style={{background: 'radial-gradient(ellipse 90% 90% at 50% 45%, transparent 70%, rgba(13,22,80,0.25) 100%)'}} />
+			{!base && <Banner src="he_title.png" x={70} y={366} w={1140} shadow="rgba(13,22,80,0.35)" />}
+			{!base && <Banner src="he_pop.png" x={810} y={672} w={440} rot={-8} shadow="rgba(13,22,80,0.6)" />}
+			{!base && <AbsoluteFill style={{background: 'radial-gradient(ellipse 90% 90% at 50% 45%, transparent 70%, rgba(13,22,80,0.25) 100%)'}} />}
 		</AbsoluteFill>
 	);
 };
 
 /* ---- Mickey (Toni Basil, 1981): a cheerleading routine without the
  * cheerleader; pom-poms, a megaphone, stars and the banner's lettering ---- */
-export const BgMickey: React.FC = () => {
+export const BgMickey: React.FC<{base?: boolean}> = ({base = false}) => {
 	useFonts();
 	const INK = '#2a0626';
 	const pompom = (x: number, y: number, R: number, a: string, b: string, k: number) => {
@@ -333,10 +338,10 @@ export const BgMickey: React.FC = () => {
 				{pompom(200, 780, 150, '#ffffff', '#2fc6ff', 1)}
 			</svg>
 			{/* the banner's Mickey / Toni Basil, bottom right as on the stock background */}
-			<Banner src="mickey_title.png" x={340} y={540} w={880} rot={-6} shadow="rgba(42,6,38,0.7)" />
-			<Banner src="mickey_artist.png" x={520} y={770} w={620} rot={-6} shadow="rgba(42,6,38,0.7)" />
-			<Halftone opacity={0.2} size={12} color="#6a0628" />
-			<AbsoluteFill style={{background: 'radial-gradient(ellipse 88% 88% at 50% 45%, transparent 64%, rgba(60,0,24,0.55) 100%)'}} />
+			{!base && <Banner src="mickey_title.png" x={340} y={540} w={880} rot={-6} shadow="rgba(42,6,38,0.7)" />}
+			{!base && <Banner src="mickey_artist.png" x={520} y={770} w={620} rot={-6} shadow="rgba(42,6,38,0.7)" />}
+			{!base && <Halftone opacity={0.2} size={12} color="#6a0628" />}
+			{!base && <AbsoluteFill style={{background: 'radial-gradient(ellipse 88% 88% at 50% 45%, transparent 64%, rgba(60,0,24,0.55) 100%)'}} />}
 		</AbsoluteFill>
 	);
 };
