@@ -15,7 +15,7 @@ same game changes to a PlayStation disc image for DuckStation or real hardware.
 
 > **No game data is included.** You need your own copy of
 > *Dancing Stage Fusion* (Europe, SLES-04163) as a disc image, and simfile
-> packs for both the console and the arcade versions of *Dancing Stage
+> packs for both the PlayStation 2 and the arcade versions of *Dancing Stage
 > Fusion*. Everything is built on your own computer from your own files.
 
 ## Status
@@ -63,8 +63,8 @@ yourself needs the steps under [Building](#building).
 
 - *Dancing Stage Fusion* (Europe, SLES-04163) as a raw `.bin` + `.cue` image
   (MODE2/2352).
-- **Simfile packs for both versions of *Dancing Stage Fusion*: the console
-  (PlayStation) version and the arcade version.** The arcade songs are the
+- **Simfile packs for both the PlayStation 2 and the arcade versions of
+  *Dancing Stage Fusion*.** The arcade songs are the
   heart of this project, so these are required, not optional. Each song is a
   StepMania simfile folder: the `.sm` step chart, the audio (`.ogg`, `.mp3`
   or `.wav`), a 256x80 banner and a 320x240 background. This project does not
