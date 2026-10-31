@@ -100,6 +100,7 @@ def main():
 		(0x8008CE50, ew(0x8008CE50), j(2, s['dlx_workout_slot'])), (0x8008CE54, ew(0x8008CE54), 0),
 		(0x8008AA00, ew(0x8008AA00), j(3, s['dlx_workout_lz'])),
 		(0x80023FC0, ew(0x80023FC0), j(2, s['dlx_load_site'])), (0x80023FC4, ew(0x80023FC4), 0),
+		(0x80050364, ew(0x80050364), j(3, s['dlx_arrow_sprite'])),	# the music select's arrows: NEW!!
 	]
 	# the workout loader's inline slot formula -> a call (x, y, clut x, clut y at 0x28..0x34(sp))
 	addiu = lambda rt, rs, imm: (9 << 26) | (rs << 21) | (rt << 16) | (imm & 0xFFFF)

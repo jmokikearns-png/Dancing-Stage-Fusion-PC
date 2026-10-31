@@ -304,3 +304,49 @@ void dlx_records_slot( unsigned char *slot )
 	slot[0xC] = (unsigned char)x; slot[0xD] = (unsigned char)(x >> 8);
 	slot[0xE] = (unsigned char)y; slot[0xF] = (unsigned char)(y >> 8);
 }
+
+/* ---- NEW!! beside an unlocked song not yet played ----------------------
+ * The music select's sprite sheet (pack 201.. item 4, the arrows' texture
+ * page) holds a "New!!" sprite at u 8, v 96, 64 x 25 that the game never
+ * draws.  The select draws its two arrows with the sprite routine
+ * 0x80027C84 (x, y, w, h; u, v, clut x, clut y, colour, OT slot on the
+ * stack) from 0x80050364: that call comes here, and after the right arrow
+ * (u 52) the song under the cursor gets NEW!! when it is an extra song with
+ * an unlock condition, unlocked, and has no save record yet (one is written
+ * when a play is cleared).  The song under the cursor: the list
+ * [0x800A9E10], number at +0x18 + 4 * [+0x14]. */
+typedef void (*SprtFn)( int x, int y, int w, int h, int u, int v, int cx, int cy, int colour, int ot );
+#define GAME_SPRT	((SprtFn)0x80027C84u)
+#define SELECT_LIST	(*(unsigned char *volatile *)0x800A9E10u)
+
+static int played( const struct DlxExtra *e )
+{
+	const unsigned char *save = SAVE_PTR;
+	int i;
+	if( ((unsigned)save & 0xFFE00000u) != 0x80000000u )
+		return 1;
+	for( i = 0; i < 32; ++i )
+		if( (*(const unsigned *)(save + 0x90 + 0x50 * i + 0x24) & 0xFFFF) == (e->record_id & 0xFFFF) )
+			return 1;
+	return 0;
+}
+
+static int cursor_is_new( void )
+{
+	const unsigned char *list = SELECT_LIST;
+	unsigned number, k;
+	if( ((unsigned)list & 0xFFE00000u) != 0x80000000u )
+		return 0;
+	number = *(const unsigned *)(list + 0x18 + 4 * *(const unsigned *)(list + 0x14));
+	for( k = 0; k < dlx_num_extra; ++k )
+		if( dlx_extra[k].number == number )
+			return dlx_extra[k].unlock_id && unlocked( &dlx_extra[k] ) && !played( &dlx_extra[k] );
+	return 0;
+}
+
+void dlx_arrow_sprite( int x, int y, int w, int h, int u, int v, int cx, int cy, int colour, int ot )
+{
+	GAME_SPRT( x, y, w, h, u, v, cx, cy, colour, ot );
+	if( u == 52 && cursor_is_new() )
+		GAME_SPRT( -136, y - 34, 64, 25, 8, 96, cx, cy, colour, ot );
+}
