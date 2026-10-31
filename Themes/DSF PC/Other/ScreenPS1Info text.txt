@@ -66,8 +66,6 @@ The PCSX-Redux authors
 FONTS
 Exo 2 by Natanael Gama, Inter by Rasmus Andersson, Lobster by Pablo Impallari
 
-Theme graphics made with Remotion.
-
 [LICENSES]
 This port is free and for personal, non-commercial use: PSXRecomp is under the PolyForm Noncommercial License 1.0.0.
 
