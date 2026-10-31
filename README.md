@@ -145,12 +145,19 @@ Tools: CMake, Ninja, the conda-forge compilers above, Python 3 with Pillow.
 ## Building the new songs
 
 The new songs are built once, from your simfile packs, into a song pack: one
-pack works for both the PC version and the Deluxe disc. (A one-click song
-builder for the release is in the works; until then it is these steps.)
+pack works for both the PC version and the Deluxe disc.
 
-You need Python 3.11 or newer with Pillow and numpy (`pip install pillow numpy`), ffmpeg and
-ffprobe on your `PATH`, and a C compiler available as `cc` (it builds the
-small PlayStation audio encoder in `tools/extrasong/psxaudio.c`).
+**With the release:** put each song's simfile folder in the `simfiles` folder
+(the names are in `simfiles\PUT_YOUR_SIMFILES_HERE.txt`) and run
+`Build New Songs.bat`. It runs the song builder with the tools in `songtools`
+(Python with numpy and Pillow, FFmpeg, and the PlayStation audio encoder),
+and installs the pack in the game. Nothing to install.
+
+**From source:**
+
+You need Python 3.11 or newer with Pillow and numpy (`pip install pillow numpy`),
+ffmpeg on your `PATH`, and a C compiler available as `cc` (it builds the small
+PlayStation audio encoder in `tools/extrasong/psxaudio.c`).
 
 1. Make a folder, e.g. `my-songs`, and copy
    [`tools/extrasong/songs.toml`](tools/extrasong/songs.toml) into it. It lists

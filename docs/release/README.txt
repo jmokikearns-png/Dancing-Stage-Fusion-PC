@@ -79,10 +79,16 @@ GRAPHICS
                   songs slow down.
 
 THE NEW SONGS
-  The new songs are built from your simfile packs of the PlayStation 2 and
-  arcade versions of Dancing Stage Fusion into a song pack; see "Building
-  the new songs" on the project page. Copy the pack's contents into
-  mods\installed\dsf.extrasongs\1.0.0\ in this folder.
+  Songs the PlayStation version never had, built from your own simfile packs
+  of the PlayStation 2 and arcade versions of Dancing Stage Fusion:
+  1. Put each song's simfile folder in the "simfiles" folder, named as
+     simfiles\PUT_YOUR_SIMFILES_HERE.txt lists (or change the "dir" lines in
+     simfiles\songs.toml). A folder holds the .sm step chart, the audio
+     (.ogg, .mp3 or .wav), a 256x80 banner and a 320x240 background.
+  2. Run "Build New Songs.bat" (after Setup.exe). It converts the charts,
+     music and pictures to the game's own formats with the tools in
+     "songtools" (about two minutes) and puts the song pack in the game.
+  The song pack holds your music and charts: for your own use only.
 
 FILES
   Data\StepMania.ini   settings          Data\Keymaps.ini   key/pad mappings
@@ -96,6 +102,8 @@ LICENCES
   domain/Boost-style); PSXRecomp (PolyForm Noncommercial 1.0.0); OpenBIOS
   (MIT); SDL3 (zlib); zlib, libpng, libjpeg-turbo, Ogg/Vorbis (BSD-style);
   GCC and GNU Binutils (GPL 3, GCC Runtime Library Exception; see
-  licenses\GCC-and-Binutils-README.txt for their source). See the
+  licenses\GCC-and-Binutils-README.txt for their source); the song tools:
+  Python (PSF), numpy (BSD), Pillow (MIT-CMU), FFmpeg (GPL; see
+  songtools\README.txt). See the
   "licenses" folder. Fonts: Exo 2, Inter, Lobster (SIL Open Font License 1.1).
   Dancing Stage Fusion (c) 1998 2004 Konami. Not affiliated with Konami.

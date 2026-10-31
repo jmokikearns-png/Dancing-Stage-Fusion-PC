@@ -517,7 +517,7 @@ def assign_palettes(lib, n, seed=0x0D5F):
 def measure_energy(audio, timing, lead, n):
 	"""Loudness per tempo-map measure of the song's audio (RMS, relative)."""
 	import numpy as np
-	raw = subprocess.check_output(['ffmpeg', '-v', 'error', '-i', audio, '-ac', '1', '-ar', '11025', '-f', 's16le', '-'])
+	raw = subprocess.check_output([FFMPEG, '-v', 'error', '-i', audio, '-ac', '1', '-ar', '11025', '-f', 's16le', '-'])
 	x = np.frombuffer(raw, np.int16).astype(float)
 	out = []
 	for M in range(n):
@@ -603,10 +603,36 @@ def tempo_map(lead, last, timing, pad):
 
 
 # ---- audio ------------------------------------------------------------------
+def bundled(name):
+	"""A program shipped beside this script (the release's song tools:
+	ffmpeg.exe, psxaudio.exe), else the one on PATH."""
+	for n in (name + '.exe', name):
+		p = os.path.join(HERE, n)
+		if os.path.isfile(p):
+			return p
+	return name
+
+
+FFMPEG = os.environ.get('FFMPEG') or bundled('ffmpeg')
+
+
 def tool(tmp):
+	exe = os.environ.get('PSXAUDIO') or bundled('psxaudio')
+	if exe != 'psxaudio':
+		return exe
 	exe = os.path.join(tmp, 'psxaudio')
 	subprocess.check_call(['cc', '-O2', '-o', exe, os.path.join(HERE, 'psxaudio.c')])
 	return exe
+
+
+def duration(audio):
+	"""The audio's length in seconds, as its container states it (what
+	ffprobe's format=duration gives; read from ffmpeg, which every build has)."""
+	r = subprocess.run([FFMPEG, '-hide_banner', '-i', audio], capture_output=True, text=True, errors='replace')
+	m = re.search(r'Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)', r.stderr)
+	if not m:
+		sys.exit('%s: ffmpeg cannot read it' % audio)
+	return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
 
 
 def pcm(src, rate, out, start=None, length=None, pad_front=0.0, fade=0.0):
@@ -615,7 +641,7 @@ def pcm(src, rate, out, start=None, length=None, pad_front=0.0, fade=0.0):
 		af.append('adelay=%d|%d' % (int(pad_front * 1000), int(pad_front * 1000)))
 	if fade > 0 and length:
 		af.append('afade=t=in:d=%g,afade=t=out:st=%g:d=%g' % (fade, length - fade, fade))
-	cmd = ['ffmpeg', '-loglevel', 'error', '-y']
+	cmd = [FFMPEG, '-loglevel', 'error', '-y']
 	if start is not None:
 		cmd += ['-ss', '%g' % start]
 	if length:
@@ -679,8 +705,7 @@ class Song:
 	def build(self, entry, psxaudio, tmp, font, stock_plate, blobs):
 		sm, report = self.sm, []
 		timing = Timing(sm)
-		dur = float(subprocess.check_output(['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
-		                                     '-of', 'default=nw=1:nk=1', self.audio]))
+		dur = duration(self.audio)
 		bpm0 = sm['bpms'][0][1]
 		first = min(m for c in sm['charts'] for m, rows in enumerate(c['measures'])
 		            if any(any(x in '124' for x in r) for r in rows))
@@ -776,6 +801,10 @@ def main():
 	a = ap.parse_args()
 	cfg = tomllib.load(open(a.songs, 'rb'))
 	root = os.path.dirname(os.path.abspath(a.songs))
+	missing = [c['dir'] for c in cfg['song'] if not os.path.isdir(os.path.join(root, c['dir']))]
+	if missing:
+		sys.exit('These song folders are missing (next to %s):\n  %s\nPut each song\'s simfile folder there with that name, '
+		         'or change its "dir" line.' % (os.path.basename(a.songs), '\n  '.join(missing)))
 	songs = [Song(c, root) for c in cfg['song']]
 	if SONGS + len(songs) > MAX_SONGS:
 		sys.exit('the game holds %d songs: at most %d extra' % (MAX_SONGS, MAX_SONGS - SONGS))
@@ -905,7 +934,7 @@ def main():
 	# and CLEARED shows over the rest of the music (ORION.78: 80, its last
 	# step at 75 and tempo map end at 79; with ORION's 80 a longer song
 	# stopped at measure 80).
-	with open(os.path.join(a.out, 'data', 'extrasongs.txt'), 'w', encoding='latin-1') as f:
+	with open(os.path.join(a.out, 'data', 'extrasongs.txt'), 'w', encoding='latin-1', newline='\n') as f:
 		f.write('# Read by port/core/dsfcore_extrasong.cpp.  Numbers are hex.\n')
 		f.write('media %x %x\n' % (base, lba - base))
 		for k, (off, size) in enumerate(blobs.index):
@@ -934,7 +963,7 @@ def main():
 	media_size = os.path.getsize(media_path)
 	media_sha = hashlib.sha256(open(media_path, 'rb').read()).hexdigest()
 	disc_sha = hashlib.sha256(open(disc.bin, 'rb').read()).hexdigest()
-	with open(os.path.join(a.out, 'manifest.toml'), 'w') as f:
+	with open(os.path.join(a.out, 'manifest.toml'), 'w', encoding='utf-8', newline='\n') as f:
 		f.write('format_version = 9\nid = "dsf.extrasongs"\nversion = "1.0.0"\n'
 		        'name = "Extra songs"\nauthor = "local"\n'
 		        'description = "%d songs added to the song list (made from your own files and disc; never share it)."\n'
