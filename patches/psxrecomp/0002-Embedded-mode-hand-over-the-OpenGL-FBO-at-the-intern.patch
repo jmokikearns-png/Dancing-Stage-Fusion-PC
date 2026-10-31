@@ -1,0 +1,33 @@
+From f46b18388272a86d7d610cdd48574b0f6628eaae Mon Sep 17 00:00:00 2001
+From: DSF PC Port <jmokikearns@gmail.com>
+Date: Fri, 16 Oct 2026 21:11:54 +0000
+Subject: [PATCH 02/11] Embedded mode: hand over the OpenGL FBO at the internal
+ resolution
+
+---
+ runtime/src/main.cpp | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/runtime/src/main.cpp b/runtime/src/main.cpp
+index 5c7f22b9..4c744893 100644
+--- a/runtime/src/main.cpp
++++ b/runtime/src/main.cpp
+@@ -8350,7 +8350,14 @@ static void embed_vblank(void) {
+         w = (int)di.width * scale;
+         h = (int)di.height * scale;
+         buf.resize((size_t)w * (size_t)h);
+-        if (scale > 1) {
++        if (g_headless_opengl && g_gl_active) {
++            /* The internal resolution lives in the GL FBO; the generic
++             * readout is native there. */
++            if (gl_renderer_capture_display_hires(buf.data(), w * (int)sizeof(uint32_t),
++                                                  (int)di.display_x, (int)di.display_y,
++                                                  (int)di.width, (int)di.height) != w * h)
++                flags = PSX_EMBED_FRAME_BLANK;
++        } else if (scale > 1) {
+             gr_render_display_hires(buf.data(), w * (int)sizeof(uint32_t),
+                                     (int)di.display_x, (int)di.display_y,
+                                     (int)di.width, (int)di.height);
+-- 
+2.43.0
+

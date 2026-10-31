@@ -1,0 +1,553 @@
+From d442631e99ab522c79b8976521a209e9f77150c2 Mon Sep 17 00:00:00 2001
+From: DSF PC Port <jmokikearns@gmail.com>
+Date: Sat, 24 Oct 2026 04:02:03 +0000
+Subject: [PATCH 04/11] Video timing: the hardware's frame periods, by standard
+ and interlace
+
+The VBlank period was a round 33.8688 MHz / 60 or / 50 Hz. On hardware it
+is lines x line length on the video clock (mednafen psx/gpu.cpp): NTSC
+263 lines (262.5 per field interlaced) of 3412.5 clocks at 53.693182 MHz,
+PAL 314 (312.5) of 3405 at 53.203425 MHz: NTSC 59.826 / 59.940 Hz, PAL
+49.761 / 50.000 Hz. GP1(08h) bit 5 now selects the field period too.
+
+Dancing Stage Fusion (PAL, progressive) adds 20.096 ms of song clock per
+VBlank; at 50 Hz its steps ran 0.48% ahead of its music (about 0.4 s by
+the end of a song). Measured after: 75.001 ticks per second of its audio
+(was 75.360), no drift from first note to last. Host pacing follows the
+live period.
+---
+ runtime/include/psx_video_timing.h    |  64 ++++--
+ runtime/src/gpu.c                     |  14 +-
+ runtime/src/main.cpp                  |   9 +-
+ runtime/src/psx_video_timing.c        |  10 +-
+ runtime/tests/test_psx_video_timing.c | 313 ++++++++++++++------------
+ 5 files changed, 225 insertions(+), 185 deletions(-)
+
+diff --git a/runtime/include/psx_video_timing.h b/runtime/include/psx_video_timing.h
+index 1769fd13..f154f46e 100644
+--- a/runtime/include/psx_video_timing.h
++++ b/runtime/include/psx_video_timing.h
+@@ -1,22 +1,32 @@
+ #ifndef PSXRECOMP_PSX_VIDEO_TIMING_H
+ #define PSXRECOMP_PSX_VIDEO_TIMING_H
+ 
+-/* Frame timing follows the GPU's live video standard.
++/* Frame timing follows the GPU's live video mode.
+  *
+- * On hardware the scanline count per frame (NTSC 263 / PAL 314) and so the
+- * VBlank rate come from GP1(08h) bit 3, whatever the console or disc region.
+- * The GPU reports every change of that bit here (GP1(08h), GP1(00h) reset,
+- * power-on, snapshot restore); VBlank scheduling (interrupts.c), the Timer 1
+- * HBlank clock (timers.c) and host frame pacing (main.cpp) all read it.
++ * On hardware the frame (field) period comes from GP1(08h): bit 3 selects
++ * the NTSC or PAL video clock and line count, bit 5 interlace, whatever the
++ * console or disc region.  The GPU reports every change of those bits here
++ * (GP1(08h), GP1(00h) reset, power-on, snapshot restore); VBlank scheduling
++ * (interrupts.c), the Timer 1 HBlank clock (timers.c) and host frame pacing
++ * (main.cpp) all read it.
+  *
+- * The frame period is live: the frame in progress ends once its elapsed
+- * cycles reach the CURRENT standard's period, the way a scanline counter
+- * running against the new line total would end the field. From the next
+- * frame on the period is exactly the new standard's. No extra state is
+- * needed across savestates: the GPU snapshot carries the mode bit.
++ * The periods are the hardware's, as mednafen's PSX GPU (psx/gpu.cpp, the
++ * reference) runs them: CPU 33.8688 MHz (44100 * 768); video clock NTSC
++ * 53.693182 MHz (315/88 * 15), PAL 53.203425 MHz; a scanline is 3412.5
++ * video clocks NTSC (3412 and 3413 alternating) and 3405 PAL; a frame is
++ * 263 / 314 lines progressive, 262.5 / 312.5 lines per field interlaced
++ * (fields alternate one line longer and shorter).  In CPU cycles, rounded:
++ *   NTSC progressive 566120.76 (59.826 Hz), interlaced 565044.48 (59.940 Hz)
++ *   PAL  progressive 680623.57 (49.761 Hz), interlaced 677372.18 (50.000 Hz)
++ *   line NTSC 2152.55, PAL 2167.59
++ * Games time themselves by these: Dancing Stage Fusion (PAL, progressive)
++ * advances its song clock 15072 / 750000 s (20.096 ms) per VBlank.
+  *
+- * The periods keep the framework's round 60/50 Hz constants so NTSC timing
+- * is bit-identical to the region-only model this replaces. */
++ * The frame period is live: the frame in progress ends once its elapsed
++ * cycles reach the CURRENT mode's period, the way a scanline counter running
++ * against the new line total would end the field.  From the next frame on
++ * the period is exactly the new mode's.  No extra state is needed across
++ * savestates: the GPU snapshot carries the mode bits. */
+ 
+ #include <stdint.h>
+ 
+@@ -24,17 +34,20 @@
+ extern "C" {
+ #endif
+ 
+-#define PSX_VBLANK_CYCLES_NTSC   564480u  /* 33.8688 MHz / 60 Hz */
+-#define PSX_VBLANK_CYCLES_PAL    677376u  /* 33.8688 MHz / 50 Hz */
++#define PSX_VBLANK_CYCLES_NTSC   566121u  /* progressive, 59.826 Hz */
++#define PSX_VBLANK_CYCLES_NTSC_I 565044u  /* interlaced field, 59.940 Hz */
++#define PSX_VBLANK_CYCLES_PAL    680624u  /* progressive, 49.761 Hz */
++#define PSX_VBLANK_CYCLES_PAL_I  677372u  /* interlaced field, 50.000 Hz */
+ #define PSX_LINES_PER_FRAME_NTSC 263u
+ #define PSX_LINES_PER_FRAME_PAL  314u
+-/* Timer 1 HBlank clock: one frame's cycles spread over its scanlines,
+- * truncated (NTSC 564480 / 263 = 2146, PAL 677376 / 314 = 2157). */
+-#define PSX_HBLANK_CYCLES_NTSC   (PSX_VBLANK_CYCLES_NTSC / PSX_LINES_PER_FRAME_NTSC)
+-#define PSX_HBLANK_CYCLES_PAL    (PSX_VBLANK_CYCLES_PAL / PSX_LINES_PER_FRAME_PAL)
++/* Timer 1 HBlank clock: one scanline, rounded (2152.55 / 2167.59). */
++#define PSX_HBLANK_CYCLES_NTSC   2153u
++#define PSX_HBLANK_CYCLES_PAL    2168u
++/* CPU cycles per second, for host pacing (period_ms = cycles * 1000 / this). */
++#define PSX_CPU_CLOCK_HZ         33868800u
+ 
+-/* Live values for the current standard. Written only through
+- * psx_video_timing_set_pal(); read on hot paths. */
++/* Live values for the current mode. Written only through
++ * psx_video_timing_set_mode(); read on hot paths. */
+ extern uint32_t g_psx_vblank_cycles;
+ extern uint32_t g_psx_hblank_cycles;
+ extern uint32_t g_psx_lines_per_frame;
+@@ -44,8 +57,13 @@ static inline int psx_gp1_display_mode_is_pal(uint32_t word) {
+     return (int)((word >> 3) & 1u);
+ }
+ 
+-/* Select the video standard. Returns 1 when it changed. */
+-int      psx_video_timing_set_pal(int pal);
++/* GP1(08h) display-mode word -> 1 when bit 5 selects interlace. */
++static inline int psx_gp1_display_mode_is_interlaced(uint32_t word) {
++    return (int)((word >> 5) & 1u);
++}
++
++/* Select the video standard and interlace. Returns 1 when the period changed. */
++int      psx_video_timing_set_mode(int pal, int interlaced);
+ int      psx_video_timing_is_pal(void);
+ /* Bumped on every change; host-side observers (pacing) compare it. */
+ uint32_t psx_video_timing_generation(void);
+diff --git a/runtime/src/gpu.c b/runtime/src/gpu.c
+index 8101a9e8..7d930665 100644
+--- a/runtime/src/gpu.c
++++ b/runtime/src/gpu.c
+@@ -3855,8 +3855,8 @@ static void gpu_reset_state(int clear_vram) {
+     hres2 = 0;
+     hres1 = 0;
+     vres = 0;
+-    video_mode = 0;   /* GP1(00h) resets GP1(08h) to 0 = NTSC */
+-    (void)psx_video_timing_set_pal(0);
++    video_mode = 0;   /* GP1(00h) resets GP1(08h) to 0 = NTSC, progressive */
++    (void)psx_video_timing_set_mode(0, 0);
+     display_depth = 0;
+     vertical_interlace = 0;
+ 
+@@ -3885,13 +3885,13 @@ static void gpu_reset_state(int clear_vram) {
+ void gpu_init(void) {
+     gpu_reset_state(1);
+     video_mode = s_power_on_video_mode;
+-    (void)psx_video_timing_set_pal((int)video_mode);
++    (void)psx_video_timing_set_mode((int)video_mode, (int)vertical_interlace);
+ }
+ 
+ void gpu_set_power_on_video_mode(int pal) {
+     s_power_on_video_mode = pal ? 1u : 0u;
+     video_mode = s_power_on_video_mode;
+-    (void)psx_video_timing_set_pal((int)video_mode);
++    (void)psx_video_timing_set_mode((int)video_mode, (int)vertical_interlace);
+ }
+ 
+ /* ---- GPUSTAT read (0x1F801814) ---- */
+@@ -7659,8 +7659,8 @@ static void gp1_display_mode(uint32_t val) {
+     vres = (val >> 2) & 1;
+     video_mode = (uint32_t)psx_gp1_display_mode_is_pal(val);
+     /* VBlank rate, Timer 1 HBlank clock and host pacing follow the live
+-     * standard, whatever the disc region (psx_video_timing.h). */
+-    (void)psx_video_timing_set_pal((int)video_mode);
++     * standard and interlace, whatever the disc region (psx_video_timing.h). */
++    (void)psx_video_timing_set_mode((int)video_mode, psx_gp1_display_mode_is_interlaced(val));
+     if (new_depth != display_depth)
+         s_d24_upload_x1 = 0; /* rising/falling: drop stale coverage */
+     display_depth = new_depth;
+@@ -7901,7 +7901,7 @@ int gpu_snapshot_read(const uint8_t *p, uint32_t len) {
+     if (len != gpu_snapshot_bytes()) return 0;
+     pst_r_init(&r, p, len);
+     if (!gpu_snap_parse(&r)) return 0;
+-    (void)psx_video_timing_set_pal((int)video_mode);
++    (void)psx_video_timing_set_mode((int)video_mode, (int)vertical_interlace);
+     ws_reset_scene_history();
+     ws_scene_hold_reset(&s_ws_scene_hold);
+     ws_hud_anchor_clear(ws_hud_anchor_tags, WS_HUD_ANCHOR_TABLE_SIZE);
+diff --git a/runtime/src/main.cpp b/runtime/src/main.cpp
+index 0312844d..ad24c3de 100644
+--- a/runtime/src/main.cpp
++++ b/runtime/src/main.cpp
+@@ -1561,7 +1561,7 @@ static_assert((int)PSX_MOD_CONTROLLER_DIGITAL ==
+               (int)PSXRecompV4::PAD_MODE_DIGITAL);
+ static double        g_host_refresh_hz = 0.0;
+ static double        g_host_refresh_max_hz = 0.0;   /* panel maximum (VRR) */
+-static constexpr double PSX_FRAME_PERIOD_MS = 1000.0 / 59.94;
++static constexpr double PSX_FRAME_PERIOD_MS = 1000.0 * PSX_VBLANK_CYCLES_NTSC / PSX_CPU_CLOCK_HZ;  /* power-on: NTSC progressive */
+ static double        g_guest_frame_period_ms = PSX_FRAME_PERIOD_MS;
+ static double        g_frame_period_ms = PSX_FRAME_PERIOD_MS;
+ static int           g_host_refresh_display_idx = -2;
+@@ -3603,8 +3603,9 @@ static void refresh_host_display_cadence(int force_log, int force_probe) {
+  * its own rate. Called once per guest VBlank; acts only on a change. */
+ static uint32_t g_video_timing_generation_seen = 0;
+ 
++/* The guest's frame rate as its video mode sets it (psx_video_timing.h). */
+ static double guest_video_standard_hz(void) {
+-    return psx_video_timing_is_pal() ? 50.0 : 1000.0 / PSX_FRAME_PERIOD_MS;
++    return (double)PSX_CPU_CLOCK_HZ / (double)g_psx_vblank_cycles;
+ }
+ 
+ static void sync_guest_cadence_to_video_standard(void) {
+@@ -3614,9 +3615,7 @@ static void sync_guest_cadence_to_video_standard(void) {
+     g_video_timing_generation_seen = gen;
+     if (g_mod_native_vblank_rate)
+         return;
+-    const double period_ms = psx_video_timing_is_pal()
+-        ? 1000.0 / 50.0
+-        : PSX_FRAME_PERIOD_MS;
++    const double period_ms = 1000.0 / guest_video_standard_hz();
+     if (period_ms == g_guest_frame_period_ms)
+         return;
+     g_guest_frame_period_ms = period_ms;
+diff --git a/runtime/src/psx_video_timing.c b/runtime/src/psx_video_timing.c
+index c0087070..225590a1 100644
+--- a/runtime/src/psx_video_timing.c
++++ b/runtime/src/psx_video_timing.c
+@@ -5,14 +5,18 @@ uint32_t g_psx_hblank_cycles   = PSX_HBLANK_CYCLES_NTSC;
+ uint32_t g_psx_lines_per_frame = PSX_LINES_PER_FRAME_NTSC;
+ 
+ static int      s_pal;
++static int      s_interlaced;
+ static uint32_t s_generation;
+ 
+-int psx_video_timing_set_pal(int pal) {
++int psx_video_timing_set_mode(int pal, int interlaced) {
+     pal = pal ? 1 : 0;
+-    if (pal == s_pal)
++    interlaced = interlaced ? 1 : 0;
++    if (pal == s_pal && interlaced == s_interlaced)
+         return 0;
+     s_pal = pal;
+-    g_psx_vblank_cycles   = pal ? PSX_VBLANK_CYCLES_PAL   : PSX_VBLANK_CYCLES_NTSC;
++    s_interlaced = interlaced;
++    g_psx_vblank_cycles   = pal ? (interlaced ? PSX_VBLANK_CYCLES_PAL_I  : PSX_VBLANK_CYCLES_PAL)
++                                : (interlaced ? PSX_VBLANK_CYCLES_NTSC_I : PSX_VBLANK_CYCLES_NTSC);
+     g_psx_hblank_cycles   = pal ? PSX_HBLANK_CYCLES_PAL   : PSX_HBLANK_CYCLES_NTSC;
+     g_psx_lines_per_frame = pal ? PSX_LINES_PER_FRAME_PAL : PSX_LINES_PER_FRAME_NTSC;
+     s_generation++;
+diff --git a/runtime/tests/test_psx_video_timing.c b/runtime/tests/test_psx_video_timing.c
+index a4ce4fe8..fce05315 100644
+--- a/runtime/tests/test_psx_video_timing.c
++++ b/runtime/tests/test_psx_video_timing.c
+@@ -1,147 +1,166 @@
+-/*
+- * Pin that VBlank timing follows the GPU's live video standard (GP1(08h)
+- * bit 3), not the disc region: NTSC -> PAL and PAL -> NTSC switches change
+- * the frame period, and the change lands where psx_video_timing.h says it
+- * does (the frame in progress ends at the new standard's period measured
+- * from its start, or at once if it is already past it; the frames after
+- * run exactly the new period). Drives the same edge helpers interrupts.c
+- * uses for VBlank scheduling.
+- *
+- * Build/run: ctest -R psx_video_timing_test
+- */
+-#include "psx_video_timing.h"
+-
+-#include <stdint.h>
+-#include <stdio.h>
+-
+-#define MAX_EDGES 64u
+-#define STEP      16u   /* divides both periods and every switch point */
+-
+-static uint64_t s_now;
+-static uint32_t s_since_vblank;
+-static uint64_t s_edges[MAX_EDGES];
+-static uint32_t s_edge_count;
+-static int      s_failures;
+-
+-static void run_until(uint64_t t) {
+-    while (s_now < t) {
+-        s_now += STEP;
+-        s_since_vblank += STEP;
+-        while (psx_vblank_edge_due(s_since_vblank)) {
+-            psx_vblank_consume_edge(&s_since_vblank);
+-            if (s_edge_count < MAX_EDGES)
+-                s_edges[s_edge_count] = s_now;
+-            s_edge_count++;
+-        }
+-    }
+-}
+-
+-/* Mirrors gpu.c gp1_display_mode: decode the GP1(08h) word, report it. */
+-static void gp1_display_mode(uint32_t word) {
+-    (void)psx_video_timing_set_pal(psx_gp1_display_mode_is_pal(word));
+-    /* A write is serviced at the guest cycle it happens: an edge that became
+-     * due on the switch is taken there. */
+-    while (psx_vblank_edge_due(s_since_vblank)) {
+-        psx_vblank_consume_edge(&s_since_vblank);
+-        if (s_edge_count < MAX_EDGES)
+-            s_edges[s_edge_count] = s_now;
+-        s_edge_count++;
+-    }
+-}
+-
+-static void expect_u64(const char *what, uint64_t got, uint64_t want) {
+-    if (got != want) {
+-        fprintf(stderr, "FAIL %s: got %llu want %llu\n", what,
+-                (unsigned long long)got, (unsigned long long)want);
+-        s_failures++;
+-    }
+-}
+-
+-static void expect_edge(uint32_t idx, uint64_t want) {
+-    char what[64];
+-    snprintf(what, sizeof what, "edge %u", (unsigned)idx);
+-    expect_u64(what, idx < s_edge_count ? s_edges[idx] : 0u, want);
+-}
+-
+-int main(void) {
+-    const uint64_t N = PSX_VBLANK_CYCLES_NTSC;
+-    const uint64_t P = PSX_VBLANK_CYCLES_PAL;
+-
+-    /* Power-on default and the derived clocks for each standard. */
+-    expect_u64("default ntsc", (uint64_t)psx_video_timing_is_pal(), 0u);
+-    expect_u64("ntsc period", g_psx_vblank_cycles, 564480u);
+-    expect_u64("ntsc lines", g_psx_lines_per_frame, 263u);
+-    expect_u64("ntsc hblank", g_psx_hblank_cycles, 2146u);
+-    expect_u64("gp1 0x08000008 is pal",
+-               (uint64_t)psx_gp1_display_mode_is_pal(0x08000008u), 1u);
+-    expect_u64("gp1 0x08000002 is ntsc",
+-               (uint64_t)psx_gp1_display_mode_is_pal(0x08000002u), 0u);
+-    {
+-        const uint32_t gen = psx_video_timing_generation();
+-        expect_u64("same standard is not a change",
+-                   (uint64_t)psx_video_timing_set_pal(0), 0u);
+-        expect_u64("no generation bump",
+-                   psx_video_timing_generation(), gen);
+-    }
+-
+-    /* 1. NTSC frames: 564480 cycles each. */
+-    run_until(2u * N);
+-    expect_edge(0, N);
+-    expect_edge(1, 2u * N);
+-
+-    /* 2. NTSC -> PAL mid-frame: the frame in progress ends 677376 from its
+-     * start, then every frame is 677376. */
+-    {
+-        const uint32_t gen = psx_video_timing_generation();
+-        run_until(2u * N + 100000u);
+-        gp1_display_mode(0x08000008u);           /* PAL, 320 wide */
+-        expect_u64("pal after GP1(08h) bit 3", g_psx_vblank_cycles, 677376u);
+-        expect_u64("pal lines", g_psx_lines_per_frame, 314u);
+-        expect_u64("pal hblank", g_psx_hblank_cycles, 2157u);
+-        expect_u64("generation bumped", psx_video_timing_generation(), gen + 1u);
+-    }
+-    run_until(2u * N + 3u * P);
+-    expect_u64("edges through pal", s_edge_count, 5u);
+-    expect_edge(2, 2u * N + P);
+-    expect_edge(3, 2u * N + 2u * P);
+-    expect_edge(4, 2u * N + 3u * P);
+-
+-    /* 3. PAL -> NTSC before the NTSC period elapsed (WipEout 3 PAL + NTSC
+-     * patch writes GP1(08h)=0x08000002): the frame ends 564480 from its
+-     * start, then every frame is 564480. */
+-    {
+-        const uint64_t start = 2u * N + 3u * P;
+-        run_until(start + 200000u);
+-        gp1_display_mode(0x08000002u);
+-        expect_u64("ntsc after GP1(08h) bit 3 clear", g_psx_vblank_cycles, 564480u);
+-        run_until(start + 3u * N);
+-        expect_u64("edges through ntsc", s_edge_count, 8u);
+-        expect_edge(5, start + N);
+-        expect_edge(6, start + 2u * N);
+-        expect_edge(7, start + 3u * N);
+-    }
+-
+-    /* 4. PAL -> NTSC after the NTSC period already elapsed: the frame in
+-     * progress ends at the switch; the overshoot carries, so the frame grid
+-     * stays on start + k * 564480. */
+-    {
+-        const uint64_t start = 2u * N + 3u * P + 3u * N;
+-        gp1_display_mode(0x08000008u);           /* back to PAL at an edge */
+-        run_until(start + 600000u);              /* past 564480, short of PAL */
+-        expect_u64("no edge yet in pal frame", s_edge_count, 8u);
+-        gp1_display_mode(0x08000000u);           /* NTSC */
+-        expect_u64("edge at switch", s_edge_count, 9u);
+-        expect_edge(8, start + 600000u);
+-        run_until(start + 3u * N);
+-        expect_edge(9, start + 2u * N);
+-        expect_edge(10, start + 3u * N);
+-        expect_u64("edges through late switch", s_edge_count, 11u);
+-    }
+-
+-    if (s_failures) {
+-        fprintf(stderr, "%d failure(s)\n", s_failures);
+-        return 1;
+-    }
+-    puts("PASS: VBlank period follows GP1(08h) video mode across NTSC/PAL switches");
+-    return 0;
+-}
++/*
++ * Pin that VBlank timing follows the GPU's live video mode (GP1(08h) bit 3
++ * standard, bit 5 interlace), not the disc region, at the hardware periods
++ * (psx_video_timing.h): NTSC -> PAL and PAL -> NTSC switches change the
++ * frame period, and the change lands where psx_video_timing.h says it does
++ * (the frame in progress ends at the new mode's period measured from its
++ * start, or at once if it is already past it; the frames after run exactly
++ * the new period). Drives the same edge helpers interrupts.c uses for VBlank
++ * scheduling.
++ *
++ * Build/run: ctest -R psx_video_timing_test
++ */
++#include "psx_video_timing.h"
++
++#include <stdint.h>
++#include <stdio.h>
++
++#define MAX_EDGES 64u
++#define STEP      1u    /* the hardware periods have no common divisor */
++
++static uint64_t s_now;
++static uint32_t s_since_vblank;
++static uint64_t s_edges[MAX_EDGES];
++static uint32_t s_edge_count;
++static int      s_failures;
++
++static void run_until(uint64_t t) {
++    while (s_now < t) {
++        s_now += STEP;
++        s_since_vblank += STEP;
++        while (psx_vblank_edge_due(s_since_vblank)) {
++            psx_vblank_consume_edge(&s_since_vblank);
++            if (s_edge_count < MAX_EDGES)
++                s_edges[s_edge_count] = s_now;
++            s_edge_count++;
++        }
++    }
++}
++
++/* Mirrors gpu.c gp1_display_mode: decode the GP1(08h) word, report it. */
++static void gp1_display_mode(uint32_t word) {
++    (void)psx_video_timing_set_mode(psx_gp1_display_mode_is_pal(word),
++                                    psx_gp1_display_mode_is_interlaced(word));
++    /* A write is serviced at the guest cycle it happens: an edge that became
++     * due on the switch is taken there. */
++    while (psx_vblank_edge_due(s_since_vblank)) {
++        psx_vblank_consume_edge(&s_since_vblank);
++        if (s_edge_count < MAX_EDGES)
++            s_edges[s_edge_count] = s_now;
++        s_edge_count++;
++    }
++}
++
++static void expect_u64(const char *what, uint64_t got, uint64_t want) {
++    if (got != want) {
++        fprintf(stderr, "FAIL %s: got %llu want %llu\n", what,
++                (unsigned long long)got, (unsigned long long)want);
++        s_failures++;
++    }
++}
++
++static void expect_edge(uint32_t idx, uint64_t want) {
++    char what[64];
++    snprintf(what, sizeof what, "edge %u", (unsigned)idx);
++    expect_u64(what, idx < s_edge_count ? s_edges[idx] : 0u, want);
++}
++
++int main(void) {
++    const uint64_t N = PSX_VBLANK_CYCLES_NTSC;
++    const uint64_t P = PSX_VBLANK_CYCLES_PAL;
++
++    /* Power-on default and the derived clocks for each standard. */
++    expect_u64("default ntsc", (uint64_t)psx_video_timing_is_pal(), 0u);
++    expect_u64("ntsc period", g_psx_vblank_cycles, 566121u);   /* 59.826 Hz */
++    expect_u64("ntsc lines", g_psx_lines_per_frame, 263u);
++    expect_u64("ntsc hblank", g_psx_hblank_cycles, 2153u);
++    expect_u64("gp1 0x08000008 is pal",
++               (uint64_t)psx_gp1_display_mode_is_pal(0x08000008u), 1u);
++    expect_u64("gp1 0x08000002 is ntsc",
++               (uint64_t)psx_gp1_display_mode_is_pal(0x08000002u), 0u);
++    {
++        const uint32_t gen = psx_video_timing_generation();
++        expect_u64("same standard is not a change",
++                   (uint64_t)psx_video_timing_set_mode(0, 0), 0u);
++        expect_u64("no generation bump",
++                   psx_video_timing_generation(), gen);
++    }
++
++    /* 1. NTSC frames: 566121 cycles each. */
++    run_until(2u * N);
++    expect_edge(0, N);
++    expect_edge(1, 2u * N);
++
++    /* 2. NTSC -> PAL mid-frame: the frame in progress ends 680624 from its
++     * start, then every frame is 680624 (49.761 Hz). */
++    {
++        const uint32_t gen = psx_video_timing_generation();
++        run_until(2u * N + 100000u);
++        gp1_display_mode(0x08000008u);           /* PAL, 320 wide */
++        expect_u64("pal after GP1(08h) bit 3", g_psx_vblank_cycles, 680624u);
++        expect_u64("pal lines", g_psx_lines_per_frame, 314u);
++        expect_u64("pal hblank", g_psx_hblank_cycles, 2168u);
++        expect_u64("generation bumped", psx_video_timing_generation(), gen + 1u);
++    }
++    run_until(2u * N + 3u * P);
++    expect_u64("edges through pal", s_edge_count, 5u);
++    expect_edge(2, 2u * N + P);
++    expect_edge(3, 2u * N + 2u * P);
++    expect_edge(4, 2u * N + 3u * P);
++
++    /* 3. PAL -> NTSC before the NTSC period elapsed (WipEout 3 PAL + NTSC
++     * patch writes GP1(08h)=0x08000002): the frame ends 566121 from its
++     * start, then every frame is 566121. */
++    {
++        const uint64_t start = 2u * N + 3u * P;
++        run_until(start + 200000u);
++        gp1_display_mode(0x08000002u);
++        expect_u64("ntsc after GP1(08h) bit 3 clear", g_psx_vblank_cycles, 566121u);
++        run_until(start + 3u * N);
++        expect_u64("edges through ntsc", s_edge_count, 8u);
++        expect_edge(5, start + N);
++        expect_edge(6, start + 2u * N);
++        expect_edge(7, start + 3u * N);
++    }
++
++    /* 4. PAL -> NTSC after the NTSC period already elapsed: the frame in
++     * progress ends at the switch; the overshoot carries, so the frame grid
++     * stays on start + k * 566121. */
++    {
++        const uint64_t start = 2u * N + 3u * P + 3u * N;
++        gp1_display_mode(0x08000008u);           /* back to PAL at an edge */
++        run_until(start + 600000u);              /* past 566121, short of PAL */
++        expect_u64("no edge yet in pal frame", s_edge_count, 8u);
++        gp1_display_mode(0x08000000u);           /* NTSC */
++        expect_u64("edge at switch", s_edge_count, 9u);
++        expect_edge(8, start + 600000u);
++        run_until(start + 3u * N);
++        expect_edge(9, start + 2u * N);
++        expect_edge(10, start + 3u * N);
++        expect_u64("edges through late switch", s_edge_count, 11u);
++    }
++
++    /* 5. Interlace (GP1(08h) bit 5) selects the field period: PAL 677372
++     * (50.000 Hz), NTSC 565044 (59.940 Hz); progressive again restores the
++     * frame period.  Each change bumps the generation, a repeat does not. */
++    {
++        const uint32_t gen = psx_video_timing_generation();
++        gp1_display_mode(0x08000028u);           /* PAL, interlaced */
++        expect_u64("pal interlaced", g_psx_vblank_cycles, 677372u);
++        expect_u64("interlace is a change", psx_video_timing_generation(), gen + 1u);
++        gp1_display_mode(0x08000028u);
++        expect_u64("same mode is not a change", psx_video_timing_generation(), gen + 1u);
++        gp1_display_mode(0x08000020u);           /* NTSC, interlaced */
++        expect_u64("ntsc interlaced", g_psx_vblank_cycles, 565044u);
++        gp1_display_mode(0x08000008u);           /* PAL, progressive */
++        expect_u64("pal progressive again", g_psx_vblank_cycles, 680624u);
++        expect_u64("hblank follows the standard", g_psx_hblank_cycles, 2168u);
++    }
++
++    if (s_failures) {
++        fprintf(stderr, "%d failure(s)\n", s_failures);
++        return 1;
++    }
++    puts("PASS: VBlank period follows GP1(08h) video standard and interlace at the hardware periods");
++    return 0;
++}
+-- 
+2.43.0
+

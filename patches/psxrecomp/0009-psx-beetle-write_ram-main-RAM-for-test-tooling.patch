@@ -1,0 +1,86 @@
+From e27b5ca68f935e779ee57c3291fe379b2126b231 Mon Sep 17 00:00:00 2001
+From: DSF PC Port <jmokikearns@gmail.com>
+Date: Fri, 30 Oct 2026 23:41:36 +0000
+Subject: [PATCH 09/11] psx-beetle: write_ram (main RAM) for test tooling
+
+---
+ runtime/src/beetle_debug_server.c | 19 +++++++++++++++++++
+ runtime/src/beetle_libretro.cpp   | 11 +++++++++++
+ 2 files changed, 30 insertions(+)
+
+diff --git a/runtime/src/beetle_debug_server.c b/runtime/src/beetle_debug_server.c
+index 9a5cac4c..0d3e2afc 100644
+--- a/runtime/src/beetle_debug_server.c
++++ b/runtime/src/beetle_debug_server.c
+@@ -43,6 +43,7 @@
+ 
+ /* ---- Externs from beetle_libretro.cpp ---- */
+ extern uint8_t  beetle_read_byte(uint32_t phys);
++extern int      beetle_write_byte(uint32_t phys, uint8_t v);
+ extern uint32_t beetle_read_word(uint32_t phys);
+ extern void     beetle_get_ram(uint8_t *out_2mb);
+ extern uint16_t beetle_get_pad(void);
+@@ -342,6 +343,23 @@ static void h_exc_ring(int id, const char *json) {
+     free(buf);
+ }
+ 
++/* write_ram {"addr": "0x80...", "hex": "0102..."}: main RAM bytes. */
++static void h_write_ram(int id, const char *json) {
++    char addr_s[32] = {0};
++    static char hex[2 * 0x10000 + 1];
++    if (!json_get_str(json, "addr", addr_s, sizeof(addr_s)) || !json_get_str(json, "hex", hex, sizeof(hex))) {
++        send_err(id, "need addr, hex"); return;
++    }
++    uint32_t addr = hex_to_u32(addr_s);
++    size_t n = strlen(hex) / 2;
++    for (size_t i = 0; i < n; i++) {
++        unsigned v;
++        if (sscanf(hex + 2 * i, "%2x", &v) != 1) { send_err(id, "bad hex"); return; }
++        if (!beetle_write_byte((addr + (uint32_t)i) & 0x1FFFFFFFu, (uint8_t)v)) { send_err(id, "not main RAM"); return; }
++    }
++    send_fmt("{\"id\":%d,\"ok\":true,\"len\":%u}\n", id, (unsigned)n);
++}
++
+ static void h_read_ram(int id, const char *json) {
+     char addr_s[32] = {0};
+     if (!json_get_str(json, "addr", addr_s, sizeof(addr_s))) {
+@@ -1659,6 +1677,7 @@ static const CmdEntry CMDS[] = {
+     { "cyc_watch_dump",        h_cyc_watch_dump },
+     { "cyc_watch_clear",       h_cyc_watch_clear },
+     { "read_ram",              h_read_ram },
++    { "write_ram",             h_write_ram },
+     { "get_registers",         h_get_registers },
+     { "dump_ram",              h_read_ram },        /* alias, parity with native */
+     { "press",                 h_press },
+diff --git a/runtime/src/beetle_libretro.cpp b/runtime/src/beetle_libretro.cpp
+index 72c09397..b1c8ebda 100644
+--- a/runtime/src/beetle_libretro.cpp
++++ b/runtime/src/beetle_libretro.cpp
+@@ -5,6 +5,7 @@
+  *   - beetle_init / beetle_shutdown / beetle_run_frame  (lifecycle)
+  *   - beetle_get_framebuffer / beetle_get_pad           (display + input)
+  *   - beetle_read_byte / beetle_read_word               (RAM read)
++ *   - beetle_write_byte                                 (main RAM write, test tooling)
+  *   - beetle_get_ram / beetle_get_vram / beetle_get_scratchpad
+  *   - SIO trace ring buffer (beetle_get_sio_trace/reset/total)
+  *   - wtrace ring buffer (beetle_wtrace_arm/disarm/reset/get/total/...)
+@@ -638,6 +639,16 @@ extern "C" int beetle_get_registers(uint32_t *out /* >= 38 words */) {
+     return 1;
+ }
+ 
++/* Main RAM only: data for tests (a cheat, a marker pattern).  Code written
++ * here is not seen through a stale instruction cache line. */
++extern "C" int beetle_write_byte(uint32_t phys, uint8_t v) {
++    if (phys < 0x00800000u && MainRAM) {
++        MainRAM->data8[phys & 0x1FFFFF] = v;
++        return 1;
++    }
++    return 0;
++}
++
+ extern "C" uint8_t beetle_read_byte(uint32_t phys) {
+     if (phys < 0x00800000u) {
+         uint32_t offset = phys & 0x1FFFFF;
+-- 
+2.43.0
+
