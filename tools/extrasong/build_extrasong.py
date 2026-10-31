@@ -872,7 +872,8 @@ def main():
 		found.append(p)
 	if missing:
 		sys.exit('Not found in %s (no .sm file with these titles):\n  %s\nPut the PlayStation 2 and arcade '
-		         'Dancing Stage Fusion simfile packs there.' % (root, '\n  '.join(missing)))
+		         'Dancing Stage Fusion simfile packs there, and simfiles of Go West, It\'s Raining Men and '
+		         'PARANOIA survivor (they are in neither pack).' % (root, '\n  '.join(missing)))
 	for c, p in zip(cfg['song'], found):
 		print('%-34s %s' % (c['title'], os.path.relpath(p, root)))
 	songs = [Song(c, root, p) for c, p in zip(cfg['song'], found)]

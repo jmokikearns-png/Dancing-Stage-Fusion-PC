@@ -64,7 +64,8 @@ yet on real Windows hardware.
 - *Dancing Stage Fusion* (Europe, SLES-04163) as a raw `.bin` + `.cue` image
   (MODE2/2352).
 - **Simfile packs for both the PlayStation 2 and the arcade versions of
-  *Dancing Stage Fusion*.** The new songs are the
+  *Dancing Stage Fusion*,** plus simfiles of **Go West**, **It's Raining Men**
+  and **PARANOIA survivor**, which are in neither pack. The new songs are the
   heart of this project, so these are required, not optional. Each song is a
   StepMania simfile folder: the `.sm` step chart, the audio (`.ogg`, `.mp3`
   or `.wav`), a 256x80 banner and a 320x240 background. This project does not
@@ -148,7 +149,8 @@ The new songs are built once, from your simfile packs, into a song pack: one
 pack works for both the PC version and the Deluxe disc.
 
 **With the release:** put your simfile packs in the `simfiles` folder, whole
-and unzipped, and run `Build New Songs.bat`. It finds each song in them by its
+and unzipped, add simfiles of Go West, It's Raining Men and PARANOIA survivor
+(in neither pack) anywhere in it, and run `Build New Songs.bat`. It finds each song in them by its
 title (and artist), with the music, banner and background its `.sm` names,
 runs the song builder with the tools in `songtools` (Python with numpy and
 Pillow, FFmpeg, and the PlayStation audio encoder), and installs the pack in
@@ -164,7 +166,9 @@ PlayStation audio encoder in `tools/extrasong/psxaudio.c`).
    [`tools/extrasong/songs.toml`](tools/extrasong/songs.toml) into it. It lists
    the 12 new songs in order, with their song IDs, background animations and
    Heaven and Earth's unlock.
-2. Put your PlayStation 2 and arcade simfile packs in that folder, whole.
+2. Put your PlayStation 2 and arcade simfile packs in that folder, whole,
+   and simfiles of Go West, It's Raining Men and PARANOIA survivor (in
+   neither pack).
    Each song is found in them by its title and artist; to use a particular
    folder instead, give the song a `dir` line in `songs.toml`.
 3. Build the pack against your disc image:

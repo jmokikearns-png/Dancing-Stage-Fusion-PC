@@ -82,8 +82,10 @@ THE NEW SONGS
   Songs the PlayStation version never had, built from your own simfile packs
   of the PlayStation 2 and arcade versions of Dancing Stage Fusion:
   1. Put your simfile packs in the "simfiles" folder, whole, as they come
-     (unzipped). The songs needed are found in them by title; the list is
-     in simfiles\PUT_YOUR_SIMFILES_HERE.txt.
+     (unzipped). Go West, It's Raining Men and PARANOIA survivor are in
+     neither pack: add a simfile of each, from wherever you have one,
+     anywhere in "simfiles". The songs needed are found by title; the list
+     is in simfiles\PUT_YOUR_SIMFILES_HERE.txt.
   2. Run "Build New Songs.bat" (after Setup.exe). It converts the charts,
      music and pictures to the game's own formats with the tools in
      "songtools" (about two minutes) and puts the song pack in the game.

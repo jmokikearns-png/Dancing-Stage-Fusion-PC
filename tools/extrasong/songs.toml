@@ -3,7 +3,9 @@
 # so keep this order.
 #
 # Put your simfile packs of the PlayStation 2 and arcade versions of Dancing
-# Stage Fusion in the folder with this file, as they come: each song is found
+# Stage Fusion in the folder with this file, as they come, and simfiles of
+# Go West, It's Raining Men and PARANOIA survivor (in neither pack, marked
+# below) from wherever you have them: each song is found
 # in them by its title (and artist); its music, banner and background are the
 # files its .sm names.  To use one particular folder instead, give the song
 # dir = "path/to/its/folder"; to match another title too, find = ["..."].
@@ -48,6 +50,7 @@ stage = 13			# its own background animation, on stage set 13
 # script = 1			# (or: Come Into My World's, fitted to this song)
 # background = "my-art/background.png"
 master_id = 0x8034
+# (not in the PlayStation 2 or arcade pack: add a simfile of it to the folder)
 title = "Go West"
 artist = "Pet Shop Boys"
 
@@ -62,7 +65,9 @@ artist = "Basement Jaxx feat. Lisa Kekaula"
 stage = 2			# its own background animation, on stage set 2
 # script = 17			# (or: Sunlight's, fitted to this song)
 master_id = 0x8036
+# (not in the PlayStation 2 or arcade pack: add a simfile of it to the folder)
 title = "It's Raining Men (Almighty Mix)"
+find = ["It's Raining Men"]	# a simfile may leave out the mix
 artist = "Geri Halliwell"
 
 [[song]]
@@ -78,6 +83,7 @@ artist = "Kim Wilde"
 stage = 15			# its own background animation, on stage set 15
 # script = 13			# (or: PARANOIA MAX's, fitted to this song)
 master_id = 0x8038
+# (not in the PlayStation 2 or arcade pack: add a simfile of it to the folder)
 title = "PARANOIA survivor"
 artist = "270"
 # banner = "my-art/banner.png"	# its pre-X banner

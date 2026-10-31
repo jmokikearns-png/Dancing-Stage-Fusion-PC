@@ -47,6 +47,9 @@ sed 's/$/\r/' "$REPO/tools/extrasong/songs.toml" > "$D/simfiles/songs.toml"
   printf 'Dancing Stage Fusion in this folder, whole, as they come (unzipped).\n'
   printf '"Build New Songs.bat" finds the songs it needs in them by title:\n\n'
   sed -n 's/^title = "\(.*\)"$/  \1/p' "$REPO/tools/extrasong/songs.toml"
+  printf '\nGo West, It'"'"'s Raining Men and PARANOIA survivor are in neither pack:\n'
+  printf 'add a simfile of each (from another pack, or a song folder of its own)\n'
+  printf 'anywhere in this folder.\n'
   printf '\nThen run "Build New Songs.bat" in the game folder.\n'
 } | sed 's/$/\r/' > "$D/simfiles/PUT_YOUR_SIMFILES_HERE.txt"
 
