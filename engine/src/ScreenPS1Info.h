@@ -2,7 +2,11 @@
  * settings and controls, credits and licences.  It looks like the options
  * screens (header, page, footer); topics on the left, the chosen topic's
  * text on the right.  The text is the theme's "Other/ScreenPS1Info text.txt"
- * ([TOPIC] lines start a topic). */
+ * ([TOPIC] lines start a topic).
+ *
+ * The same class is the welcome screen shown before the title menu on the
+ * first start (metric Once=1: after it has been left once, a flag file in
+ * Data/ makes it go straight on to the next screen). */
 
 #ifndef SCREEN_PS1_INFO_H
 #define SCREEN_PS1_INFO_H
@@ -21,6 +25,7 @@ public:
 
 	virtual void Input( const DeviceInput& DeviceI, const InputEventType type, const GameInput &GameI, const MenuInput &MenuI, const StyleInput &StyleI );
 	virtual void HandleScreenMessage( const ScreenMessage SM );
+	virtual void Update( float fDeltaTime );
 
 	virtual void MenuUp( PlayerNumber pn, const InputEventType type );
 	virtual void MenuDown( PlayerNumber pn, const InputEventType type );
@@ -38,6 +43,8 @@ private:
 	};
 	vector<Topic*> m_Topics;
 	int m_iSelected;
+	bool m_bOnce, m_bSkip;
+	CString SeenFlag() const { return "Data/" + m_sName + ".seen"; }
 	Sprite m_sprPage, m_sprCursor;
 	BitmapText m_textBody;
 	RageSound m_soundChange;

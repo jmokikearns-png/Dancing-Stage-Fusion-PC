@@ -23,6 +23,17 @@ StepMania 3.95 opens the window, shows the game's picture, plays its sound, read
 YOUR DISC
 The game's data is read from your own disc image.  None of it comes with the port.
 
+[IS IT SAFE?]
+This is Dancing Stage Fusion PC, a free fan project.  Here is what happened on your PC:
+
+Setup.exe read the game's program from your own disc image, translated it into C code (PSXRecomp) and compiled that with the compiler in the "setup" folder (GCC), making dsfcore.dll, the game core.  It also gave DancingStageFusionPC.exe the game's memory card icon.
+
+A program that builds other programs, and new programs without a paid code-signing certificate, can make antivirus software and Windows SmartScreen wary.  That is all it is: nothing here is hidden, and all of the source code is public:
+github.com/jmokikearns-png/Dancing-Stage-Fusion-PC
+
+Have fun!
+- CrashReporter
+
 [PC SETTINGS]
 All in the game's own OPTIONS menu:
 
