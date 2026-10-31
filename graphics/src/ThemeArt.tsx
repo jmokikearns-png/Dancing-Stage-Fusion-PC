@@ -119,6 +119,37 @@ export const ThemeTitleLogoOwn: React.FC<{scale?: number}> = ({scale = 3}) => {
 	);
 };
 
+/* The splash before the title menu (ScreenPS1Splash): our logo and a note
+ * from the author on what Setup did, for players whose antivirus is wary. */
+export const ThemeSplashNotice: React.FC = () => {
+	const line: React.CSSProperties = {fontFamily: fonts.heading, fontWeight: 700, color: '#FFF4D6', fontSize: 30, lineHeight: 1.35,
+		textShadow: `0 2px 0 ${colors.maroonDark}`, textAlign: 'center', margin: '0 0 22px 0'};
+	return (
+		<AbsoluteFill>
+			<ThemeBackground stars="title" />
+			<div style={{position: 'absolute', left: 120, top: 34, width: 1040, height: 400, display: 'flex', justifyContent: 'center'}}>
+				<div style={{transform: 'scale(0.62)', transformOrigin: 'top center', width: 374 * 3, height: 176 * 3, position: 'relative'}}>
+					<ThemeTitleLogoOwn />
+					<div style={{position: 'absolute', left: (374 / 2 + 70) * 3 - 189, top: (176 / 2 + 14) * 3 - 156, width: 378, height: 312,
+						display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+						<div style={{transform: 'translateY(24px) rotate(-7deg) skewX(-4deg)'}}><LogoText text="PC" size={64} s={3} /></div>
+					</div>
+				</div>
+			</div>
+			<div style={{position: 'absolute', left: 110, top: 400, width: 1060, padding: '34px 44px 26px', boxSizing: 'border-box', borderRadius: 26,
+				background: 'rgba(42,6,6,0.84)', border: `4px solid ${colors.orange}`, boxShadow: '0 10px 30px rgba(60,10,0,0.45)'}}>
+				<p style={{...line, color: colors.titleYellow, fontSize: 36, fontWeight: 800}}>A free, open-source fan project</p>
+				<p style={line}>Setup.exe built the game on your PC, from your own disc, with the compiler that comes with it.
+					Antivirus software can be wary of new, unsigned programs that build other programs. That is all it is.</p>
+				<p style={{...line, color: colors.titleYellow, fontSize: 26, whiteSpace: 'nowrap'}}>Source code: github.com/jmokikearns-png/Dancing-Stage-Fusion-PC</p>
+				<p style={{...line, fontStyle: 'italic', margin: 0}}>- CrashReporter</p>
+			</div>
+			<div style={{position: 'absolute', left: 0, right: 0, bottom: 26, textAlign: 'center', fontFamily: fonts.heading, fontWeight: 700,
+				fontSize: 24, color: 'rgba(255,244,214,0.85)', textShadow: `0 2px 0 ${colors.maroonDark}`}}>Press Enter to continue</div>
+		</AbsoluteFill>
+	);
+};
+
 /* The loading window's banner (468x62, shown 1:1 by StepMania). */
 export const ThemeSplash: React.FC = () => (
 	<AbsoluteFill style={{background: panelGradient, alignItems: 'center', justifyContent: 'center', borderBottom: `3px solid ${colors.orange}`}}>

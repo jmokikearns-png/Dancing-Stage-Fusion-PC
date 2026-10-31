@@ -68,8 +68,9 @@ void ScreenSplash::MenuStart( PlayerNumber pn )
 		return;
 	if( !ALLOW_START_TO_SKIP )
 		return;
-	this->ClearMessageQueue( SM_PrepScreen );
-	HandleScreenMessage( SM_PrepScreen );
+	/* DSF PC: skip now (posting SM_PrepScreen again waited the full delay). */
+	this->ClearMessageQueue();
+	StartTransitioning( SM_GoToNextScreen );
 }
 
 /*

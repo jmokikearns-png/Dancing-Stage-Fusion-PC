@@ -25,7 +25,7 @@ fi
 
 "$G/fonts/build_font.sh" "$T"
 
-mkdir -p "$T/Graphics" "$T/BGAnimations/ScreenWithMenuElements background" "$T/BGAnimations/ScreenTitleMenu background"
+mkdir -p "$T/Graphics" "$T/BGAnimations/ScreenWithMenuElements background" "$T/BGAnimations/ScreenTitleMenu background" "$T/BGAnimations/ScreenPS1Splash background"
 still ThemeHeader "$T/Graphics/_shared menu header (res 640x44).png"
 still ThemeFooter "$T/Graphics/_shared footer (res 640x32).png"
 still ThemeOptionsPage "$T/Graphics/ScreenOptions page (res 640x480).png"
@@ -38,11 +38,16 @@ fi
 still ThemeBackground "$T/BGAnimations/ScreenWithMenuElements background/bg (res 640x480).png"
 still ThemeTitleBackground "$T/BGAnimations/ScreenTitleMenu background/bg (res 640x480).png"
 still ThemeSplash "$E/Data/splash.png"
+still ThemeSplashNotice "$T/BGAnimations/ScreenPS1Splash background/notice (res 640x480).png"
 still ThemeInfoCursor "$T/Graphics/ScreenPS1Info cursor (res 160x28).png"
 
 for d in "ScreenWithMenuElements background" "ScreenTitleMenu background"; do
 	printf '[Layer1]\r\nFile=bg (res 640x480).png\r\nType=sprite\r\nStretch=1\r\n' > "$T/BGAnimations/$d/BGAnimation.ini"
 done
+printf '[Layer1]\r\nFile=notice (res 640x480).png\r\nType=sprite\r\nStretch=1\r\n' > "$T/BGAnimations/ScreenPS1Splash background/BGAnimation.ini"
+# the splash has no menu bars
+printf '<ActorFrame />\r\n' > "$T/Graphics/ScreenPS1Splash header.xml"
+printf '<ActorFrame />\r\n' > "$T/Graphics/ScreenPS1Splash footer.xml"
 
 if [ -z "$LOGO" ]; then
 	# our own logo (ThemeArt.tsx ThemeTitleLogoOwn): it drops in, then "PC" stamps on
@@ -100,5 +105,4 @@ header ScreenMapControllers "KEY / JOY MAPPINGS"
 header ScreenTestInput "TEST INPUT"
 header ScreenPS1Pause "PC MENU"
 header ScreenPS1Info "INFO"
-header ScreenPS1Welcome "WELCOME"
 echo "theme art written to $T"

@@ -25,7 +25,6 @@ static const RageColor TOPIC_SELECTED_COLOR( 1, 1, 1, 1 );	/* on the orange curs
 ScreenPS1Info::ScreenPS1Info( CString sName ) : ScreenWithMenuElements( sName )
 {
 	m_iSelected = 0;
-	m_bOnce = m_bSkip = false;
 }
 
 ScreenPS1Info::~ScreenPS1Info()
@@ -73,9 +72,6 @@ void ScreenPS1Info::LoadText()
 void ScreenPS1Info::Init()
 {
 	ScreenWithMenuElements::Init();
-
-	m_bOnce = THEME->HasMetric( m_sName, "Once" ) && THEME->GetMetricB( m_sName, "Once" );
-	m_bSkip = m_bOnce && DoesFileExist( SeenFlag() );
 
 	m_sprPage.Load( THEME->GetPathG("ScreenOptions","page") );
 	m_sprPage.SetXY( SCREEN_CENTER_X, SCREEN_CENTER_Y );
@@ -150,26 +146,10 @@ void ScreenPS1Info::MenuStart( PlayerNumber pn )
 	MenuBack( pn );
 }
 
-void ScreenPS1Info::Update( float fDeltaTime )
-{
-	ScreenWithMenuElements::Update( fDeltaTime );
-	if( m_bSkip )
-	{
-		m_bSkip = false;
-		HandleScreenMessage( SM_GoToNextScreen );
-	}
-}
-
 void ScreenPS1Info::MenuBack( PlayerNumber pn )
 {
 	if( IsTransitioning() )
 		return;
-	if( m_bOnce )
-	{
-		RageFile f;
-		if( f.Open(SeenFlag(), RageFile::WRITE) )
-			f.PutLine( "The welcome screen has been shown; delete this file to see it again." );
-	}
 	SCREENMAN->PlayStartSound();
 	StartTransitioning( SM_GoToPrevScreen );
 }
