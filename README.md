@@ -76,6 +76,44 @@ yourself needs the steps under [Building](#building).
 No PlayStation BIOS is needed: the free [OpenBIOS](https://github.com/grumpycoders/pcsx-redux)
 is used.
 
+## Building the new songs
+
+The new songs are built once, from your simfile packs, into a song pack: one
+pack works for both the PC version and the Deluxe disc. (The first release's
+setup program will do this for you; until then it is these steps.)
+
+You need Python 3.11 or newer with Pillow (`pip install pillow`), ffmpeg and
+ffprobe on your `PATH`, and a C compiler available as `cc` (it builds the
+small PlayStation audio encoder in `tools/extrasong/psxaudio.c`).
+
+1. Make a folder, e.g. `my-songs`, and copy
+   [`tools/extrasong/songs.toml`](tools/extrasong/songs.toml) into it. It lists
+   the 12 new songs in order, with their song IDs, background animations and
+   Heaven and Earth's unlock.
+2. Under `my-songs/songs/`, put each song's simfile folder from your
+   PlayStation 2 and arcade simfile packs, named as in `songs.toml`
+   (for example `songs/Tough Enough/`), or change the `dir` lines to where
+   your folders are. Each folder needs the `.sm` chart, the audio, a 256x80
+   banner and a 320x240 background.
+3. Build the pack against your disc image:
+
+   ```
+   python tools/extrasong/build_extrasong.py my-songs/songs.toml "path/to/Dancing Stage Fusion (Europe) (En,Fr,De,Es,It).cue" dsf.extrasongs
+   ```
+
+   It converts the charts, music, previews and pictures to the game's own
+   formats. The result, `dsf.extrasongs/`, holds `manifest.toml` and
+   `data/` (`extrasongs.txt`, `gfx.bin`, `media.bin`).
+4. Use it:
+   - **PC version:** copy the `dsf.extrasongs` folder's contents into the game
+     folder's `mods\installed\dsf.extrasongs\1.0.0\`.
+   - **Deluxe:** copy the three files in `data/` into the Deluxe builder's
+     `songs` folder, then run `Build Deluxe Disc.exe`.
+
+The song pack contains your music and charts: it is for your own use, don't
+share it. To use your own pictures for a song, add `background = ...` or
+`banner = ...` to its entry in `songs.toml` (examples are commented in there).
+
 ## Repository layout
 
 | Path | What |
