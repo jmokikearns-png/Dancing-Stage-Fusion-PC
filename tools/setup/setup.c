@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "logo.h"
 
 #define RAW 2352
 #define DATA 2048
@@ -29,6 +30,7 @@
 #define DELUXE_NAME "Dancing Stage Fusion Deluxe"
 #define CARD_ICON 0x983C0u	/* the save icon's palette (16 colours) and 16x16 4-bit pixels, in the program file */
 #define PROGRAM "DancingStageFusionPC.exe"
+#define GAME_FILES 0x80092B50u	/* the game's file table: size and first sector of each file */
 #define ICON_GROUP 1007		/* the program's icon (StepMania's IDI_ICON) */
 #define MAX_FILES 128
 
@@ -188,6 +190,68 @@ static uint8_t *read_game_program( const char *bin )
 	    0x800 + get32(exe + 0x1C) != EXE_SIZE )
 		fail( "the game program on the disc is not as expected.%s", "" );
 	return exe;
+}
+
+/* One of the game's files (its table in the program: size, first sector). */
+static uint8_t *read_game_file( const char *bin, const uint8_t *exe, int entry, uint32_t *size )
+{
+	static uint8_t sector[RAW];
+	const uint32_t at = 0x800 + (GAME_FILES - EXE_LOAD) + 8 * (uint32_t)entry;
+	const uint32_t n = get32( exe + at ), lba = get32( exe + at + 4 ), sectors = (n + DATA - 1) / DATA;
+	uint8_t *buf = malloc( (size_t)sectors * DATA );
+	FILE *f = fopen( bin, "rb" );
+	uint32_t i;
+	if( !f )
+		fail( "cannot open %s", bin );
+	for( i = 0; i < sectors; ++i )
+	{
+		_fseeki64( f, (long long)(lba + i) * RAW, SEEK_SET );
+		if( fread(sector, 1, RAW, f) != RAW )
+			fail( "cannot read %s", bin );
+		memcpy( buf + (size_t)i * DATA, sector + 24, DATA );
+	}
+	fclose( f );
+	*size = n;
+	return buf;
+}
+
+static int copy_file( const char *from, const char *to )
+{
+	return CopyFileA( from, to, FALSE ) != 0;
+}
+
+/* The title screen's logo: the game's own, from the disc (logo.c), with the
+ * project's "PC" and animation (setup\logo) beside it. Loose files in
+ * Themes\ take the place of the ones in DancingStageFusionPC.dat. */
+static void set_title_logo( const char *bin, const uint8_t *exe )
+{
+	static const char *const ours[] = { "_title logo pc (res 126x104).png", "ScreenTitleMenu logo.xml" };
+	char dir[MAX_PATH], src[MAX_PATH], p[MAX_PATH], q[MAX_PATH];
+	uint32_t n;
+	uint8_t *ovl = read_game_file( bin, exe, LOGO_OVERLAY, &n );
+	int i, ok;
+	join( dir, g_root, "Themes" ); CreateDirectoryA( dir, NULL );
+	join( dir, g_root, "Themes\\DSF PC" ); CreateDirectoryA( dir, NULL );
+	join( dir, g_root, "Themes\\DSF PC\\Graphics" ); CreateDirectoryA( dir, NULL );
+	join( p, dir, "_title logo dsf (res 374x176).png" );
+	ok = make_title_logo( ovl, n, p );
+	join( src, g_setup, "logo" );
+	for( i = 0; ok && i < 2; ++i )
+	{
+		join( q, src, ours[i] );
+		join( p, dir, ours[i] );
+		ok = copy_file( q, p );
+	}
+	free( ovl );
+	if( !ok )
+	{
+		/* without all three, the title keeps the lettering in DancingStageFusionPC.dat */
+		join( p, dir, "ScreenTitleMenu logo.xml" );
+		DeleteFileA( p );
+		printf( "  (Could not make the title screen's logo: the title shows the plain lettering.)\n" );
+		return;
+	}
+	printf( "  The title screen now has the game's logo.\n" );
 }
 
 static void write_file( const char *path, const void *data, size_t n )
@@ -538,6 +602,7 @@ int main( void )
 	write_seeds( exe, p );
 	write_project( cue );
 	set_icon( exe );
+	set_title_logo( bin, exe );
 	free( exe );
 
 	/* 3: recompile */

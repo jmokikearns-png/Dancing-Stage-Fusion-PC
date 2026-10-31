@@ -18,6 +18,7 @@
 
 #include "arch/ArchHooks/ArchHooks.h"
 #include "arch/LoadingWindow/LoadingWindow.h"
+#include "PS1Core.h"
 #include "arch/Dialog/Dialog.h"
 #include <ctime>
 
@@ -961,6 +962,20 @@ int main(int argc, char* argv[])
 	
 	g_argc = argc;
 	g_argv = argv;
+
+#if defined(WIN32) && !defined(XBOX)
+	/* DSF PC: nothing works without the game - the menus, the theme's logo
+	 * and the core all come from the player's disc - so don't start at all
+	 * until it is there and Setup.exe has run. */
+	{
+		CString sError;
+		if( !PS1Core::CheckInstalled(sError) )
+		{
+			MessageBoxA( NULL, sError.c_str(), "Dancing Stage Fusion PC", MB_OK | MB_ICONERROR );
+			return 1;
+		}
+	}
+#endif
 
 #if defined(WIN32) && !defined(XBOX)
 	/* DSF PC: pin this process as DPI-unaware (what it always was) before

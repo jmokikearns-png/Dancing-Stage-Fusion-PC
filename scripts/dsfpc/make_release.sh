@@ -25,21 +25,24 @@ env -u LOGO -u LOGO_FROM NO_CORE=1 NO_ZIP=1 CB="$CB" README="$REPO/docs/release/
 rm -f "$D/dsfcore.dll"
 
 S=$D/setup
-mkdir -p "$S/recomp/bios" "$S/icon"
+mkdir -p "$S/recomp/bios" "$S/icon" "$S/logo"
 cp "$RECOMP" "$S/psxrecomp-game.exe"
 cp "$REPO/game-project/game.toml" "$S/recomp/game.toml"
 cp "$(sed -n "s/^PSXRECOMP_ROOT:PATH=//p" "$CB/CMakeCache.txt")/bios/SCPH1001.toml" "$S/recomp/bios/"
 bash "$REPO/scripts/dsfpc/make_kit.sh" "$CB" "$S/kit"
 cp -r "$COMPILER" "$S/compiler"
 python3 "$REPO/tools/setup/make_badge.py" "$S/icon/badge.rgba"
+# The title logo's "PC" and animation (the logo itself Setup takes from the disc)
+cp "$REPO/tools/setup/logo/"* "$S/logo/"
 "$TC/bin/x86_64-w64-mingw32-gcc" -O2 -Wall -Wextra -Wno-format-truncation -static -s \
-  -o "$D/Setup.exe" "$REPO/tools/setup/setup.c"
+  -o "$D/Setup.exe" "$REPO/tools/setup/setup.c" "$REPO/tools/setup/logo.c" -lm
 cp "$COMPILER/README.txt" "$D/licenses/GCC-and-Binutils-README.txt"
 
 # Nothing from the game, the player's disc or a local setup in the release.
 bad=$(cd "$D" && find . \( \( -iname '*.bin' -not -path './bios/openbios.bin' \) -o -iname '*.cue' -o -iname '*.mcd' -o -name 'dsfcore.dll' \
         -o -name 'StepMania.ini' -o -name 'Keymaps.ini' -o -name 'overlay_captures.json*' \
-        -o -path './setup/work*' -o -path './mods/installed*' -o -name '*.log' \) -print)
+        -o -path './setup/work*' -o -path './mods/installed*' -o -name '*.log' \
+        -o -name '_title logo dsf*' -o -path './Themes*' \) -print)
 if [ -n "$bad" ]; then echo "ERROR: not for the release:"; echo "$bad"; exit 1; fi
 if grep -rlaE 'SLES_041\.63_(full|dispatch)' "$S/kit" >/dev/null; then
   echo "ERROR: game code in the kit" >&2; exit 1

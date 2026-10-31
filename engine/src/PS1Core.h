@@ -51,6 +51,9 @@ public:
 	 * anything).  Returns false, with a message for the player, when the core
 	 * or the disc image is missing or the boot failed. */
 	bool Start( CString &sErrorOut );
+	/* Before anything else starts: false, with a message for the player,
+	 * when the game isn't set up (no disc image, or Setup.exe not run). */
+	static bool CheckInstalled( CString &sErrorOut );
 	bool IsStarted() const { return m_bStarted; }
 	bool HasExited() const;
 	/* Main thread: true once after the player chose QUIT on the game's main menu. */

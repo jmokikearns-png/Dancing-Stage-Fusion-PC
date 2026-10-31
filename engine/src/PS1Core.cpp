@@ -202,6 +202,22 @@ PS1Core::~PS1Core()
 	delete m_pTexture;
 }
 
+bool PS1Core::CheckInstalled( CString &sError )
+{
+	const CString sRoot = RootDir();
+	if( FindDiscImage(sRoot + "\\disc").empty() )
+	{
+		sError = "No disc image found.\n\nPut your Dancing Stage Fusion (Europe) disc image\n(.bin and .cue) in the \"disc\" folder, then run Setup.exe.";
+		return false;
+	}
+	if( !FileExists(sRoot + "\\dsfcore.dll") )
+	{
+		sError = "Dancing Stage Fusion PC isn't set up yet.\n\nRun Setup.exe first: it builds the game\nfrom your Dancing Stage Fusion disc.";
+		return false;
+	}
+	return true;
+}
+
 bool PS1Core::Start( CString &sError )
 {
 	if( m_bStarted )
