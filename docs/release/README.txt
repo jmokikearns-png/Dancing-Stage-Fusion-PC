@@ -72,7 +72,7 @@ SYNC
 
 GRAPHICS
   The game's OPTIONS > GRAPHIC OPTIONS > DISPLAY SETTINGS:
-    GAME RESOLUTION: Native / 720p / 1080p (default) / 1440p.
+    GAME RESOLUTION: Native / 720p (default) / 1080p / 1440p.
     RENDERER:     OpenGL (default) or Software.
     SMOOTH ARROWS: an extra picture between each two of the game's own, so
                   the arrows move every frame (ON by default). Turn it OFF if

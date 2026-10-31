@@ -77,7 +77,7 @@ PrefsManager::PrefsManager() :
 	/* I'd rather get occasional people asking for support for this even though
      * it's already here than lots of people asking why songs aren't being displayed. */
 	m_bHiddenSongs			( "HiddenSongs",			false ),
-	m_bVsync				( "Vsync",					true ),
+	m_bVsync				( "Vsync",					false ),	/* DSF PC: off - the game paces itself by the sound */
 	m_bInterlaced			( "Interlaced",				false ),
 	/* XXX: Set these defaults for individual consoles using VideoCardDefaults.ini. */
 	m_bPAL					( "PAL",					false ),
@@ -288,7 +288,7 @@ PrefsManager::PrefsManager() :
 	m_bPS1AutoTiming				( "PS1AutoTiming",				false ),
 	m_bPS1OpenGL					( "PS1OpenGL",					true ),
 	m_bPS1SmoothArrows				( "PS1SmoothArrows",			true ),
-	m_sPS1InternalResolution		( "PS1InternalResolution",		"1080p" ),
+	m_sPS1InternalResolution		( "PS1InternalResolution",		"720p" ),
 	m_iSoundDevice					( "SoundDevice",				"" ),
 	m_SoundResampleQuality			( "SoundResampleQuality",		RageSoundReader_Resample::RESAMP_NORMAL ),
 	m_sInputDrivers					( "InputDrivers",				"" ),
