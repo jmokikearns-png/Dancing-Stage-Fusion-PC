@@ -14,8 +14,9 @@ It also includes **Dancing Stage Fusion Deluxe**, a builder that applies the
 same game changes to a PlayStation disc image for DuckStation or real hardware.
 
 > **No game data is included.** You need your own copy of
-> *Dancing Stage Fusion* (Europe, SLES-04163) as a disc image. Everything
-> that comes from the game is built on your own computer from your own disc.
+> *Dancing Stage Fusion* (Europe, SLES-04163) as a disc image, and simfile
+> packs for both the console and the arcade versions of *Dancing Stage
+> Fusion*. Everything is built on your own computer from your own files.
 
 ## Status
 
@@ -43,14 +44,17 @@ yourself needs the steps under [Building](#building).
   languages; **QUIT** is on the main menu.
 - **STEP MARK COLORS TYPE3**: arrows coloured by rhythm (quarter, eighth,
   triplet, sixteenth).
-- **Extra songs** from song packs you build from your own audio and step
-  charts, in the music select, results, WORKOUT and RECORDS like the original
-  songs, with optional unlock conditions.
+- **The arcade songs**: songs the PlayStation version never had, built from
+  your simfile packs into the game's own song list. They play like the
+  original 20: in the music select, results, WORKOUT and RECORDS, with their
+  own banners, previews and backgrounds, and unlock conditions (Heaven and
+  Earth stays hidden until you clear PARANOIA survivor on DIFFICULT or
+  EXPERT).
 
 **Deluxe (PlayStation disc)**
 
 - `Build Deluxe Disc.exe` turns your disc image into a Deluxe image: TYPE3
-  colours, the extra songs from the same song packs, unlocks, and a NEW!!
+  colours, the arcade songs from the same song packs, unlocks, and a NEW!!
   marker on newly unlocked songs.
 - Checks your image first and changes nothing if it isn't the expected,
   undamaged PAL disc; patched sectors keep valid error-correction data.
@@ -59,10 +63,15 @@ yourself needs the steps under [Building](#building).
 
 - *Dancing Stage Fusion* (Europe, SLES-04163) as a raw `.bin` + `.cue` image
   (MODE2/2352).
+- **Simfile packs for both versions of *Dancing Stage Fusion*: the console
+  (PlayStation) version and the arcade version.** The arcade songs are the
+  heart of this project, so these are required, not optional. Each song is a
+  StepMania simfile folder: the `.sm` step chart, the audio (`.ogg`, `.mp3`
+  or `.wav`), a 256x80 banner and a 320x240 background. This project does not
+  host or link to them, because they contain the songs' music: you supply
+  your own.
 - A 64-bit Windows PC. High resolution rendering uses OpenGL; there is a
   software renderer for machines without it.
-- For extra songs: your own audio files and step charts (e.g. StepMania
-  `.sm` simfiles).
 
 No PlayStation BIOS is needed: the free [OpenBIOS](https://github.com/grumpycoders/pcsx-redux)
 is used.
@@ -76,7 +85,7 @@ is used.
 | `engine/` | The modified StepMania 3.95 (its own licence: MIT) |
 | `graphics/` | Theme graphics and fonts, rendered from design tokens |
 | `mods/` | Mod packages loaded by the game core |
-| `tools/extrasong/` | Song pack builder: your audio and charts in, a song pack out |
+| `tools/extrasong/` | Song pack builder: your simfile packs in, a song pack out |
 | `tools/ps1disc/` | The Deluxe disc builder and its PlayStation code |
 | `patches/psxrecomp/` | Changes to PSXRecomp this project needs, applied at build time |
 | `scripts/` | Build and packaging scripts |
