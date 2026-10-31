@@ -6,7 +6,7 @@ W=/home/user/work
 NAME=${1:-DancingStageFusionPC-win64-test4}
 E=$W/wt/dsfpc                                        # engine (branch wip/dsfpc)
 SMB=$W/builds/dsfpc-win64                            # Release engine build
-CB=$W/analysis/recomp-feasibility/build-win64-core   # dsfcore.dll (DSF_EMBED=ON)
+CB=${CB:-$W/analysis/recomp-feasibility/build-win64-core}   # dsfcore.dll (DSF_EMBED=ON)
 P=$W/tools/recomp-src/psxrecomp
 DEPS=$W/builds/windows-build/deps-src
 OUT=$W/builds/package
@@ -35,7 +35,8 @@ if [ -n "${LOGO_FROM:-}" ]; then
      "$LOGO_FROM/_title logo pc (res 126x104).png" "$G/"
   rm -f "$G/_title logo (res 640x120).png"
 fi
-cp "$CB/dsfcore.dll" "$D/"
+# NO_CORE=1 (the public release): no dsfcore.dll, Setup.exe builds it.
+[ -n "${NO_CORE:-}" ] || cp "$CB/dsfcore.dll" "$D/"
 cp -r "$CB/bios" "$CB/assets" "$CB/mods" "$D/"
 python3 - "$CB/game.toml" "$D/game.toml" <<'PY'
 import sys
@@ -59,7 +60,7 @@ cp "$E/src/crypto51/License.txt" "$L/CryptoPP-5.1-License.txt"
 cp "$P/LICENSE" "$L/PSXRecomp-LICENSE-PolyForm-Noncommercial-1.0.0.txt"
 cp "$P/THIRD_PARTY_ATTRIBUTION.md" "$L/PSXRecomp-THIRD_PARTY_ATTRIBUTION.md"
 cp "$P"/runtime/licenses/*.txt "$L/"
-cp "$CB/_deps/sdl3-src/LICENSE.txt" "$L/SDL3-LICENSE.txt"
+cp "$(sed -n "s/^SDL3_SOURCE_DIR:STATIC=//p" "$CB/CMakeCache.txt")/LICENSE.txt" "$L/SDL3-LICENSE.txt"
 cp "$CB/bios/OpenBIOS.LICENSE" "$L/OpenBIOS-LICENSE.txt"
 cp "$DEPS/zlib/LICENSE" "$L/zlib-LICENSE.txt"
 cp "$DEPS/libpng/LICENSE" "$L/libpng-LICENSE.txt"
@@ -79,6 +80,7 @@ printf 'Memory cards (card1.mcd, card2.mcd) are kept here.\r\n' > "$D/saves/READ
 # (StepMania.cpp, DSF_DATA_FILE); Data stays a folder (settings, logs, cache).
 DATA_DIRS="Announcers BGAnimations BackgroundEffects BackgroundTransitions CDTitles Characters Courses NoteSkins RandomMovies Songs Themes"
 (cd "$D" && zip -q -r -0 DancingStageFusionPC.dat $DATA_DIRS && rm -rf $DATA_DIRS)
+[ -z "${NO_ZIP:-}" ] || exit 0
 mkdir -p "$W/deliverables"; rm -f "$W/deliverables/$NAME.zip"
 (cd "$OUT" && zip -q -r -9 "$W/deliverables/$NAME.zip" "$NAME")
 # Never ship disc data, memory cards or local settings.

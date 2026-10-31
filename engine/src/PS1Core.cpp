@@ -72,6 +72,21 @@ namespace
 		return buf;
 	}
 
+	/* A setting for the core, read from its environment when it starts.
+	 * dsfcore.dll uses the Universal C runtime, which keeps its own copy of
+	 * the environment (taken when it first loads, and not updated by
+	 * SetEnvironmentVariable): set the value there too, as well as in the
+	 * process and in this program's runtime. */
+	void SetCoreEnv( const char *sName, const CString &sValue )
+	{
+		SetEnvironmentVariableA( sName, sValue.c_str() );
+		_putenv_s( sName, sValue.c_str() );
+		typedef int (__cdecl *PutEnvS)( const char *, const char * );
+		if( HMODULE hUcrt = LoadLibraryA("ucrtbase.dll") )
+			if( PutEnvS pPut = (PutEnvS) GetProcAddress(hUcrt, "_putenv_s") )
+				pPut( sName, sValue.c_str() );
+	}
+
 	int ShiftOf( uint32_t mask )
 	{
 		int i = 0;
@@ -203,7 +218,7 @@ bool PS1Core::Start( CString &sError )
 	const CString sDll = sRoot + "\\dsfcore.dll";
 	if( !FileExists(sDll) )
 	{
-		sError = "dsfcore.dll is missing.\n\nIt is built from your own Dancing Stage Fusion disc;\nsee README.txt.";
+		sError = "dsfcore.dll is missing.\n\nRun Setup.exe first: it builds the game\nfrom your own Dancing Stage Fusion disc.";
 		return false;
 	}
 	const CString sDisc = FindDiscImage( sRoot + "\\disc" );
@@ -216,17 +231,9 @@ bool PS1Core::Start( CString &sError )
 	/* The core's files go in Data\, not beside the program: its overlay
 	 * capture store (read from the environment when the core starts). */
 	if( getenv("PSX_OVERLAY_CAPTURES") == NULL )
-	{
-		const CString sCaptures = sRoot + "\\Data\\overlay_captures.json";
-		SetEnvironmentVariableA( "PSX_OVERLAY_CAPTURES", sCaptures.c_str() );
-		_putenv( ("PSX_OVERLAY_CAPTURES=" + sCaptures).c_str() );
-	}
+		SetCoreEnv( "PSX_OVERLAY_CAPTURES", sRoot + "\\Data\\overlay_captures.json" );
 	if( getenv("PSX_CACHE_DIR") == NULL )
-	{
-		const CString sCache = sRoot + "\\Data\\cache";
-		SetEnvironmentVariableA( "PSX_CACHE_DIR", sCache.c_str() );
-		_putenv( ("PSX_CACHE_DIR=" + sCache).c_str() );
-	}
+		SetCoreEnv( "PSX_CACHE_DIR", sRoot + "\\Data\\cache" );
 
 	HMODULE h = LoadLibraryA( sDll.c_str() );
 	if( h == NULL )
@@ -269,7 +276,7 @@ bool PS1Core::Start( CString &sError )
 	{
 		vArgs.push_back( "--renderer" );	vArgs.push_back( "software" );
 	}
-	_putenv_s( "PSX_INTERNAL_RESOLUTION", PREFSMAN->m_sPS1InternalResolution.Get().c_str() );
+	SetCoreEnv( "PSX_INTERNAL_RESOLUTION", PREFSMAN->m_sPS1InternalResolution.Get() );
 	if( FileExists(sRoot + "\\bios\\openbios.bin") )
 	{
 		vArgs.push_back( "--bios" );	vArgs.push_back( sRoot + "\\bios\\openbios.bin" );

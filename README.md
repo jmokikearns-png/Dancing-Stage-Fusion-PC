@@ -20,9 +20,9 @@ same game changes to a PlayStation disc image for DuckStation or real hardware.
 
 ## Status
 
-Work in progress. Test builds are being played on Windows; the first public
-release is being prepared. Until then there is no download: building it
-yourself needs the steps under [Building](#building).
+The first release, 1.0 beta 1, is built and being tested; downloads will be
+on the Releases page. It has been tested in Wine (a Windows emulator), not
+yet on real Windows hardware.
 
 ## Features
 
@@ -87,6 +87,7 @@ is used.
 | `mods/` | Mod packages loaded by the game core |
 | `tools/extrasong/` | Song pack builder: your simfile packs in, a song pack out |
 | `tools/ps1disc/` | The Deluxe disc builder and its PlayStation code |
+| `tools/setup/` | `Setup.exe`: builds the game core from the player's disc |
 | `patches/psxrecomp/` | Changes to PSXRecomp this project needs, applied at build time |
 | `scripts/` | Build and packaging scripts |
 
@@ -98,27 +99,56 @@ which is compiled together with the PSXRecomp runtime and `core/` into
 `dsfcore.dll`. The generated code is derived from the game, so it is never
 committed or distributed; it exists only on the machine that built it.
 
-Outline (cross-compiling from Linux; a detailed guide comes with the first
-release):
+### With the release (Windows)
+
+The release does that part on your PC, with no tools to install:
+
+1. Unzip it anywhere you can write to.
+2. Put your disc image (`.bin` + `.cue`) in its `disc` folder.
+3. Run `Setup.exe`. It checks the image against the Redump dump, reads the
+   game program off it, recompiles it (`setup\psxrecomp-game.exe`), compiles
+   that with the included GCC (`setup\compiler`) and links it with the
+   prebuilt rest of the game core (`setup\kit`) into `dsfcore.dll`; it also
+   gives the program the game's memory card icon. About a minute, and the
+   same `dsfcore.dll`, byte for byte, on every PC. The recompiled code is
+   deleted afterwards.
+4. Run `DancingStageFusionPC.exe`.
+
+### From source
+
+Cross-compiled from Linux. The compiler is conda-forge's GCC 16 for
+`x86_64-w64-mingw32` (UCRT, mingw-w64 12, posix threads): its Linux-hosted
+build (`gcc_impl_win-64`, `gxx_impl_win-64`, `binutils_impl_win-64` and the
+`mingw-w64-ucrt-x86_64-*` sysroot packages from the `linux-64` and `noarch`
+channels) builds everything here, and its Windows-hosted build of the same
+version is the one the release ships for `Setup.exe`, so the prebuilt kit and
+the player's compiled game code always match.
 
 1. Check out PSXRecomp at the version in `patches/psxrecomp/` and apply the
-   patches there.
+   patches there (`git am --keep-cr`).
 2. Extract the game program from your disc and generate the game's C code
    with the recompiler and `game-project/game.toml`.
-3. Build `dsfcore.dll` (CMake, Ninja, MinGW-w64 x86-64).
-4. Build the engine in `engine/` the same way.
-5. Package: the program, `dsfcore.dll`, the data archive and your disc image
-   in its `disc` folder.
+3. Build `dsfcore.dll` with CMake and Ninja, using
+   `scripts/win/toolchain-conda-ucrt.cmake` (`DSF_TC` = the toolchain's
+   folder) and `-DDSF_EMBED=ON -DPSX_EMBED=ON -DCMAKE_C_STANDARD=17
+   -DCMAKE_CXX_STANDARD=17 -DPSX_ENABLE_VULKAN=OFF`.
+4. Build the engine in `engine/` (MinGW-w64 x86-64).
+5. `scripts/dsfpc/package.sh` packages a personal build (with your
+   `dsfcore.dll`); `scripts/dsfpc/make_release.sh VERSION` makes the release
+   instead: no `dsfcore.dll`, plus `Setup.exe` (`tools/setup/`), the kit
+   (`make_kit.sh`: the game core minus the game's code), the trimmed Windows
+   compiler (`make_compiler.sh`) and the recompiler. It refuses to package
+   anything from the game.
 
-Tools: CMake, Ninja, MinGW-w64 (x86_64, posix threads), Python 3.
+Tools: CMake, Ninja, the conda-forge compilers above, Python 3 with Pillow.
 
 ## Building the new songs
 
 The new songs are built once, from your simfile packs, into a song pack: one
-pack works for both the PC version and the Deluxe disc. (The first release's
-setup program will do this for you; until then it is these steps.)
+pack works for both the PC version and the Deluxe disc. (A one-click song
+builder for the release is in the works; until then it is these steps.)
 
-You need Python 3.11 or newer with Pillow (`pip install pillow`), ffmpeg and
+You need Python 3.11 or newer with Pillow and numpy (`pip install pillow numpy`), ffmpeg and
 ffprobe on your `PATH`, and a C compiler available as `cc` (it builds the
 small PlayStation audio encoder in `tools/extrasong/psxaudio.c`).
 
