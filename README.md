@@ -44,7 +44,7 @@ yourself needs the steps under [Building](#building).
   languages; **QUIT** is on the main menu.
 - **STEP MARK COLORS TYPE3**: arrows coloured by rhythm (quarter, eighth,
   triplet, sixteenth).
-- **The arcade songs**: songs the PlayStation version never had, built from
+- **New songs**: songs the PlayStation version never had, built from
   your simfile packs into the game's own song list. They play like the
   original 20: in the music select, results, WORKOUT and RECORDS, with their
   own banners, previews and backgrounds, and unlock conditions (Heaven and
@@ -54,7 +54,7 @@ yourself needs the steps under [Building](#building).
 **Deluxe (PlayStation disc)**
 
 - `Build Deluxe Disc.exe` turns your disc image into a Deluxe image: TYPE3
-  colours, the arcade songs from the same song packs, unlocks, and a NEW!!
+  colours, the new songs from the same song packs, unlocks, and a NEW!!
   marker on newly unlocked songs.
 - Checks your image first and changes nothing if it isn't the expected,
   undamaged PAL disc; patched sectors keep valid error-correction data.
@@ -64,7 +64,7 @@ yourself needs the steps under [Building](#building).
 - *Dancing Stage Fusion* (Europe, SLES-04163) as a raw `.bin` + `.cue` image
   (MODE2/2352).
 - **Simfile packs for both the PlayStation 2 and the arcade versions of
-  *Dancing Stage Fusion*.** The arcade songs are the
+  *Dancing Stage Fusion*.** The new songs are the
   heart of this project, so these are required, not optional. Each song is a
   StepMania simfile folder: the `.sm` step chart, the audio (`.ogg`, `.mp3`
   or `.wav`), a 256x80 banner and a 320x240 background. This project does not
