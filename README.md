@@ -147,11 +147,12 @@ Tools: CMake, Ninja, the conda-forge compilers above, Python 3 with Pillow.
 The new songs are built once, from your simfile packs, into a song pack: one
 pack works for both the PC version and the Deluxe disc.
 
-**With the release:** put each song's simfile folder in the `simfiles` folder
-(the names are in `simfiles\PUT_YOUR_SIMFILES_HERE.txt`) and run
-`Build New Songs.bat`. It runs the song builder with the tools in `songtools`
-(Python with numpy and Pillow, FFmpeg, and the PlayStation audio encoder),
-and installs the pack in the game. Nothing to install.
+**With the release:** put your simfile packs in the `simfiles` folder, whole
+and unzipped, and run `Build New Songs.bat`. It finds each song in them by its
+title (and artist), with the music, banner and background its `.sm` names,
+runs the song builder with the tools in `songtools` (Python with numpy and
+Pillow, FFmpeg, and the PlayStation audio encoder), and installs the pack in
+the game. Nothing to install.
 
 **From source:**
 
@@ -163,11 +164,9 @@ PlayStation audio encoder in `tools/extrasong/psxaudio.c`).
    [`tools/extrasong/songs.toml`](tools/extrasong/songs.toml) into it. It lists
    the 12 new songs in order, with their song IDs, background animations and
    Heaven and Earth's unlock.
-2. Under `my-songs/songs/`, put each song's simfile folder from your
-   PlayStation 2 and arcade simfile packs, named as in `songs.toml`
-   (for example `songs/Tough Enough/`), or change the `dir` lines to where
-   your folders are. Each folder needs the `.sm` chart, the audio, a 256x80
-   banner and a 320x240 background.
+2. Put your PlayStation 2 and arcade simfile packs in that folder, whole.
+   Each song is found in them by its title and artist; to use a particular
+   folder instead, give the song a `dir` line in `songs.toml`.
 3. Build the pack against your disc image:
 
    ```

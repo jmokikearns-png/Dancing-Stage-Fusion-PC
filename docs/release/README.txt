@@ -81,10 +81,9 @@ GRAPHICS
 THE NEW SONGS
   Songs the PlayStation version never had, built from your own simfile packs
   of the PlayStation 2 and arcade versions of Dancing Stage Fusion:
-  1. Put each song's simfile folder in the "simfiles" folder, named as
-     simfiles\PUT_YOUR_SIMFILES_HERE.txt lists (or change the "dir" lines in
-     simfiles\songs.toml). A folder holds the .sm step chart, the audio
-     (.ogg, .mp3 or .wav), a 256x80 banner and a 320x240 background.
+  1. Put your simfile packs in the "simfiles" folder, whole, as they come
+     (unzipped). The songs needed are found in them by title; the list is
+     in simfiles\PUT_YOUR_SIMFILES_HERE.txt.
   2. Run "Build New Songs.bat" (after Setup.exe). It converts the charts,
      music and pictures to the game's own formats with the tools in
      "songtools" (about two minutes) and puts the song pack in the game.

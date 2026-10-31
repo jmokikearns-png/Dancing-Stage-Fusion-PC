@@ -2,18 +2,19 @@
 # (song 21 first).  A song keeps its save slot only while it keeps its place,
 # so keep this order.
 #
-# Each "dir" is a StepMania simfile folder from your PlayStation 2 or arcade
-# Dancing Stage Fusion simfile pack, holding NAME.sm, the audio (.ogg, .mp3 or
-# .wav), NAME.png (256x80 banner) and NAME-bg.png (320x240 background).  Put
-# them under songs/ next to this file, or change the paths.
+# Put your simfile packs of the PlayStation 2 and arcade versions of Dancing
+# Stage Fusion in the folder with this file, as they come: each song is found
+# in them by its title (and artist); its music, banner and background are the
+# files its .sm names.  To use one particular folder instead, give the song
+# dir = "path/to/its/folder"; to match another title too, find = ["..."].
 #
 # Build: python tools/extrasong/build_extrasong.py songs.toml DISC.cue OUT
+# (the release: "Build New Songs.bat").
 #
 # stage = K: the song's own background animation on stage set K (1..17, not
 # 11, one song each).  script = N instead: stock song N's, fitted to it.
 # background / banner: your own picture instead of the simfile's.
 [[song]]
-dir = "songs/Tough Enough"
 stage = 1			# its own background animation, on stage set 1
 # script = 18			# (or: 321STARS's, fitted to this song)
 master_id = 0x8030
@@ -22,7 +23,6 @@ title = "Tough Enough"
 artist = "Vanilla Ninja"
 
 [[song]]
-dir = "songs/Chihuahua 2002"
 stage = 10			# its own background animation, on stage set 10
 # script = 19			# (or: Try 2 Luv. U's, fitted to this song)
 master_id = 0x8031
@@ -30,7 +30,6 @@ title = "Chihuahua 2002"
 artist = "DJ BoBo"
 
 [[song]]
-dir = "songs/Danger! High Voltage"
 stage = 9			# its own background animation, on stage set 9
 # script = 0			# (or: I Believe In A Thing Called Love's, fitted to this song)
 master_id = 0x8032
@@ -38,7 +37,6 @@ title = "Danger! High Voltage"
 artist = "Electric Six"
 
 [[song]]
-dir = "songs/Familiar Feeling"
 stage = 6			# its own background animation, on stage set 6
 # script = 7			# (or: Keep On Movin''s, fitted to this song)
 master_id = 0x8033
@@ -46,7 +44,6 @@ title = "Familiar Feeling"
 artist = "Moloko"
 
 [[song]]
-dir = "songs/Go West"
 stage = 13			# its own background animation, on stage set 13
 # script = 1			# (or: Come Into My World's, fitted to this song)
 # background = "my-art/background.png"
@@ -55,7 +52,6 @@ title = "Go West"
 artist = "Pet Shop Boys"
 
 [[song]]
-dir = "songs/Good Luck"
 stage = 8			# its own background animation, on stage set 8
 # script = 6			# (or: KAKUMEI's, fitted to this song)
 master_id = 0x8035
@@ -63,7 +59,6 @@ title = "Good Luck"
 artist = "Basement Jaxx feat. Lisa Kekaula"
 
 [[song]]
-dir = "songs/Its Raining Men (Almighty Mix)"
 stage = 2			# its own background animation, on stage set 2
 # script = 17			# (or: Sunlight's, fitted to this song)
 master_id = 0x8036
@@ -71,7 +66,6 @@ title = "It's Raining Men (Almighty Mix)"
 artist = "Geri Halliwell"
 
 [[song]]
-dir = "songs/Kids in America"
 stage = 12			# its own background animation, on stage set 12
 # script = 10			# (or: Mickey's, fitted to this song)
 # background = "my-art/background.png"
@@ -81,7 +75,6 @@ artist = "Kim Wilde"
 
 # The simfile uses the DDR X scale; these are DDR EXTREME / Fusion's.
 [[song]]
-dir = "songs/PARANOIA survivor"
 stage = 15			# its own background animation, on stage set 15
 # script = 13			# (or: PARANOIA MAX's, fitted to this song)
 master_id = 0x8038
@@ -92,7 +85,6 @@ single = [3, 5, 8, 10]
 double = [5, 8, 10]
 
 [[song]]
-dir = "songs/Rappers Delight"
 stage = 3			# its own background animation, on stage set 3
 # script = 11			# (or: Move Your Feet's, fitted to this song)
 master_id = 0x8039
@@ -100,7 +92,6 @@ title = "Rapper's Delight"
 artist = "Sugarhill Gang"
 
 [[song]]
-dir = "songs/Superstar"
 stage = 4			# its own background animation, on stage set 4
 # script = 4			# (or: Gotta Get Thru This's, fitted to this song)
 master_id = 0x803a
@@ -110,7 +101,6 @@ artist = "Jamelia"
 # Hidden until PARANOIA survivor is cleared on DIFFICULT or EXPERT, single
 # or double (the game's Standard and Heavy charts).
 [[song]]
-dir = "songs/Heaven and Earth"
 stage = 16			# its own background animation, on stage set 16
 # script = 14			# (or: AM-3P's, fitted to this song)
 # background = "my-art/background.png"

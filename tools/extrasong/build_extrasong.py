@@ -264,6 +264,8 @@ def parse_sm(path):
 	if not bpms or bpms[0][0] > 0:
 		sys.exit('%s: no tempo at beat 0' % path)
 	return dict(title=tags.get('TITLE', [''])[0].strip(), artist=tags.get('ARTIST', [''])[0].strip(),
+	            music=tags.get('MUSIC', [''])[0].strip(), banner=tags.get('BANNER', [''])[0].strip(),
+	            background=tags.get('BACKGROUND', [''])[0].strip(),
 	            offset=float(tags.get('OFFSET', ['0'])[0] or 0), bpms=bpms,
 	            stops=[s for s in pairs('STOPS') if s[1] > 0],
 	            sample_start=float(tags.get('SAMPLESTART', ['0'])[0] or 0),
@@ -667,22 +669,74 @@ def xa_sector(sub, data):
 
 
 # ---- one song -----------------------------------------------------------------
+def norm(text):
+	"""A title or artist for matching: letters and digits only, lower case."""
+	return re.sub(r'[^0-9a-z]', '', text.lower())
+
+
+def sm_header(path):
+	"""TITLE, TITLETRANSLIT and ARTIST of a .sm, without parsing its charts."""
+	s = open(path, encoding='utf-8', errors='replace').read()
+	tag = lambda k: (re.search(r'#' + k + r':([^;]*);', s) or [None, ''])[1].strip()
+	return tag('TITLE'), tag('TITLETRANSLIT'), tag('ARTIST'), s.count('#NOTES:')
+
+
+class SimfileIndex:
+	"""Every .sm under a folder (the player's simfile packs, as they come),
+	to find each new song by its title."""
+	def __init__(self, root):
+		self.by_title = {}
+		for d, _, files in os.walk(root):
+			for f in files:
+				if f.lower().endswith('.sm'):
+					p = os.path.join(d, f)
+					title, translit, artist, charts = sm_header(p)
+					for t in {norm(title), norm(translit)} - {''}:
+						self.by_title.setdefault(t, []).append((p, norm(artist), charts))
+
+	def find(self, cfg):
+		"""The best .sm for a song: its title (or one of `find`), then the
+		artist, then the most step charts; None if there is none."""
+		names = [cfg['title']] + list(cfg.get('find', []))
+		cands = [c for n in names for c in self.by_title.get(norm(n), [])]
+		if not cands:
+			return None
+		a = norm(cfg.get('artist', ''))
+		same = [c for c in cands if a and c[1] and (a in c[1] or c[1] in a)]
+		cands = same or cands
+		return sorted(cands, key=lambda c: (-c[2], c[0]))[0][0]
+
+
+def song_file(d, base, tag, fallbacks, exts):
+	"""A song's file: the one its .sm names, else the usual names, else the
+	only file of that kind in its folder."""
+	for name in ([tag] if tag else []) + [base + f for f in fallbacks]:
+		p = name if os.path.isabs(name) else os.path.join(d, name)
+		if os.path.isfile(p):
+			return p
+	return None
+
+
 class Song:
-	def __init__(self, cfg, root):
+	def __init__(self, cfg, root, sm_path):
 		self.cfg = cfg
-		self.dir = os.path.join(root, cfg['dir'])
-		names = [f for f in os.listdir(self.dir) if f.lower().endswith('.sm')]
-		if len(names) != 1:
-			sys.exit('%s: expected one .sm file' % self.dir)
-		self.base = os.path.join(self.dir, names[0][:-3])
-		self.sm = parse_sm(self.base + '.sm')
-		self.audio = next((self.base + e for e in ('.ogg', '.mp3', '.wav') if os.path.exists(self.base + e)), None)
+		self.dir = os.path.dirname(sm_path)
+		self.base = sm_path[:-3]
+		self.sm = parse_sm(sm_path)
+		self.audio = song_file(self.dir, os.path.basename(self.base), self.sm['music'], ('.ogg', '.mp3', '.wav'), None)
 		if not self.audio:
 			sys.exit('%s: no audio file' % self.dir)
 		self.id = cfg['master_id']
 		self.title = cfg.get('title', self.sm['title'])
 		self.artist = cfg.get('artist', self.sm['artist'])
 		self.path = lambda k: os.path.join(root, cfg[k])
+		stem = os.path.basename(self.base)
+		self.banner_png = self.path('banner') if 'banner' in self.cfg else \
+			song_file(self.dir, stem, self.sm['banner'], ('.png', '-bn.png', '-banner.png', ' banner.png'), None)
+		self.bg_png = self.path('background') if 'background' in self.cfg else \
+			song_file(self.dir, stem, self.sm['background'], ('-bg.png', '-background.png', ' bg.png', ' background.png'), None)
+		if not self.banner_png or not self.bg_png:
+			sys.exit('%s: no %s picture (give it in songs.toml)' % (self.dir, 'banner' if not self.banner_png else 'background'))
 
 	def chart(self, style, diff):
 		return next((c for c in self.sm['charts'] if c['style'] == style and c['diff'] == SM_NAME[diff]), None)
@@ -755,12 +809,11 @@ class Song:
 			events, dropped = retime_events(donor_entry[1], donor_entry[0], dens, float(self.length))
 			self.script = ('from stock song %d' % donor, len(parse_events(events)[1]),
 			               '%d past the end dropped' % dropped if dropped else '')
-		bg_png = self.path('background') if 'background' in self.cfg else self.base + '-bg.png'
-		bg = konami_lz.encode(background_tim(Image.open(bg_png)))
+		bg = konami_lz.encode(background_tim(Image.open(self.bg_png)))
 		self.entries = [build_pack([slot0, events, bg, pack_items(entry(68 + 5 * UI_DONOR + k))[3]])
 		                for k in range(LANG_ENTRIES)]
 		# ---- graphics ----
-		banner_img = Image.open(self.path('banner') if 'banner' in self.cfg else self.base + '.png')
+		banner_img = Image.open(self.banner_png)
 		if 'plate' in self.cfg:
 			plate = plate_tim(self.path('plate'), stock_plate)
 		else:
@@ -801,11 +854,28 @@ def main():
 	a = ap.parse_args()
 	cfg = tomllib.load(open(a.songs, 'rb'))
 	root = os.path.dirname(os.path.abspath(a.songs))
-	missing = [c['dir'] for c in cfg['song'] if not os.path.isdir(os.path.join(root, c['dir']))]
+	index = None
+	found, missing = [], []
+	for c in cfg['song']:
+		d = os.path.join(root, c['dir']) if 'dir' in c else None
+		if d and os.path.isdir(d):
+			sms = [f for f in os.listdir(d) if f.lower().endswith('.sm')]
+			if len(sms) != 1:
+				sys.exit('%s: expected one .sm file' % d)
+			found.append(os.path.join(d, sms[0]))
+			continue
+		if index is None:
+			index = SimfileIndex(root)
+		p = index.find(c)
+		if p is None:
+			missing.append('%s - %s' % (c['title'], c.get('artist', '')))
+		found.append(p)
 	if missing:
-		sys.exit('These song folders are missing (next to %s):\n  %s\nPut each song\'s simfile folder there with that name, '
-		         'or change its "dir" line.' % (os.path.basename(a.songs), '\n  '.join(missing)))
-	songs = [Song(c, root) for c in cfg['song']]
+		sys.exit('Not found in %s (no .sm file with these titles):\n  %s\nPut the PlayStation 2 and arcade '
+		         'Dancing Stage Fusion simfile packs there.' % (root, '\n  '.join(missing)))
+	for c, p in zip(cfg['song'], found):
+		print('%-34s %s' % (c['title'], os.path.relpath(p, root)))
+	songs = [Song(c, root, p) for c, p in zip(cfg['song'], found)]
 	if SONGS + len(songs) > MAX_SONGS:
 		sys.exit('the game holds %d songs: at most %d extra' % (MAX_SONGS, MAX_SONGS - SONGS))
 
