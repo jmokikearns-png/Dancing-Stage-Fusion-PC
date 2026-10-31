@@ -87,6 +87,38 @@ export const ThemeTitleLogo: React.FC = () => (
 	</AbsoluteFill>
 );
 
+/* The title screen's logo: our own design (none of the game's logo is
+ * used or traced). "Dancing Stage" over a big "Fusion" in Lobster with the
+ * banded look of our "PC" (green glow, yellow rim, dark ink, green fill),
+ * tilted, over a slanted ink plate with a yellow rim. Same canvas as the theme's logo frame (374x176 at `scale`), so
+ * "PC" (ThemeTitleLogoPC) stamps on at the same place beside "Fusion". */
+export const ThemeTitleLogoOwn: React.FC<{scale?: number}> = ({scale = 3}) => {
+	const s = scale, W = 374, H = 176;
+	const plate = [[16, 52], [304, 30], [316, 134], [30, 158]];
+	const pts = plate.map(([x, y]) => `${x * s},${y * s}`).join(' ');
+	return (
+		<AbsoluteFill>
+			<svg width={W * s} height={H * s} style={{position: 'absolute'}}>
+				<defs>
+					<linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+						<stop offset="0%" stopColor="#0B5A4A" />
+						<stop offset="100%" stopColor={colors.logoInk} />
+					</linearGradient>
+				</defs>
+				<polygon points={pts} fill={colors.logoGreen} stroke={colors.logoGreen} strokeWidth={14 * s} strokeLinejoin="round" />
+				<polygon points={pts} fill={colors.logoRim} stroke={colors.logoRim} strokeWidth={7 * s} strokeLinejoin="round" />
+				<polygon points={pts} fill="url(#plate)" stroke={colors.logoInk} strokeWidth={2 * s} strokeLinejoin="round" />
+			</svg>
+			<div style={{position: 'absolute', left: 26 * s, top: 38 * s, transform: `rotate(-6deg) skewX(-6deg)`, transformOrigin: 'left top'}}>
+				<LogoText text="Dancing Stage" size={38} s={s} />
+			</div>
+			<div style={{position: 'absolute', left: 36 * s, top: 76 * s, transform: `rotate(-6deg) skewX(-6deg)`, transformOrigin: 'left top'}}>
+				<LogoText text="Fusion" size={64} s={s} />
+			</div>
+		</AbsoluteFill>
+	);
+};
+
 /* The loading window's banner (468x62, shown 1:1 by StepMania). */
 export const ThemeSplash: React.FC = () => (
 	<AbsoluteFill style={{background: panelGradient, alignItems: 'center', justifyContent: 'center', borderBottom: `3px solid ${colors.orange}`}}>

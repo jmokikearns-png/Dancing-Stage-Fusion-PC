@@ -18,24 +18,21 @@ TC=${DSF_TC:-$W/tc/linux}
 OUT=$W/builds/package
 D=$OUT/$NAME
 
-# The program and its data, without a game core, without a title logo of
-# the game's own.
+# The program and its data, without a game core, with our own title logo.
 env -u LOGO -u LOGO_FROM NO_CORE=1 NO_ZIP=1 CB="$CB" README="$REPO/docs/release/README.txt" \
   bash "$REPO/scripts/dsfpc/package.sh" "$NAME"
 rm -f "$D/dsfcore.dll"
 
 S=$D/setup
-mkdir -p "$S/recomp/bios" "$S/icon" "$S/logo"
+mkdir -p "$S/recomp/bios" "$S/icon"
 cp "$RECOMP" "$S/psxrecomp-game.exe"
 cp "$REPO/game-project/game.toml" "$S/recomp/game.toml"
 cp "$(sed -n "s/^PSXRECOMP_ROOT:PATH=//p" "$CB/CMakeCache.txt")/bios/SCPH1001.toml" "$S/recomp/bios/"
 bash "$REPO/scripts/dsfpc/make_kit.sh" "$CB" "$S/kit"
 cp -r "$COMPILER" "$S/compiler"
 python3 "$REPO/tools/setup/make_badge.py" "$S/icon/badge.rgba"
-# The title logo's "PC" and animation (the logo itself Setup takes from the disc)
-cp "$REPO/tools/setup/logo/"* "$S/logo/"
 "$TC/bin/x86_64-w64-mingw32-gcc" -O2 -Wall -Wextra -Wno-format-truncation -static -s \
-  -o "$D/Setup.exe" "$REPO/tools/setup/setup.c" "$REPO/tools/setup/logo.c" -lm
+  -o "$D/Setup.exe" "$REPO/tools/setup/setup.c"
 cp "$COMPILER/README.txt" "$D/licenses/GCC-and-Binutils-README.txt"
 
 # Nothing from the game, the player's disc or a local setup in the release.

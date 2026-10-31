@@ -2,7 +2,7 @@ import React from 'react';
 import {Composition, Still} from 'remotion';
 import {FontSheet, FontSheetProps} from './FontSheet';
 import exo2Bold24 from '../fonts/exo2-700-24.json';
-import {DsfLogoProps, LOGO_DEFAULTS, logoCanvas, PC_BOX, ThemeBackground, ThemeFooter, ThemeHeader, ThemeOptionsPage, ThemeSplash, ThemeTitleLogo, ThemeTitleLogoDSF, ThemeInfoCursor} from './ThemeArt';
+import {DsfLogoProps, LOGO_DEFAULTS, logoCanvas, PC_BOX, ThemeBackground, ThemeFooter, ThemeHeader, ThemeOptionsPage, ThemeSplash, ThemeTitleLogo, ThemeTitleLogoDSF, ThemeTitleLogoOwn, ThemeInfoCursor} from './ThemeArt';
 import {FPS, ShowOff, totalFrames} from './ShowOff';
 import {sizes} from './tokens';
 import {FontMatch} from './FontMatch';
@@ -25,6 +25,7 @@ export const Root: React.FC = () => (
 		<Still id="ThemeFooter" component={ThemeFooter} width={1280} height={64} />
 		<Still id="ThemeOptionsPage" component={ThemeOptionsPage} width={1280} height={960} />
 		<Still id="ThemeTitleLogo" component={ThemeTitleLogo} width={1280} height={240} />
+		<Still id="ThemeTitleLogoOwn" component={ThemeTitleLogoOwn} width={374 * 3} height={176 * 3} />
 		{/* only with the player's own copy of the game's logo in the public dir */}
 		{(['all', 'logo'] as const).map((part) => (
 			<Still key={part} id={part === 'all' ? 'ThemeTitleLogoDSF' : 'ThemeTitleLogoDSFArt'} component={ThemeTitleLogoDSF as React.FC<Record<string, unknown>>}

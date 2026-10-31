@@ -3,7 +3,7 @@
 # tokens (Remotion) straight into the theme, and write the actor files that
 # use them.  build_theme_art.sh ENGINE_DIR   (the folder with Themes/ and Data/)
 #
-# The title logo is our own lettering unless the player supplies the game's
+# The title logo is our own design (ThemeTitleLogoOwn) unless the player supplies the game's
 # logo: LOGO=their-logo.png (400x175 art, or any multiple).  It is then
 # upscaled 4x (ESRGAN_MODEL=RealESRGAN_x4plus_anime_6B.pth, see
 # upscale/esrgan_np.py; without it the logo is used as it is), traced into
@@ -32,7 +32,8 @@ still ThemeOptionsPage "$T/Graphics/ScreenOptions page (res 640x480).png"
 # (the logo's layers may not start with "ScreenTitleMenu logo": StepMania
 # would take them for the element itself, beside the xml)
 if [ -z "$LOGO" ]; then
-	still ThemeTitleLogo "$T/Graphics/_title logo (res 640x120).png"
+	still ThemeTitleLogoOwn "$T/Graphics/_title logo main (res 374x176).png"
+	still ThemeTitleLogoPC "$T/Graphics/_title logo pc (res 126x104).png"
 fi
 still ThemeBackground "$T/BGAnimations/ScreenWithMenuElements background/bg (res 640x480).png"
 still ThemeTitleBackground "$T/BGAnimations/ScreenTitleMenu background/bg (res 640x480).png"
@@ -44,8 +45,14 @@ for d in "ScreenWithMenuElements background" "ScreenTitleMenu background"; do
 done
 
 if [ -z "$LOGO" ]; then
-	rm -f "$T/Graphics/ScreenTitleMenu logo "*.png "$T/Graphics/_title logo dsf "*.png "$T/Graphics/_title logo pc "*.png
-	printf '<Sprite Texture="_title logo (res 640x120).png" />\r\n' > "$T/Graphics/ScreenTitleMenu logo.xml"
+	# our own logo (ThemeArt.tsx ThemeTitleLogoOwn): it drops in, then "PC" stamps on
+	rm -f "$T/Graphics/ScreenTitleMenu logo "*.png "$T/Graphics/_title logo dsf "*.png "$T/Graphics/_title logo (res 640x120).png"
+	{
+		printf '<ActorFrame>\r\n<children>\r\n'
+		printf '\t<Layer1 Class="Sprite" Texture="_title logo main (res 374x176).png" OnCommand="zoom,1.6;diffusealpha,0;decelerate,0.35;zoom,1;diffusealpha,1" />\r\n'
+		printf '\t<Layer2 Class="Sprite" Texture="_title logo pc (res 126x104).png" OnCommand="x,70;y,14;diffusealpha,0;zoom,4;sleep,0.4;diffusealpha,1;accelerate,0.14;zoom,0.85;decelerate,0.12;zoom,1.08;accelerate,0.08;zoom,1;glowshift;effectperiod,2.5;effectcolor1,1,1,1,0;effectcolor2,1,1,0.6,0.35" />\r\n'
+		printf '</children>\r\n</ActorFrame>\r\n'
+	} > "$T/Graphics/ScreenTitleMenu logo.xml"
 else
 	PUB=$(mktemp -d)
 	trap 'rm -rf "${PUB:?}"' EXIT
@@ -65,7 +72,7 @@ print(w, h, L['pcBoxW'], L['pcBoxH'],
       L['pcX'] - L['cropX'] + L['pcBoxW'] / 2 - 12 - w / 2, L['pcY'] - h / 2)
 PY
 )
-	rm -f "$T/Graphics/_title logo (res 640x120).png" "$T/Graphics/ScreenTitleMenu logo "*.png "$T/Graphics/_title logo dsf "*.png "$T/Graphics/_title logo pc "*.png
+	rm -f "$T/Graphics/_title logo (res 640x120).png" "$T/Graphics/_title logo main "*.png "$T/Graphics/ScreenTitleMenu logo "*.png "$T/Graphics/_title logo dsf "*.png "$T/Graphics/_title logo pc "*.png
 	still ThemeTitleLogoDSFArt "$T/Graphics/_title logo dsf (res ${LW}x${LH}).png" --public-dir="$PUB"
 	still ThemeTitleLogoPC "$T/Graphics/_title logo pc (res ${PW}x${PH}).png" --public-dir="$PUB"
 	# the logo drops in; "PC" stamps on after it, then glints now and then

@@ -25,9 +25,8 @@ SETUP
   3. Run Setup.exe. It checks the image, reads the game program off it,
      recompiles it (setup\psxrecomp-game.exe), compiles that with the
      included compiler (setup\compiler) and links dsfcore.dll, the game
-     core. It also puts the game's logo on the title screen and gives
-     DancingStageFusionPC.exe the game's memory card icon, both taken from
-     your disc. This takes a few minutes; run it again any time to rebuild.
+     core. It also gives DancingStageFusionPC.exe the game's memory card
+     icon, taken from your disc. This takes a few minutes; run it again any time to rebuild.
      Until Setup has run, DancingStageFusionPC.exe only tells you to run it.
   4. Plug in your dance pad(s), then run DancingStageFusionPC.exe.
   No PlayStation BIOS is needed (the free OpenBIOS is included).

@@ -1,6 +1,0 @@
-<ActorFrame>
-<children>
-	<Layer1 Class="Sprite" Texture="_title logo dsf (res 374x176).png" OnCommand="zoom,1.6;diffusealpha,0;decelerate,0.35;zoom,1;diffusealpha,1" />
-	<Layer2 Class="Sprite" Texture="_title logo pc (res 126x104).png" OnCommand="x,108.0;y,5.0;diffusealpha,0;zoom,4;sleep,0.4;diffusealpha,1;accelerate,0.14;zoom,0.85;decelerate,0.12;zoom,1.08;accelerate,0.08;zoom,1;glowshift;effectperiod,2.5;effectcolor1,1,1,1,0;effectcolor2,1,1,0.6,0.35" />
-</children>
-</ActorFrame>
