@@ -64,9 +64,11 @@ namespace
 
 	CString RootDir()
 	{
-		/* StepMania's working directory is the install folder (Themes, Data, ...). */
+		/* The install folder: the program's own (dsfcore.dll, disc, Data, ...). */
 		char buf[MAX_PATH] = "";
-		GetCurrentDirectoryA( sizeof(buf), buf );
+		GetModuleFileNameA( NULL, buf, sizeof(buf) );
+		if( char *slash = strrchr(buf, '\\') )
+			*slash = 0;
 		return buf;
 	}
 
@@ -191,7 +193,7 @@ bool PS1Core::Start( CString &sError )
 	{
 		if( HasExited() )
 		{
-			sError = ssprintf( "The game stopped (code %i). See dsfcore.log in the game folder.", GetExitCode() );
+			sError = ssprintf( "The game stopped (code %i). See Data\\dsfcore.log in the game folder.", GetExitCode() );
 			return false;
 		}
 		return true;
@@ -209,6 +211,21 @@ bool PS1Core::Start( CString &sError )
 	{
 		sError = "No disc image found.\n\nPut your Dancing Stage Fusion (Europe) disc image\n(.bin and .cue) in the \"disc\" folder.";
 		return false;
+	}
+
+	/* The core's files go in Data\, not beside the program: its overlay
+	 * capture store (read from the environment when the core starts). */
+	if( getenv("PSX_OVERLAY_CAPTURES") == NULL )
+	{
+		const CString sCaptures = sRoot + "\\Data\\overlay_captures.json";
+		SetEnvironmentVariableA( "PSX_OVERLAY_CAPTURES", sCaptures.c_str() );
+		_putenv( ("PSX_OVERLAY_CAPTURES=" + sCaptures).c_str() );
+	}
+	if( getenv("PSX_CACHE_DIR") == NULL )
+	{
+		const CString sCache = sRoot + "\\Data\\cache";
+		SetEnvironmentVariableA( "PSX_CACHE_DIR", sCache.c_str() );
+		_putenv( ("PSX_CACHE_DIR=" + sCache).c_str() );
 	}
 
 	HMODULE h = LoadLibraryA( sDll.c_str() );
@@ -285,7 +302,7 @@ bool PS1Core::Start( CString &sError )
 		LOG->Warn( "PS1Core: the sound driver doesn't mix direct streams; the game will be silent and clock-paced" );
 
 	LOG->Trace( "PS1Core: starting %s with disc \"%s\"", sDll.c_str(), sDisc.c_str() );
-	const int iRet = pfnStart( &host, (int) vArgv.size(), &vArgv[0], (sRoot + "\\dsfcore.log").c_str() );
+	const int iRet = pfnStart( &host, (int) vArgv.size(), &vArgv[0], (sRoot + "\\Data\\dsfcore.log").c_str() );
 	if( iRet != 0 )
 	{
 		sError = ssprintf( "dsfcore.dll refused to start (code %i).", iRet );

@@ -20,7 +20,7 @@
 
 #include "Banner.h"
 
-#define CACHE_DIR "Cache/"
+#define CACHE_DIR "Data/Cache/"
 #define BANNER_CACHE_INDEX CACHE_DIR "banners.cache"
 
 

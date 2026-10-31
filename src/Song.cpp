@@ -38,7 +38,7 @@
 #include <set>
 #include <float.h>
 
-#define CACHE_DIR "Cache/"
+#define CACHE_DIR "Data/Cache/"
 
 const int FILE_CACHE_VERSION = 144;	// increment this to invalidate cache
 

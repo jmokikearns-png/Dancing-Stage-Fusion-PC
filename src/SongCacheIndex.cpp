@@ -23,7 +23,7 @@
  * path; we don't have to actually look in the directory (to find out the directory hash)
  * in order to find the cache file.
  */
-#define CACHE_DIR "Cache/"
+#define CACHE_DIR "Data/Cache/"
 #define CACHE_INDEX CACHE_DIR "index.cache"
 
 

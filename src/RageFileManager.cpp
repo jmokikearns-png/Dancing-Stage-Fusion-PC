@@ -299,9 +299,11 @@ void RageFileManager::MountInitialFilesystems()
 	CHECKPOINT_M( ssprintf( "... %i parts", int(parts.size())) );
 	ASSERT_M( parts.size() > 1, ssprintf("Strange DirOfExecutable: %s", DirOfExecutable.c_str()) );
 	CString Dir = join( "/", parts.begin(), parts.end()-1 );
-	/* DSF PC: or the executable's own directory, when it holds the data. */
+	/* DSF PC: or the executable's own directory, when it holds the data
+	 * (the Themes folder, or the archive with it, DancingStageFusionPC.dat). */
 	struct stat st;
-	if( !stat( DirOfExecutable + "/Themes", &st ) && (st.st_mode & S_IFDIR) )
+	if( (!stat( DirOfExecutable + "/Themes", &st ) && (st.st_mode & S_IFDIR)) ||
+	    (!stat( DirOfExecutable + "/DancingStageFusionPC.dat", &st ) && (st.st_mode & S_IFREG)) )
 		Dir = DirOfExecutable;
 	RageFileManager::Mount( "dir", Dir, "/" );
 #elif defined(DARWIN)

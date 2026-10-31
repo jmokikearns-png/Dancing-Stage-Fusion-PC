@@ -876,7 +876,7 @@ static void DoSave()
 {
 	char szModName2[MAX_PATH];
 
-	SpliceProgramPath(szModName2, sizeof szModName2, "../crashinfo.txt");
+	SpliceProgramPath(szModName2, sizeof szModName2, "Data/crashinfo.txt");
 
 	HANDLE hFile = CreateFile(szModName2, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (INVALID_HANDLE_VALUE == hFile)
@@ -994,7 +994,7 @@ INT_PTR APIENTRY CrashDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 					PRODUCT_NAME " warning", MB_OK|MB_ICONEXCLAMATION))
 					return TRUE;
 
-			ViewWithNotepad("../crashinfo.txt");
+			ViewWithNotepad("Data/crashinfo.txt");
 			return TRUE;
 		case IDC_BUTTON_RESTART:
 			{

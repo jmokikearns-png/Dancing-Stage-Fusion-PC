@@ -76,6 +76,7 @@
 #endif
 
 #define ZIPS_DIR "Packages/"
+#define DSF_DATA_FILE "DancingStageFusionPC.dat"
 
 int g_argc = 0;
 char **g_argv = NULL;
@@ -1038,6 +1039,10 @@ int main(int argc, char* argv[])
 			FILEMAN->Mount( "dir", dirs[i], "/Songs" );
 	}
 	MountTreeOfZips( ZIPS_DIR );
+	/* Dancing Stage Fusion PC: StepMania's own data (themes, noteskins and the
+	 * folders it expects to find) in one archive beside the program. */
+	if( IsAFile(DSF_DATA_FILE) )
+		FILEMAN->Mount( "zip", DSF_DATA_FILE, "/" );
 
 	/* One of the above filesystems might contain files that affect preferences, eg Data/Static.ini.
 	 * Re-read preferences. */

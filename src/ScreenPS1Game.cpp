@@ -113,7 +113,7 @@ void ScreenPS1Game::Update( float fDeltaTime )
 	}
 	if( PS1CORE->HasExited() )
 	{
-		ShowError( ssprintf("The game stopped (code %i).\nSee dsfcore.log in the game folder.", PS1CORE->GetExitCode()) );
+		ShowError( ssprintf("The game stopped (code %i).\nSee Data\\dsfcore.log in the game folder.", PS1CORE->GetExitCode()) );
 		return;
 	}
 
