@@ -1,0 +1,76 @@
+# The title screen's INFO (ScreenPS1Info): a [TOPIC] line starts a topic,
+# the lines after it are its text (wrapped to fit).  Lines starting with #
+# are skipped.
+[ABOUT]
+DANCING STAGE FUSION PC
+
+A Windows version of the European PlayStation game Dancing Stage Fusion (SLES-04163), played from your own disc.
+
+The game is the original: its own code, songs, steps, menus and timing.  The PC side adds a window at any size, keyboard / dance pad / joystick mapping and PC settings, all inside the game's own OPTIONS menu.
+
+Port by CrashReporter
+
+[HOW IT WORKS]
+RECOMPILED, NOT EMULATED
+The game's PlayStation program (MIPS R3000A code) has been translated by PSXRecomp into C and compiled for x64, so your PC's processor runs the game's own code directly.
+
+THE PLAYSTATION AROUND IT
+The console's graphics chip, sound chip, CD drive, controllers and memory cards are reproduced by the PSXRecomp runtime (dsfcore.dll).  The BIOS is OpenBIOS, a free replacement: no Sony BIOS is needed.
+
+STEPMANIA AS THE HOST
+StepMania 3.95 opens the window, shows the game's picture, plays its sound, reads keyboards, dance pads and joysticks, and keeps the PC settings.  The game reads its buttons straight from StepMania's key mapping.
+
+YOUR DISC
+The game's data is read from your own disc image.  None of it comes with the port.
+
+[PC SETTINGS]
+All in the game's own OPTIONS menu:
+
+SOUND OPTIONS
+Volume, audio buffer, picture sync and picture delay.
+
+GRAPHIC OPTIONS - DISPLAY SETTINGS
+Screen mode, resolution, refresh rate, VSync, game resolution and renderer.  Display changes apply when you leave the page.
+
+CONTROLLER SETTINGS - KEY CONFIG 1P / 2P
+Choose a button, then press the key or pad button for it.  Square clears a button; Esc cancels.
+
+[CONTROLS]
+Player 1 keys (change them in KEY CONFIG):
+Arrows - Up / Down / Left / Right
+X - Cross        C - Circle
+Z - Square       S - Triangle
+Q / 1 - L1 / L2     E / 3 - R1 / R2
+Enter - Start    Backspace - Select
+
+Player 2: the numeric keypad (8 2 4 6 arrows, 0 Cross, . Circle, 1 Square, 3 Triangle, Enter Start, + Select).
+
+QUIT, under OPTIONS on the game's main menu, closes Dancing Stage Fusion PC.
+
+[CREDITS]
+PORT BY
+CrashReporter
+
+DANCING STAGE FUSION
+(c) 2004 Konami.  This port is not made or endorsed by Konami.
+
+STEPMANIA 3.95
+Chris Danford, Glenn Maynard and the StepMania team
+
+PSXRECOMP
+Matthew Stanley (mstan) and contributors, RetroPortingToolkit
+
+OPENBIOS
+The PCSX-Redux authors
+
+FONTS
+Exo 2 by Natanael Gama, Inter by Rasmus Andersson, Lobster by Pablo Impallari
+
+[LICENSES]
+This port is free and for personal, non-commercial use: PSXRecomp is under the PolyForm Noncommercial License 1.0.0.
+
+StepMania: MIT.  OpenBIOS: MIT.  SDL3: zlib.  libchdr, libwebp: BSD-3-Clause.  Lua 5.0: MIT.  zlib, libpng, libjpeg-turbo, Ogg Vorbis, PCRE, Crypto++, libresample: their own licences.  Fonts: SIL Open Font License 1.1.
+
+The full texts are in the "licenses" folder.
+
+Never share your disc image or a build made from it.
