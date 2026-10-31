@@ -122,7 +122,6 @@ Please own the game you play.
 
 ## Licences
 
-- This project's own code: **(licence to be chosen before the first release)**
 - `engine/`: StepMania, MIT licence
 - PSXRecomp (used to build the game core): PolyForm Noncommercial 1.0.0, so
   builds of the PC version are for non-commercial use
