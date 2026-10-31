@@ -76,6 +76,42 @@ yourself needs the steps under [Building](#building).
 No PlayStation BIOS is needed: the free [OpenBIOS](https://github.com/grumpycoders/pcsx-redux)
 is used.
 
+## Repository layout
+
+| Path | What |
+|---|---|
+| `core/` | The game-specific code built into the game core: input, menus, settings, smooth arrows, step colours, extra songs, QUIT |
+| `game-project/` | Recompiler project for the game (`game.toml`, CMake) |
+| `engine/` | The modified StepMania 3.95 (its own licence: MIT) |
+| `graphics/` | Theme graphics and fonts, rendered from design tokens |
+| `mods/` | Mod packages loaded by the game core |
+| `tools/extrasong/` | Song pack builder: your simfile packs in, a song pack out |
+| `tools/ps1disc/` | The Deluxe disc builder and its PlayStation code |
+| `patches/psxrecomp/` | Changes to PSXRecomp this project needs, applied at build time |
+| `scripts/` | Build and packaging scripts |
+
+## Building
+
+The game core is built with [PSXRecomp](https://github.com/mstan/psxrecomp):
+the recompiler reads the game program from your disc and generates C code,
+which is compiled together with the PSXRecomp runtime and `core/` into
+`dsfcore.dll`. The generated code is derived from the game, so it is never
+committed or distributed; it exists only on the machine that built it.
+
+Outline (cross-compiling from Linux; a detailed guide comes with the first
+release):
+
+1. Check out PSXRecomp at the version in `patches/psxrecomp/` and apply the
+   patches there.
+2. Extract the game program from your disc and generate the game's C code
+   with the recompiler and `game-project/game.toml`.
+3. Build `dsfcore.dll` (CMake, Ninja, MinGW-w64 x86-64).
+4. Build the engine in `engine/` the same way.
+5. Package: the program, `dsfcore.dll`, the data archive and your disc image
+   in its `disc` folder.
+
+Tools: CMake, Ninja, MinGW-w64 (x86_64, posix threads), Python 3.
+
 ## Building the new songs
 
 The new songs are built once, from your simfile packs, into a song pack: one
@@ -113,42 +149,6 @@ small PlayStation audio encoder in `tools/extrasong/psxaudio.c`).
 The song pack contains your music and charts: it is for your own use, don't
 share it. To use your own pictures for a song, add `background = ...` or
 `banner = ...` to its entry in `songs.toml` (examples are commented in there).
-
-## Repository layout
-
-| Path | What |
-|---|---|
-| `core/` | The game-specific code built into the game core: input, menus, settings, smooth arrows, step colours, extra songs, QUIT |
-| `game-project/` | Recompiler project for the game (`game.toml`, CMake) |
-| `engine/` | The modified StepMania 3.95 (its own licence: MIT) |
-| `graphics/` | Theme graphics and fonts, rendered from design tokens |
-| `mods/` | Mod packages loaded by the game core |
-| `tools/extrasong/` | Song pack builder: your simfile packs in, a song pack out |
-| `tools/ps1disc/` | The Deluxe disc builder and its PlayStation code |
-| `patches/psxrecomp/` | Changes to PSXRecomp this project needs, applied at build time |
-| `scripts/` | Build and packaging scripts |
-
-## Building
-
-The game core is built with [PSXRecomp](https://github.com/mstan/psxrecomp):
-the recompiler reads the game program from your disc and generates C code,
-which is compiled together with the PSXRecomp runtime and `core/` into
-`dsfcore.dll`. The generated code is derived from the game, so it is never
-committed or distributed; it exists only on the machine that built it.
-
-Outline (cross-compiling from Linux; a detailed guide comes with the first
-release):
-
-1. Check out PSXRecomp at the version in `patches/psxrecomp/` and apply the
-   patches there.
-2. Extract the game program from your disc and generate the game's C code
-   with the recompiler and `game-project/game.toml`.
-3. Build `dsfcore.dll` (CMake, Ninja, MinGW-w64 x86-64).
-4. Build the engine in `engine/` the same way.
-5. Package: the program, `dsfcore.dll`, the data archive and your disc image
-   in its `disc` folder.
-
-Tools: CMake, Ninja, MinGW-w64 (x86_64, posix threads), Python 3.
 
 ## Legal
 
