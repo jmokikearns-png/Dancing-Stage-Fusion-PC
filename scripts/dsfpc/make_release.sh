@@ -27,7 +27,9 @@ S=$D/setup
 mkdir -p "$S/recomp/bios" "$S/icon"
 cp "$RECOMP" "$S/psxrecomp-game.exe"
 cp "$REPO/game-project/game.toml" "$S/recomp/game.toml"
-cp "$(sed -n "s/^PSXRECOMP_ROOT:PATH=//p" "$CB/CMakeCache.txt")/bios/SCPH1001.toml" "$S/recomp/bios/"
+# (the BIOS's recompiler settings; a note pointing at the upstream project's
+# own development notes is left out of the shipped copy)
+sed -E 's/\([A-Z]+\.md rule [0-9]+; /(/' "$(sed -n "s/^PSXRECOMP_ROOT:PATH=//p" "$CB/CMakeCache.txt")/bios/SCPH1001.toml" > "$S/recomp/bios/SCPH1001.toml"
 bash "$REPO/scripts/dsfpc/make_kit.sh" "$CB" "$S/kit"
 cp -r "$COMPILER" "$S/compiler"
 python3 "$REPO/tools/setup/make_badge.py" "$S/icon/badge.rgba"

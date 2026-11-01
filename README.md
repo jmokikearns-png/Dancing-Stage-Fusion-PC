@@ -20,8 +20,8 @@ same game changes to a PlayStation disc image for DuckStation or real hardware.
 
 ## Status
 
-The first release, 1.0 beta 1, is built and has been tested on Windows;
-downloads will be on the Releases page.
+Version 1.0 is out and has been tested on Windows. Download it from the
+[Releases page](https://github.com/jmokikearns-png/Dancing-Stage-Fusion-PC/releases/latest).
 
 ## Features
 
