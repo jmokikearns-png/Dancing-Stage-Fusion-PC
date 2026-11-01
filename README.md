@@ -83,7 +83,7 @@ is used.
 | `core/` | The game-specific code built into the game core: input, menus, settings, smooth arrows, step colours, extra songs, QUIT |
 | `game-project/` | Recompiler project for the game (`game.toml`, CMake) |
 | `engine/` | The modified StepMania 3.95 (its own licence: MIT) |
-| `graphics/` | Theme graphics and fonts, rendered from design tokens |
+| `graphics/` | Theme graphics and fonts, rendered from design tokens; the release trailer |
 | `mods/` | Mod packages loaded by the game core |
 | `tools/extrasong/` | Song pack builder: your simfile packs in, a song pack out |
 | `tools/ps1disc/` | The Deluxe disc builder and its PlayStation code |
@@ -141,6 +141,10 @@ the player's compiled game code always match.
    anything from the game.
 
 Tools: CMake, Ninja, the conda-forge compilers above, Python 3 with Pillow.
+
+To set all of this up on a fresh machine and make a release, see
+[docs/BUILDING-RELEASE.md](docs/BUILDING-RELEASE.md): `scripts/setup_build_env.sh`
+fetches the exact compilers and tools 1.0 was built with and checks each one.
 
 ## Building the new songs
 

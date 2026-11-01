@@ -9,11 +9,17 @@ import {FontMatch} from './FontMatch';
 import {SongPlate, SongPlateProps} from './SongPlate';
 import {SongBackground, SongBackgroundProps} from './SongBackground';
 import {BgGoWest, BgHeavenEarth, BgKidsInAmerica, BgMickey} from './SongBackgrounds';
+import {Trailer, trailerFrames} from './trailer/Trailer';
+import {Thumbnail} from './trailer/Thumbnail';
+import {FPS as TRAILER_FPS} from './trailer/beat';
 
 export const Root: React.FC = () => (
 	<>
 		<Composition id="ShowOff" component={ShowOff} durationInFrames={totalFrames()} fps={FPS}
 			width={sizes.frameW} height={sizes.frameH} />
+		{/* the release trailer: needs its footage, song and font in the public dir (--public-dir, see trailer-tools/README.md) */}
+		<Still id="TrailerThumbnail" component={Thumbnail} width={1280} height={720} />
+		<Composition id="Trailer" component={Trailer} durationInFrames={trailerFrames()} fps={TRAILER_FPS} width={1920} height={1080} />
 		{/* StepMania theme: "Common Normal" in the heading font (fonts/build_font.py) */}
 		<Still id="FontCommonNormal" component={FontSheet as React.FC<Record<string, unknown>>} width={1024} height={1024}
 			defaultProps={{family: "'Exo 2'", weight: 700, size: 24, cell: 32, baseline: 24, scale: 2, outline: 1.25,

@@ -12,7 +12,10 @@ Base: upstream commit `2a4824fcb897cb635438958f0c8cffb5a27df656`.
 git clone https://github.com/mstan/psxrecomp
 cd psxrecomp
 git checkout 2a4824fcb897cb635438958f0c8cffb5a27df656
-git am --keep-cr /path/to/patches/psxrecomp/*.patch
+/path/to/patches/psxrecomp/apply.sh .
 ```
 
-`--keep-cr` matters: some of the files use Windows line endings.
+`apply.sh` applies the patches in order with `git am --keep-cr` (some of the
+files use Windows line endings) and runs `0010-emitter-generic-comments.sh`,
+which is change 0010 as a script. The result is exactly the PSXRecomp tree
+the 1.0 release was built from.

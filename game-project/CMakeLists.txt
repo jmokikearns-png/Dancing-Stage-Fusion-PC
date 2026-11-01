@@ -5,9 +5,9 @@ set(PSX_RECOMP_UI OFF CACHE BOOL "feasibility: no launcher UI" FORCE)
 include("${PSXRECOMP_ROOT}/runtime/runtime.cmake")
 
 # Our own code (not disc-derived): plugins, mod packages, shipped config.
-set(DSF_PORT_DIR "/home/user/work/port" CACHE PATH "Dancing Stage Fusion PC port sources")
-# StepMania 2005 input layer (branch wip/sm-platform of the engine repo).
-set(DSF_PLATFORM_DIR "/home/user/work/wt/sm-platform/platform" CACHE PATH "dsfplatform sources")
+set(DSF_PORT_DIR "${CMAKE_CURRENT_LIST_DIR}/.." CACHE PATH "Dancing Stage Fusion PC port sources (this repository)")
+# StepMania 2005 input layer, engine/platform (used by the stand-alone build only).
+set(DSF_PLATFORM_DIR "${CMAKE_CURRENT_LIST_DIR}/../engine/platform" CACHE PATH "dsfplatform sources (the stand-alone build only)")
 
 # DSF_EMBED: build the game as dsfcore.dll for the port's StepMania, which
 # provides window, sound, input and pacing (port/core/dsfcore_api.h).
