@@ -1,4 +1,4 @@
-# Dancing Stage Fusion PC
+<h1 align="center"><img src="docs/logo.png" alt="Dancing Stage Fusion PC" width="520"></h1>
 
 **Dancing Stage Fusion** (PlayStation, Europe, 2004) on modern Windows PCs.
 
