@@ -95,8 +95,9 @@ bash $REPO/scripts/dsfpc/make_compiler.sh      # tc/win -> builds/compiler-win64
 bash $REPO/scripts/dsfpc/make_release.sh 1.1   # -> $W/deliverables/DancingStageFusionPC-1.1.zip
 ```
 
-`make_release.sh` packages the engine, the theme and data, `Setup.exe`, the
-kit, the compiler, the recompiler and the song tools, and refuses to package
+`make_release.sh` packages the engine, the theme and data, `Setup.exe`,
+`Updater.exe` (`tools/updater`, built with the system MinGW and the engine's
+zlib), a `VERSION` file, the kit, the compiler, the recompiler and the song tools, and refuses to package
 anything from the game (disc images, `dsfcore.dll`, memory cards, game code).
 
 ## 7. Before publishing
@@ -107,4 +108,5 @@ anything from the game (disc images, `dsfcore.dll`, memory cards, game code).
 - Play a song, and run `Build New Songs.bat` with simfile packs in
   `simfiles`.
 - Releases are published from GitHub's Releases page (tag `v1.1` and so on),
-  with the zip attached.
+  with the zip attached: the updater picks the release's
+  `DancingStageFusionPC-<version>.zip`, so keep that name.

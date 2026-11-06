@@ -405,6 +405,7 @@ set(SM_SOURCES_WIN32
   archutils/Win32/WindowIcon.cpp
   # DSF PC: the original game, run from dsfcore.dll (Windows only)
   PS1Core.cpp
+  DsfUpdate.cpp
   PS1Settings.cpp
   ScreenPS1Game.cpp
 )

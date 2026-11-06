@@ -96,6 +96,14 @@ THE NEW SONGS
      (songtools\extrasong\songs.toml) and replaces the old song pack.
   The song pack holds your music and charts: for your own use only.
 
+UPDATES
+  The game looks for a newer version on GitHub when it starts and offers it
+  on the title menu: YES downloads and installs it, then starts the game
+  again. Your disc image, game core, songs, saves and settings stay; Setup
+  runs again by itself only when the game core is built differently. You can
+  also run Updater.exe in this folder at any time. To stop the check, set
+  PS1CheckForUpdates=0 in Data\StepMania.ini.
+
 FILES
   Data\StepMania.ini   settings          Data\Keymaps.ini   key/pad mappings
   saves\card1.mcd      memory card

@@ -162,6 +162,14 @@ PS1Core::PS1Core():
 	m_pfnState = m_pfnExitCode = NULL;
 	m_iFramesProduced = 0;
 	m_iShownSerial = -1;
+	m_iContentsProduced = m_iContentsShown = m_iDraws = 0;
+	m_iStatsContents = m_iStatsShown = m_iStatsDraws = 0;
+	m_iLastPictureTicks = 0;
+	memset( m_aGapHist, 0, sizeof m_aGapHist );
+	m_iLastShowAt = 0;
+	m_iHeldTicks = m_iHeldFrames = 0;
+	m_iLastShownTicks = 0;
+	memset( m_aShownGapHist, 0, sizeof m_aShownGapHist );
 	m_iShownContent = -1;
 	m_iLastContent = -1;
 	m_uRShift = m_uGShift = m_uBShift = m_uAShift = 0;
@@ -406,11 +414,32 @@ void PS1Core::Update( float fDeltaTime )
 	m_fStatsSeconds += fDeltaTime;
 	if( m_fStatsSeconds >= 10 )
 	{
-		int64_t iFrames;
+		int64_t iFrames, iContents, iShown, iDraws;
 		{
 			LockMut( m_FrameLock );
 			iFrames = m_iFramesProduced;
+			iContents = m_iContentsProduced;
+			iShown = m_iContentsShown;
+			iDraws = m_iDraws;
 		}
+		LOG->Info( "PS1Core: pictures: %.1f/s new from the game, %.1f/s shown (%lld never shown), %.0f draws/s",
+			(iContents - m_iStatsContents) / m_fStatsSeconds, (iShown - m_iStatsShown) / m_fStatsSeconds,
+			(long long)((iContents - m_iStatsContents) - (iShown - m_iStatsShown)), (iDraws - m_iStatsDraws) / m_fStatsSeconds );
+		{
+			LockMut( m_FrameLock );
+			LOG->Info( "PS1Core: gaps between new pictures: <5 ms %d, 5-15 %d, 15-25 %d, 25-35 %d, 35-45 %d, 45+ %d",
+				m_aGapHist[0], m_aGapHist[1], m_aGapHist[2], m_aGapHist[3], m_aGapHist[4], m_aGapHist[5] );
+			memset( m_aGapHist, 0, sizeof m_aGapHist );
+			LOG->Info( "PS1Core: gaps between pictures shown:      <5 ms %d, 5-15 %d, 15-25 %d, 25-35 %d, 35-45 %d, 45+ %d",
+				m_aShownGapHist[0], m_aShownGapHist[1], m_aShownGapHist[2], m_aShownGapHist[3], m_aShownGapHist[4], m_aShownGapHist[5] );
+			memset( m_aShownGapHist, 0, sizeof m_aShownGapHist );
+			LOG->Info( "PS1Core: pictures held for the VBlank cadence: %.1f ms on average",
+				m_iHeldFrames? m_iHeldTicks * 1000.0 / m_iTicksPerSecond / m_iHeldFrames: 0.0 );
+			m_iHeldTicks = m_iHeldFrames = 0;
+		}
+		m_iStatsContents = iContents;
+		m_iStatsShown = iShown;
+		m_iStatsDraws = iDraws;
 		const int64_t iRead = AtomicLoad( m_iAudioRead );
 		const int64_t iTimed = AtomicLoad( m_iTimedFrames ) - m_iStatsTimedFrames;
 		const double fMsPerTick = 1000.0 / m_iTicksPerSecond;
@@ -478,7 +507,8 @@ const PS1Core::Frame *PS1Core::PickFrameToShow()
 		 * older when the offset is positive. */
 		const int64_t iLimit = m_Ready.back()->iAudioEnd -
 			int64_t( max(0, PREFSMAN->m_iPS1SyncOffsetMs.Get()) * (SAMPLE_RATE / 1000) );
-		while( m_Ready.size() > 1 && m_Ready[1]->iAudioEnd <= iLimit )
+		const int64_t iNow = Now();
+		while( m_Ready.size() > 1 && m_Ready[1]->iAudioEnd <= iLimit && m_Ready[1]->iShowAt <= iNow )
 			FreeOldest();
 		return m_Ready.front();
 	}
@@ -498,6 +528,7 @@ RageTexture *PS1Core::GetFrameTexture( float &fU, float &fV )
 {
 	{
 		LockMut( m_FrameLock );
+		++m_iDraws;
 		const Frame *f = PickFrameToShow();
 		if( f != NULL && f->iSerial != m_iShownSerial )
 		{
@@ -505,6 +536,14 @@ RageTexture *PS1Core::GetFrameTexture( float &fU, float &fV )
 			if( !f->bRepeat && f->iContent != m_iShownContent )
 			{
 				m_iShownContent = f->iContent;
+				++m_iContentsShown;
+				const int64_t iNow = Now();
+				if( m_iLastShownTicks != 0 )
+				{
+					const double fGap = (iNow - m_iLastShownTicks) * 1000.0 / m_iTicksPerSecond;
+					m_aShownGapHist[fGap < 5? 0: fGap < 15? 1: fGap < 25? 2: fGap < 35? 3: fGap < 45? 4: 5]++;
+				}
+				m_iLastShownTicks = iNow;
 				Upload( *f );
 			}
 		}
@@ -594,8 +633,40 @@ void PS1Core::CoreVideo( void *pUser, const uint32_t *pARGB, int iWidth, int iHe
 			f->pixels.swap( buf );
 		f->iContent = f->iSerial;
 		p->m_iLastContent = f->iSerial;
+		++p->m_iContentsProduced;
+		const int64_t iNow = p->Now();
+		if( p->m_iLastPictureTicks != 0 )
+		{
+			const double fGap = (iNow - p->m_iLastPictureTicks) * 1000.0 / p->m_iTicksPerSecond;
+			p->m_aGapHist[fGap < 5? 0: fGap < 15? 1: fGap < 25? 2: fGap < 35? 3: fGap < 45? 4: 5]++;
+		}
+		p->m_iLastPictureTicks = iNow;
 	}
 	f->iAudioEnd = AtomicLoad( p->m_iAudioWritten );
+	/* The core hands over a VBlank's picture as soon as it has made it, and it
+	 * makes them in bursts: it runs whenever the sound queue drops below its
+	 * target, and the sound device takes sound in chunks, so a game frame's
+	 * two VBlanks (its own picture and SMOOTH ARROWS' in-between one) came
+	 * about 10 ms apart, then nothing for 30.  Shown as they came, the
+	 * in-between picture was on screen a third of the time (uneven arrows,
+	 * judgements blinking).  So each picture is due about one VBlank after
+	 * the one before, and not drawn before then; a picture that comes later
+	 * than that is due at once, and the cadence goes on from it. */
+	{
+		const int64_t iNow = p->Now();
+		const int64_t iPeriod = p->m_iTicksPerSecond * PAL_FRAME_CPU_CYCLES / CPU_CLOCK_HZ;
+		/* 1 ms short of a VBlank: the cadence creeps earlier until a picture
+		 * that comes late puts it back, so it keeps to the newest arrivals
+		 * instead of the latest one ever (pictures wait ~5 ms, not ~20). */
+		const int64_t iSlack = p->m_iTicksPerSecond / 1000;
+		int64_t iShowAt = p->m_iLastShowAt + iPeriod - iSlack;
+		if( p->m_iLastShowAt == 0 || iShowAt > iNow + 2 * iPeriod || iShowAt < iNow )
+			iShowAt = iNow;
+		f->iShowAt = iShowAt;
+		p->m_iLastShowAt = iShowAt;
+		p->m_iHeldTicks += iShowAt - iNow;
+		++p->m_iHeldFrames;
+	}
 	p->m_Ready.push_back( f );
 	(void) iScale;
 

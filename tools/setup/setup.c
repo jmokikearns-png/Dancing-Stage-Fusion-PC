@@ -34,10 +34,13 @@
 #define MAX_FILES 128
 
 static char g_root[MAX_PATH], g_setup[MAX_PATH], g_work[MAX_PATH], g_kit[MAX_PATH];
+static int g_no_pause;	/* --no-pause / --icon: run by Updater.exe, which keeps its own window */
 
 static void pause_and_exit( int code )
 {
 	char line[8];
+	if( g_no_pause )
+		exit( code );
 	printf( "\nPress Enter to close this window." );
 	fflush( stdout );
 	fgets( line, sizeof line, stdin );
@@ -495,8 +498,11 @@ static void delete_tree( const char *dir )
 	RemoveDirectoryA( dir );
 }
 
-int main( void )
+int main( int argc, char **argv )
 {
+	/* --icon: only give the program the game's icon again (after an update
+	 * replaced DancingStageFusionPC.exe); --no-pause: no Enter at the end. */
+	const int icon_only = argc > 1 && strcmp( argv[1], "--icon" ) == 0;
 	char cue[MAX_PATH], bin[MAX_PATH], p[MAX_PATH], q[MAX_PATH], gcc[MAX_PATH], gxx[MAX_PATH], recomp[MAX_PATH];
 	char cmd[32768], gen[MAX_PATH], obj[MAX_PATH], dll_new[MAX_PATH], dll[MAX_PATH];
 	static char files[MAX_FILES][MAX_PATH];
@@ -507,14 +513,28 @@ int main( void )
 	int nfiles = 0, next = 0, done = 0, running = 0, i, nj, failed = -1;
 	DWORD t0 = GetTickCount();
 
-	printf( "Dancing Stage Fusion PC - Setup\n"
-	        "Builds the game from YOUR copy of Dancing Stage Fusion (Europe).\n\n" );
+	for( i = 1; i < argc; ++i )
+		if( strcmp(argv[i], "--no-pause") == 0 || strcmp(argv[i], "--icon") == 0 )
+			g_no_pause = 1;
+	if( !icon_only )
+		printf( "Dancing Stage Fusion PC - Setup\n"
+		        "Builds the game from YOUR copy of Dancing Stage Fusion (Europe).\n\n" );
 	crc_init();
 	GetModuleFileNameA( NULL, g_root, sizeof g_root );
 	*strrchr( g_root, '\\' ) = 0;
 	join( g_setup, g_root, "setup" );
 	join( g_work, g_setup, "work" );
 	join( g_kit, g_setup, "kit" );
+	if( icon_only )
+	{
+		if( !find_cue(cue) )
+			fail( "no disc image found in %s\\disc", g_root );
+		bin_from_cue( cue, bin );
+		exe = read_game_program( bin );
+		set_icon( exe );
+		free( exe );
+		return 0;
+	}
 	join( recomp, g_setup, "psxrecomp-game.exe" );
 	join( gcc, g_setup, "compiler\\bin\\x86_64-w64-mingw32-gcc.exe" );
 	join( gxx, g_setup, "compiler\\bin\\x86_64-w64-mingw32-g++.exe" );

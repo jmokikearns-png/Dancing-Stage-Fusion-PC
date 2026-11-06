@@ -36,6 +36,14 @@ python3 "$REPO/tools/setup/make_badge.py" "$S/icon/badge.rgba"
 "$TC/bin/x86_64-w64-mingw32-gcc" -O2 -Wall -Wextra -Wno-format-truncation -static -s \
   -o "$D/Setup.exe" "$REPO/tools/setup/setup.c" -lshell32
 cp "$COMPILER/README.txt" "$D/licenses/GCC-and-Binutils-README.txt"
+# The updater (tools/updater): installs newer releases from GitHub; the game
+# runs "Updater.exe --check" at start-up and offers them. Static zlib and
+# WinHTTP, with the engine's MinGW and libraries (builds/deps-x86_64).
+DEPS_PREFIX=${DEPS_PREFIX:-$W/builds/deps-x86_64}
+x86_64-w64-mingw32-gcc-win32 -O2 -Wall -Wextra -static -s -I"$DEPS_PREFIX/include" \
+  -o "$D/Updater.exe" "$REPO/tools/updater/updater.c" -L"$DEPS_PREFIX/lib" -lz -lwinhttp
+cp "$DEPS_PREFIX/../windows-build/deps-src/zlib/LICENSE" "$D/licenses/zlib-LICENSE.txt" 2>/dev/null || true
+printf '%s\r\n' "$V" > "$D/VERSION"
 
 # The new songs: "Build New Songs.bat" builds them from the player's
 # simfile packs in simfiles\ with songtools\ (Python, ffmpeg, the builder).

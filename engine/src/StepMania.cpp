@@ -19,6 +19,7 @@
 #include "arch/ArchHooks/ArchHooks.h"
 #include "arch/LoadingWindow/LoadingWindow.h"
 #include "PS1Core.h"
+#include "DsfUpdate.h"
 #include "arch/Dialog/Dialog.h"
 #include <ctime>
 
@@ -1023,6 +1024,11 @@ int main(int argc, char* argv[])
 	PREFSMAN	= new PrefsManager;
 
 	ApplyLogPreferences();
+
+	/* DSF PC: look for a newer release in the background (Updater.exe --check);
+	 * the title menu offers it. */
+	if( PREFSMAN->m_bPS1CheckForUpdates )
+		DsfUpdate::StartCheck();
 
 #if defined(XBOX)
 	if(PREFSMAN->m_bEnableVirtualMemory)

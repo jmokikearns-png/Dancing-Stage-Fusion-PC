@@ -20,6 +20,10 @@
 #include "CommonMetrics.h"
 #include "Game.h"
 #include "ScreenOptionsMasterPrefs.h"
+#include "ScreenPrompt.h"
+#include "DsfUpdate.h"
+
+AutoScreenMessage( SM_DsfUpdateAnswer )
 
 #define MAX_STAGES_TEXT				THEME->GetMetric (m_sName,"MaxStagesText")
 #define COIN_MODE_CHANGE_SCREEN		THEME->GetMetric (m_sName,"CoinModeChangeScreen")
@@ -99,6 +103,35 @@ void ScreenTitleMenu::Init()
 	this->SortByDrawOrder();
 
 	SOUND->PlayOnceFromAnnouncer( "title menu game name" );
+}
+
+/* DSF PC: offer a newer release (DsfUpdate) once, when the menu is up. */
+void ScreenTitleMenu::Update( float fDeltaTime )
+{
+	ScreenSelectMaster::Update( fDeltaTime );
+	CString sVersion;
+	if( !IsTransitioning() && DsfUpdate::TakeOffer(sVersion) )
+		SCREENMAN->Prompt( SM_DsfUpdateAnswer,
+			"Dancing Stage Fusion PC " + sVersion + " is out.\n\n"
+			"Update now? It takes a minute or two.\n"
+			"Your songs, saves and settings stay.",
+			PROMPT_YES_NO, ANSWER_YES );
+}
+
+void ScreenTitleMenu::HandleScreenMessage( const ScreenMessage SM )
+{
+	if( SM == SM_DsfUpdateAnswer )
+	{
+		if( ScreenPrompt::s_LastAnswer == ANSWER_YES )
+		{
+			if( DsfUpdate::Launch() )
+				ExitGame();
+			else
+				SCREENMAN->SystemMessage( "Updater.exe is missing: download the update from the GitHub page." );
+		}
+		return;
+	}
+	ScreenSelectMaster::HandleScreenMessage( SM );
 }
 
 ScreenTitleMenu::~ScreenTitleMenu()

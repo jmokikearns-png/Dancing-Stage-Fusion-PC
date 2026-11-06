@@ -116,6 +116,7 @@ private:
 		int64_t iContent;	/* the frame whose picture this shows */
 		int64_t iAudioEnd;	/* audio frames produced when this frame was finished */
 		int64_t iSerial;
+		int64_t iShowAt;	/* ticks: not drawn before this (the VBlank cadence, see CoreVideo) */
 	};
 	Frame *GetFreeFrame();		/* m_FrameLock held */
 	void FreeOldest();		/* m_FrameLock held */
@@ -137,6 +138,12 @@ private:
 	vector<Frame*> m_Free;
 	int64_t m_iFramesProduced;
 	int64_t m_iShownSerial;
+	int64_t m_iContentsProduced, m_iContentsShown, m_iDraws;	/* new pictures handed over / put on screen; texture requests */
+	int64_t m_iStatsContents, m_iStatsShown, m_iStatsDraws;
+	int64_t m_iLastPictureTicks; int m_aGapHist[6];
+	int64_t m_iLastShowAt;		/* iShowAt of the newest frame */
+	int64_t m_iHeldTicks, m_iHeldFrames;	/* how long pictures waited for their due time */
+	int64_t m_iLastShownTicks; int m_aShownGapHist[6];	/* gaps between new pictures put on screen */	/* gaps between new pictures: <5, <15, <25, <35, <45, >=45 ms */
 	int64_t m_iShownContent;	/* the picture in the texture now */
 	int64_t m_iLastContent;		/* core thread: the newest frame with pixels */
 	uint32_t m_uRShift, m_uGShift, m_uBShift, m_uAShift;

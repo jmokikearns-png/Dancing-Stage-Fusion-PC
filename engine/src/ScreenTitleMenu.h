@@ -21,6 +21,8 @@ public:
 	virtual void Input( const DeviceInput& DeviceI, const InputEventType type, const GameInput &GameI, const MenuInput &MenuI, const StyleInput &StyleI );
 
 	virtual void HandleMessage( const CString& sMessage );
+	virtual void Update( float fDeltaTime );
+	virtual void HandleScreenMessage( const ScreenMessage SM );
 
 private:
 	AutoActor		m_sprLogo;

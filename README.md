@@ -20,8 +20,11 @@ same game changes to a PlayStation disc image for DuckStation or real hardware.
 
 ## Status
 
-Version 1.0 is out and has been tested on Windows. Download it from the
+Version 1.0.1 is out and has been tested on Windows. Download it from the
 [Releases page](https://github.com/jmokikearns-png/Dancing-Stage-Fusion-PC/releases/latest).
+From 1.0.1 the game looks for new versions itself and offers to install them;
+on 1.0, run `DancingStageFusionPC-Updater.exe` from the release in your game
+folder once.
 
 ## Features
 
@@ -39,6 +42,8 @@ Version 1.0 is out and has been tested on Windows. Download it from the
 - **AUTO TIMING**: a tap test that measures your setup's sound and picture
   delay, then keeps fine-tuning the timing from your steps.
 - Audio buffer, picture delay and picture sync settings for low latency.
+- Updates from GitHub: the game offers a new version on its title menu and
+  installs it, keeping your disc image, game core, songs, saves and settings.
 - All PC settings live in the game's own OPTIONS menus, in all five of its
   languages; **QUIT** is on the main menu.
 - **STEP MARK COLORS TYPE3**: arrows coloured by rhythm (quarter, eighth,
@@ -88,6 +93,7 @@ is used.
 | `tools/extrasong/` | Song pack builder: your simfile packs in, a song pack out |
 | `tools/ps1disc/` | The Deluxe disc builder and its PlayStation code |
 | `tools/setup/` | `Setup.exe`: builds the game core from the player's disc |
+| `tools/updater/` | `Updater.exe`: installs newer releases from GitHub |
 | `patches/psxrecomp/` | Changes to PSXRecomp this project needs, applied at build time |
 | `scripts/` | Build and packaging scripts |
 
