@@ -1,7 +1,8 @@
 # The release trailer
 
 The trailer (`src/trailer/`, composition `Trailer`, thumbnail
-`TrailerThumbnail`) is cut to *A Stupid Barber* and uses footage of the
+`TrailerThumbnail`) is cut to *A Stupid Barber*; the 1.0.1 trailer
+(`TrailerHotfix`, `Hotfix.tsx`) to *KEEP ON MOVIN'* (`str_decode.py 13 keeponmovin.wav`) and uses footage of the
 game. Neither is in this repository: they come from your own disc and your
 own recordings, in a folder you pass to Remotion as `--public-dir`. That
 folder holds:
