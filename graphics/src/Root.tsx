@@ -12,6 +12,7 @@ import {BgGoWest, BgHeavenEarth, BgKidsInAmerica, BgMickey} from './SongBackgrou
 import {Trailer, trailerFrames} from './trailer/Trailer';
 import {Thumbnail} from './trailer/Thumbnail';
 import {HotfixTrailer, HOTFIX_FPS, hotfixFrames} from './trailer/Hotfix';
+import {ThumbnailHotfix} from './trailer/ThumbnailHotfix';
 import {FPS as TRAILER_FPS} from './trailer/beat';
 
 export const Root: React.FC = () => (
@@ -20,6 +21,7 @@ export const Root: React.FC = () => (
 			width={sizes.frameW} height={sizes.frameH} />
 		{/* the release trailer: needs its footage, song and font in the public dir (--public-dir, see trailer-tools/README.md) */}
 		<Still id="TrailerThumbnail" component={Thumbnail} width={1280} height={720} />
+		<Still id="TrailerHotfixThumbnail" component={ThumbnailHotfix} width={1280} height={720} />
 		<Composition id="TrailerHotfix" component={HotfixTrailer} durationInFrames={hotfixFrames()} fps={HOTFIX_FPS} width={1920} height={1080} />
 		<Composition id="Trailer" component={Trailer} durationInFrames={trailerFrames()} fps={TRAILER_FPS} width={1920} height={1080} />
 		{/* StepMania theme: "Common Normal" in the heading font (fonts/build_font.py) */}
