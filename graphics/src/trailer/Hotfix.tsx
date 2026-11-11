@@ -36,7 +36,7 @@ const UPDATER_LINES = [
 	'Updated to 1.0.1.',
 ];
 
-const CalmTag: React.FC<{text: string; sub?: string; len: number}> = ({text, sub, len}) => {
+export const CalmTag: React.FC<{text: string; sub?: string; len: number}> = ({text, sub, len}) => {
 	const frame = useCurrentFrame();
 	const a = interpolate(frame, [6, 22, len - 12, len], [0, 1, 1, 0], clamp);
 	const x = interpolate(frame, [6, 26], [-30, 0], clamp);
@@ -52,7 +52,7 @@ const CalmTag: React.FC<{text: string; sub?: string; len: number}> = ({text, sub
 	);
 };
 
-const CalmShot: React.FC<{src: string; len: number; hue?: 'green' | 'orange' | 'red' | 'blue'}> = ({src, len, hue = 'green'}) => {
+export const CalmShot: React.FC<{src: string; len: number; hue?: 'green' | 'orange' | 'red' | 'blue'}> = ({src, len, hue = 'green'}) => {
 	const frame = useCurrentFrame();
 	const drift = interpolate(frame, [0, len], [1.0, 1.035]);
 	return (
@@ -115,7 +115,7 @@ const Ending: React.FC<{len: number}> = ({len}) => {
 	);
 };
 
-const Note: React.FC<{len: number}> = ({len}) => {
+export const Note: React.FC<{len: number}> = ({len}) => {
 	const frame = useCurrentFrame();
 	const o = interpolate(frame, [0, 15, len - 15, len], [0, 1, 1, 0], clamp);
 	return (
@@ -171,7 +171,7 @@ export const HotfixTrailer: React.FC = () => {
 	);
 };
 
-const FadeIn: React.FC<{on: boolean; children: React.ReactNode}> = ({on, children}) => {
+export const FadeIn: React.FC<{on: boolean; children: React.ReactNode}> = ({on, children}) => {
 	const frame = useCurrentFrame();
 	return <AbsoluteFill style={{opacity: on ? interpolate(frame, [0, XF], [0, 1], clamp) : 1}}>{children}</AbsoluteFill>;
 };

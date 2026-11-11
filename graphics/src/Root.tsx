@@ -13,6 +13,7 @@ import {Trailer, trailerFrames} from './trailer/Trailer';
 import {Thumbnail} from './trailer/Thumbnail';
 import {HotfixTrailer, HOTFIX_FPS, hotfixFrames} from './trailer/Hotfix';
 import {ThumbnailHotfix} from './trailer/ThumbnailHotfix';
+import {Release11Trailer, RELEASE11_FPS, release11Frames} from './trailer/Release11';
 import {FPS as TRAILER_FPS} from './trailer/beat';
 
 export const Root: React.FC = () => (
@@ -23,6 +24,7 @@ export const Root: React.FC = () => (
 		<Still id="TrailerThumbnail" component={Thumbnail} width={1280} height={720} />
 		<Still id="TrailerHotfixThumbnail" component={ThumbnailHotfix} width={1280} height={720} />
 		<Composition id="TrailerHotfix" component={HotfixTrailer} durationInFrames={hotfixFrames()} fps={HOTFIX_FPS} width={1920} height={1080} />
+		<Composition id="Trailer11" component={Release11Trailer} durationInFrames={release11Frames()} fps={RELEASE11_FPS} width={1920} height={1080} />
 		<Composition id="Trailer" component={Trailer} durationInFrames={trailerFrames()} fps={TRAILER_FPS} width={1920} height={1080} />
 		{/* StepMania theme: "Common Normal" in the heading font (fonts/build_font.py) */}
 		<Still id="FontCommonNormal" component={FontSheet as React.FC<Record<string, unknown>>} width={1024} height={1024}

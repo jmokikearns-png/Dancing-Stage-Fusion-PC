@@ -2,7 +2,9 @@
 
 The trailer (`src/trailer/`, composition `Trailer`, thumbnail
 `TrailerThumbnail`) is cut to *A Stupid Barber*; the 1.0.1 trailer
-(`TrailerHotfix`, `Hotfix.tsx`) to *KEEP ON MOVIN'* (`str_decode.py 13 keeponmovin.wav`) and uses footage of the
+(`TrailerHotfix`, `Hotfix.tsx`) to *KEEP ON MOVIN'* (`str_decode.py 13 keeponmovin.wav`); the 1.1 trailer
+(`Trailer11`, `Release11.tsx`) to *321STARS* (`str_decode.py 3 stars.wav`, clips
+`clips/v_*.mp4` cut at the times in `edit11.json` beside the recordings). They use footage of the
 game. Neither is in this repository: they come from your own disc and your
 own recordings, in a folder you pass to Remotion as `--public-dir`. That
 folder holds:
@@ -23,6 +25,7 @@ Render:
 
 ```
 npx remotion render src/index.ts Trailer trailer.mp4 --public-dir=PATH --crf=17 --audio-bitrate=320k
+npx remotion render src/index.ts Trailer11 trailer11.mp4 --public-dir=PATH --crf=17 --audio-bitrate=320k
 npx remotion still src/index.ts TrailerThumbnail thumbnail.png --public-dir=PATH
 ```
 
