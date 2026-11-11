@@ -7,15 +7,17 @@ import {Intro, Logo, LogoArt} from './cards';
 import {Flash, Shot, Slam, Stripes, Tag, Title} from './parts';
 
 /* The 1.1 trailer, cut like the 1.0 one: 321STARS (DJ Simon, from the
- * player's disc, stream 3: "str_decode.py 3 stars.wav"), 192 BPM, first
- * beat at 0.307 s (fitted to the decoded stream's onsets).  Shots are 12
- * beats, words 8, the montage 2 and then 1.  Footage: the 1.1
+ * player's disc, stream 3: "str_decode.py 3 stars.wav"), 192 BPM.  The
+ * opening count is six vocal hits on beats 4, 6, 8, 9, 10 and 11 and the
+ * drums come in on beat 12 (3.745 s), the first downbeat: beat k is at
+ * k * 60/192 - 0.005 s (fitted to the decoded stream), so cuts every 4 beats
+ * land on the bars.  Shots are 12 beats, words 8, the montage 2 and then 1.  Footage: the 1.1
  * build (clips/v_*.mp4 and g_*.mp4, cut at the times in edit11.json).  The
  * game ran at about 1/1.4 of its speed while it was recorded, so its
  * footage plays at RATE.  No white flashes in the last stretch. */
 export const RELEASE11_FPS = 50;
 const BEAT = 60 / 192;
-const PHASE = 0.307;
+const PHASE = -0.005;
 const RATE = 1.4;
 const f = (s: number) => Math.round(s * RELEASE11_FPS);
 const beatT = (k: number) => PHASE + k * BEAT;
@@ -70,9 +72,26 @@ const cuts: Scene[] = [
 		words(B(212 + 2 * i), B(214 + 2 * i), w, {slamSize: [220, 230, 210, 220][i], hue: HUES[i], flash: false})),
 ];
 
+/* The opening count, a word a vocal hit (beats), each slammed in on its hit,
+ * with an arrow hitting the receptors. */
+const COUNT: Array<[number, string]> = [[4, '1'], [6, '2'], [8, '3'], [9, '2'], [10, '1'], [11, 'YEAH!']];
+const COUNT_ARROWS = [[0], [3], [1], [2], [0, 3], [1, 2]];
+const Count: React.FC = () => (
+	<>
+		{COUNT.map(([k, w], i) => {
+			const from = f(B(k)), to = i + 1 < COUNT.length ? f(B(COUNT[i + 1][0])) : f(B(12));
+			return (
+				<Sequence key={i} from={from} durationInFrames={to - from} layout="none">
+					<Slam text={w} size={w === 'YEAH!' ? 230 : 300} y={150} dur={to - from} />
+				</Sequence>
+			);
+		})}
+	</>
+);
+
 const SceneView: React.FC<{s: Scene; absStart: number; len: number}> = ({s, absStart, len}) => {
 	switch (s.kind) {
-		case 'intro': return <Intro beat={BEAT} phase={PHASE} />;
+		case 'intro': return <Intro beat={BEAT} phase={PHASE} hits={COUNT.map(([k], i) => [k, COUNT_ARROWS[i]] as [number, number[]])} />;
 		case 'logo': return <Logo len={len} />;
 		case 'shot': return <Shot src={s.src!} from={0} len={len} hue={s.hue} full={s.full} absStart={absStart} rate={s.rate}
 			beat={BEAT} phase={PHASE} />;
@@ -146,6 +165,7 @@ export const Release11Trailer: React.FC = () => {
 					</Sequence>
 				);
 			})}
+			<Count />
 			<Sequence from={f(B(40))} durationInFrames={f(B(212)) - f(B(40))} name="footage note">
 				<FootageNote len={f(B(212)) - f(B(40))} />
 			</Sequence>

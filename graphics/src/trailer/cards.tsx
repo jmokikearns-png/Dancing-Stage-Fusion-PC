@@ -35,7 +35,8 @@ export const GameArrow: React.FC<{dir: number; size: number; kind: 'note' | 'rec
 /* Intro: the receptors fade in, then step arrows scroll up and hit them on
  * the beat, from the music's first beat. */
 const HITS: Array<[number, number[]]> = [[1, [0]], [2, [1]], [3, [2]], [4, [3]], [5, [0, 3]], [6, [1]], [7, [2]]];
-export const Intro: React.FC<{beats?: number; beat?: number; phase?: number}> = ({beat = BEAT, phase = 0.01}) => {
+export const Intro: React.FC<{beats?: number; beat?: number; phase?: number; hits?: Array<[number, number[]]>}> =
+	({beat = BEAT, phase = 0.01, hits = HITS}) => {
 	const frame = useCurrentFrame();
 	const t = frame / FPS;
 	const SIZE = 170, GAP = 30, REC_Y = 250, SPEED = 1150;	/* px a second */
@@ -45,7 +46,7 @@ export const Intro: React.FC<{beats?: number; beat?: number; phase?: number}> = 
 	return (
 		<AbsoluteFill style={{background: '#050507', opacity: fade}}>
 			{[0, 1, 2, 3].map((dir) => {
-				const last = HITS.filter(([k, ds]) => ds.includes(dir) && beatTime(k) <= t).map(([k]) => beatTime(k)).pop();
+				const last = hits.filter(([k, ds]) => ds.includes(dir) && beatTime(k) <= t).map(([k]) => beatTime(k)).pop();
 				const lit = last === undefined ? 0 : Math.max(0, 1 - (t - last) * 4);
 				return (
 					<div key={'r' + dir} style={{position: 'absolute', left: x0 + dir * (SIZE + GAP), top: REC_Y, transform: `scale(${1 + 0.12 * lit})`}}>
@@ -53,7 +54,7 @@ export const Intro: React.FC<{beats?: number; beat?: number; phase?: number}> = 
 					</div>
 				);
 			})}
-			{HITS.flatMap(([k, ds]) => ds.map((dir) => {
+			{hits.flatMap(([k, ds]) => ds.map((dir) => {
 				const dt = beatTime(k) - t;	/* seconds until the hit */
 				if (dt < -0.25 || dt > 1.2) return null;
 				const y = REC_Y + Math.max(0, dt) * SPEED;

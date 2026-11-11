@@ -11,7 +11,7 @@ TEXTS = ['THE PLAYSTATION\nORIGINAL', 'NOW ON PC', '12 NEW SONGS', 'YOUR', 'DISC
          'Dancing Stage Fusion PC', 'Now available on GitHub',
          'Version 1.1', 'ACHIEVEMENTS', 'YOUR RECORDS COUNT', 'NEW!!', 'TRACK YOUR PROGRESS', '+ NEW!! MARKER',
          'EARN AS YOU PLAY', 'UNLOCKED!', 'EVERY MODE COUNTS', '25 TO EARN', 'NEWLY UNLOCKED', 'KEPT ON YOUR PC',
-         'PLAY.', 'EARN.', 'UNLOCK.', 'REPEAT.']
+         'PLAY.', 'EARN.', 'UNLOCK.', 'REPEAT.', '1', '2', '3', 'YEAH!']
 def slug(t):
     return re.sub(r'[^a-z0-9]+', '-', t.lower()).strip('-')
 f = ImageFont.truetype(FONT, 200)
