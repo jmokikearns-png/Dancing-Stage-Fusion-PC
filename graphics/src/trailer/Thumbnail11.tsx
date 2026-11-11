@@ -17,7 +17,7 @@ export const Thumbnail11: React.FC = () => (
 	<AbsoluteFill>
 		<Stripes hue="orange" speed={0} />
 		<AbsoluteFill style={{background: 'radial-gradient(ellipse 60% 70% at 28% 40%, rgba(255,200,90,0.25) 0%, rgba(0,0,0,0) 70%)'}} />
-		<Frame src="thumb/v11_new.png" x={790} y={70} w={430} rot={6} />
+		<Frame src="thumb/v11_list.png" x={790} y={70} w={430} rot={6} />
 		<Frame src="thumb/v11_res.png" x={700} y={300} w={430} rot={-6} />
 		<div style={{position: 'absolute', left: 30, top: 50, transform: 'rotate(-3deg)', filter: 'drop-shadow(0 14px 22px rgba(0,0,0,0.7))'}}>
 			<LogoArt k={1.5} frame={60} />
@@ -29,9 +29,7 @@ export const Thumbnail11: React.FC = () => (
 			</div>
 		</div>
 		<div style={{position: 'absolute', left: 74, top: 505, transform: 'rotate(-3deg)', filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.7))'}}>
-			<Title text="ACHIEVEMENTS" size={52} />
-			<div style={{height: 10}} />
-			<Title text="+ NEW!! MARKER" size={52} />
+			<Title text="ACHIEVEMENTS" size={60} />
 		</div>
 	</AbsoluteFill>
 );
