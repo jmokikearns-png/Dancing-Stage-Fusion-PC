@@ -26,6 +26,7 @@ Render:
 ```
 npx remotion render src/index.ts Trailer trailer.mp4 --public-dir=PATH --crf=17 --audio-bitrate=320k
 npx remotion render src/index.ts Trailer11 trailer11.mp4 --public-dir=PATH --crf=17 --audio-bitrate=320k
+npx remotion still src/index.ts Trailer11Thumbnail thumbnail11.png --public-dir=PATH
 npx remotion still src/index.ts TrailerThumbnail thumbnail.png --public-dir=PATH
 ```
 
