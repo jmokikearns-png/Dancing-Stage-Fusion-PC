@@ -19,6 +19,8 @@
  *   - get_mapping() / begin_mapping() / mapping_state() / clear_mapping():
  *     the KEY CONFIG pages in the game's CONTROLLER SETTINGS, on top of the
  *     host's key / pad mapping.
+ *   - play_result() / save_progress(): what the player did, for the host's
+ *     achievements (dsfcore_achieve.cpp).
  *
  * All callbacks run on the core's thread.  The host loads the DLL at run time
  * (LoadLibrary + GetProcAddress("dsfcore_start")), so the StepMania program
@@ -33,7 +35,7 @@
 extern "C" {
 #endif
 
-#define DSFCORE_API_VERSION 9
+#define DSFCORE_API_VERSION 10
 
 enum {
 	DSFCORE_FRAME_BLANK = 1,	/* display disabled: show black */
@@ -114,6 +116,50 @@ enum {
 	DSFCORE_STATE_EXITED = 2	/* boot failed or the runtime returned; see dsfcore_exit_code() */
 };
 
+/* v10: one player's song, when its result is final (on the results screen,
+ * or when the song was failed).  Grades are the game's codes: 3 AA, 4 A,
+ * 5 B, 6 C, 7 D (all-PERFECT plays get AA); 0 when failed. */
+typedef struct DsfCorePlay
+{
+	uint32_t struct_size;		/* sizeof(DsfCorePlay) */
+	int32_t player;			/* 0 or 1 */
+	int32_t workout;		/* 1: WORKOUT MODE */
+	int32_t double_style;		/* 1: DOUBLE (one player on both mats) */
+	int32_t chart;			/* 0 BEGINNER, 1 STANDARD, 2 DIFFICULT, 3 EXPERT */
+	int32_t song_id;		/* the song's id, as in its save record */
+	int32_t new_song;		/* 1: one of the songs the PlayStation version never had */
+	int32_t cleared;
+	int32_t grade;
+	int32_t perfect, great, good, almost, boo;
+	int32_t max_combo;
+	int32_t steps;			/* the chart's steps */
+	int32_t kcal_milli;		/* WORKOUT: this song's calories, in 1/1000 kcal */
+} DsfCorePlay;
+
+/* v10: the memory card's save as the game has it in memory (after it was
+ * loaded or changed): what was done before, for achievements earned
+ * before the host kept them. */
+#define DSFCORE_SAVE_SONGS 32
+typedef struct DsfCoreSaveSong
+{
+	int32_t song_id;		/* 0: an empty record */
+	int32_t new_song;
+	int32_t plays;			/* cleared plays */
+	int32_t best_combo;		/* the best max combo of its charts */
+	uint8_t grade[8];		/* single 0-3, double 4-7 (BEGINNER .. EXPERT); 0: not cleared */
+	uint8_t full_combo;		/* bit per chart */
+	uint8_t reserved[3];
+} DsfCoreSaveSong;
+typedef struct DsfCoreProgress
+{
+	uint32_t struct_size;		/* sizeof(DsfCoreProgress) */
+	int32_t list_songs;		/* songs in the music select: the disc's 20 and the new ones */
+	int32_t new_songs;		/* of them, new */
+	DsfCoreSaveSong song[DSFCORE_SAVE_SONGS];
+	int32_t workout_kcal_milli;	/* WORKOUT MODE's running total */
+	uint32_t lesson_sections;	/* bit per finished LESSON MODE section (Lesson 1 = bits 0-7) */
+} DsfCoreProgress;
+
 typedef struct DsfCoreHost
 {
 	uint32_t struct_size;		/* sizeof(DsfCoreHost) */
@@ -147,6 +193,9 @@ typedef struct DsfCoreHost
 	/* v6: the delays as measured now; 0 when the host can't tell.  v8: the
 	 * host may run a tap test first (the call then takes some seconds). */
 	int (*measure_latency)( void *user, DsfCoreLatency *out );
+	/* v10: achievements (see DsfCorePlay and DsfCoreProgress). */
+	void (*play_result)( void *user, const DsfCorePlay *play );
+	void (*save_progress)( void *user, const DsfCoreProgress *progress );
 } DsfCoreHost;
 
 /* argv[0] is ignored; the rest are runtime options (--game, --disc, --bios,

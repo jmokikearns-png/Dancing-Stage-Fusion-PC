@@ -64,3 +64,14 @@ default_enabled = true
 [[plugin]]
 feature = "stepmania-smooth"
 id = "dsf.stepmania.smooth"
+
+[[feature]]
+id = "stepmania-achievements"
+name = "Achievements"
+description = "Tells StepMania each song's result and what the memory card's save holds, for the PC version's achievements."
+group = "Content"
+default_enabled = true
+
+[[plugin]]
+feature = "stepmania-achievements"
+id = "dsf.stepmania.achievements"

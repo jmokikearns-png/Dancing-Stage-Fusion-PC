@@ -124,6 +124,18 @@ int dsfcore_host_measure_latency( DsfCoreLatency *out )
 	return g_host.measure_latency? g_host.measure_latency( g_host.user, out ): 0;
 }
 
+void dsfcore_host_play_result( const DsfCorePlay *play )
+{
+	if( g_host.play_result )
+		g_host.play_result( g_host.user, play );
+}
+
+void dsfcore_host_save_progress( const DsfCoreProgress *progress )
+{
+	if( g_host.save_progress )
+		g_host.save_progress( g_host.user, progress );
+}
+
 __declspec(dllexport) int dsfcore_start( const DsfCoreHost *host, int argc, const char *const *argv, const char *log_path )
 {
 	if( g_state != DSFCORE_STATE_NOT_STARTED || host == NULL ||

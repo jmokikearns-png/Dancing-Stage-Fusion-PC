@@ -35,6 +35,9 @@ void dsfcore_host_quit( void );
 
 /* The PC's sound and picture delays (see DsfCoreHost.measure_latency). */
 int dsfcore_host_measure_latency( DsfCoreLatency *out );
+/* Achievements (see DsfCoreHost.play_result / save_progress). */
+void dsfcore_host_play_result( const DsfCorePlay *play );
+void dsfcore_host_save_progress( const DsfCoreProgress *progress );
 
 #ifdef __cplusplus
 }

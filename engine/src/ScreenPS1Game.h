@@ -9,6 +9,8 @@
 
 #include "Screen.h"
 #include "BitmapText.h"
+#include "ActorFrame.h"
+#include "Quad.h"
 
 class ScreenPS1Game : public Screen
 {
@@ -29,6 +31,14 @@ private:
 
 	bool m_bFailed;
 	BitmapText m_textMessage;
+
+	/* A newly earned achievement, shown at the top for a few seconds. */
+	void ShowNextAchievement();
+	ActorFrame m_Toast;
+	Quad m_quadToast;
+	BitmapText m_textToastTitle, m_textToastName;
+	vector<CString> m_ToastQueue;
+	float m_fToastLeft;		/* seconds until the one shown now is gone */
 };
 
 #endif

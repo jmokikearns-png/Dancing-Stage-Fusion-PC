@@ -10,6 +10,7 @@
 #include "arch/Sound/RageSoundDriver_Generic_Software.h"
 
 #include "dsfcore_api.h"	/* keep in sync with port/core/dsfcore_api.h */
+#include "DsfAchievements.h"
 
 #include <windows.h>
 #include <math.h>
@@ -153,7 +154,8 @@ private:
 };
 
 PS1Core::PS1Core():
-	m_FrameLock( "PS1Core frames" )
+	m_FrameLock( "PS1Core frames" ),
+	m_ReportLock( "PS1Core reports" )
 {
 	m_bStarted = false;
 	m_bRunning = false;
@@ -327,6 +329,8 @@ bool PS1Core::Start( CString &sError )
 	host.clear_mapping = CoreClearMapping;
 	host.quit = CoreQuit;
 	host.measure_latency = CoreMeasureLatency;
+	host.play_result = CorePlayResult;
+	host.save_progress = CoreSaveProgress;
 
 	RageSound_Generic_Software::SetDirectStream( MixThunk, this );
 	if( !RageSound_Generic_Software::DirectStreamSupported() )
@@ -405,7 +409,25 @@ uint32_t PS1Core::TakePads()
 
 void PS1Core::Update( float fDeltaTime )
 {
-	if( !m_bStarted || !m_bRunning )
+	if( !m_bStarted )
+		return;
+
+	/* Achievement reports from the core thread. */
+	{
+		vector<DsfCorePlay> Plays;
+		vector<DsfCoreProgress> Progress;
+		{
+			LockMut( m_ReportLock );
+			Plays.swap( m_PendingPlays );
+			Progress.swap( m_PendingProgress );
+		}
+		for( unsigned i = 0; i < Progress.size(); ++i )
+			DsfAchievements::OnProgress( Progress[i] );
+		for( unsigned i = 0; i < Plays.size(); ++i )
+			DsfAchievements::OnPlay( Plays[i] );
+	}
+
+	if( !m_bRunning )
 		return;
 
 	m_Settings.Update( fDeltaTime );
@@ -757,6 +779,25 @@ void PS1Core::CoreClearMapping( void *pUser, int iPlayer, int iButton )
 void PS1Core::CoreQuit( void *pUser )
 {
 	((PS1Core *) pUser)->m_bQuitRequested = true;
+}
+
+void PS1Core::CorePlayResult( void *pUser, const DsfCorePlay *pPlay )
+{
+	PS1Core *p = (PS1Core *) pUser;
+	if( pPlay == NULL || pPlay->struct_size < sizeof(DsfCorePlay) )
+		return;
+	LockMut( p->m_ReportLock );
+	p->m_PendingPlays.push_back( *pPlay );
+}
+
+void PS1Core::CoreSaveProgress( void *pUser, const DsfCoreProgress *pProgress )
+{
+	PS1Core *p = (PS1Core *) pUser;
+	if( pProgress == NULL || pProgress->struct_size < sizeof(DsfCoreProgress) )
+		return;
+	LockMut( p->m_ReportLock );
+	p->m_PendingProgress.clear();	/* only the latest matters */
+	p->m_PendingProgress.push_back( *pProgress );
 }
 
 /* For AUTO TIMING.  Sound: the guest's sound waits in our queue (its

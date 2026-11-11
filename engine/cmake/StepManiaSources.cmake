@@ -286,6 +286,8 @@ set(SM_SOURCES_CORE
   ScreenTestFonts.cpp
   ScreenTestInput.cpp
   ScreenPS1Info.cpp
+  ScreenPS1Achievements.cpp
+  DsfAchievements.cpp
   ScreenTestLights.cpp
   ScreenTestSound.cpp
   ScreenTextEntry.cpp

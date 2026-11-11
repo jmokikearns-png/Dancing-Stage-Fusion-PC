@@ -1,0 +1,1 @@
+<BitmapText Font="Common Normal" Text="ACHIEVEMENTS" OnCommand="shadowlength,2" GainFocusCommand="stoptweening;linear,0.1;zoom,1.2;diffuse,1,1,0.4,1" LoseFocusCommand="stoptweening;linear,0.1;zoom,1;diffuse,0.7,0.7,0.7,1" />

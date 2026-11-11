@@ -106,6 +106,14 @@ private:
 	static void CoreClearMapping( void *pUser, int iPlayer, int iButton );
 	static void CoreQuit( void *pUser );
 	static int CoreMeasureLatency( void *pUser, DsfCoreLatency *pOut );
+	static void CorePlayResult( void *pUser, const DsfCorePlay *pPlay );
+	static void CoreSaveProgress( void *pUser, const DsfCoreProgress *pProgress );
+
+	/* Achievement reports: queued on the core thread, handed to
+	 * DsfAchievements on the main thread (Update). */
+	RageMutex m_ReportLock;
+	vector<DsfCorePlay> m_PendingPlays;
+	vector<DsfCoreProgress> m_PendingProgress;
 
 	struct Frame
 	{

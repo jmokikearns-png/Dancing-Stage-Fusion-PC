@@ -3,8 +3,9 @@
 # is built from the player's own disc).  Usage: package.sh [NAME]
 set -euo pipefail
 W=/home/user/work
+REPO=$(cd "$(dirname "$0")/../.." && pwd)
 NAME=${1:-DancingStageFusionPC-win64-test4}
-E=$W/wt/dsfpc                                        # engine (branch wip/dsfpc)
+E=${E:-$REPO/engine}                                 # the engine (modified StepMania 3.95)
 SMB=$W/builds/dsfpc-win64                            # Release engine build
 CB=${CB:-$W/analysis/recomp-feasibility/build-win64-core}   # dsfcore.dll (DSF_EMBED=ON)
 P=$W/tools/recomp-src/psxrecomp
@@ -25,7 +26,7 @@ find "$D" -name CVS -type d -prune -exec rm -rf {} +
 # The title logo: the player's own copy of the game's logo, rendered into this
 # personal package only (never into a repository); without one, our own.
 if [ -n "${LOGO:-}" ]; then
-  LOGO=$LOGO ESRGAN_MODEL=${ESRGAN_MODEL:-} "$W/port/graphics/theme/build_theme_art.sh" "$D" >/dev/null
+  LOGO=$LOGO ESRGAN_MODEL=${ESRGAN_MODEL:-} "$REPO/graphics/theme/build_theme_art.sh" "$D" >/dev/null
 fi
 # Or the title-logo files of an earlier personal package (LOGO_FROM = its
 # Themes/DSF PC/Graphics folder).
@@ -68,7 +69,7 @@ cp "$DEPS/libjpeg-turbo/LICENSE.md" "$L/libjpeg-turbo-LICENSE.md"
 cp "$DEPS/ogg/COPYING" "$L/Ogg-COPYING.txt"
 cp "$DEPS/vorbis/COPYING" "$L/Vorbis-COPYING.txt"
 for f in exo-2:Exo2 inter:Inter lobster:Lobster; do
-  cp "$W/port/graphics/node_modules/@fontsource/${f%%:*}/LICENSE" "$L/${f##*:}-OFL-1.1.txt"
+  cp "$REPO/graphics/node_modules/@fontsource/${f%%:*}/LICENSE" "$L/${f##*:}-OFL-1.1.txt"
 done
 
 sed 's/$/\r/' "${README:-$W/scripts/dsfpc/README-player-test4.txt}" > "$D/README.txt"

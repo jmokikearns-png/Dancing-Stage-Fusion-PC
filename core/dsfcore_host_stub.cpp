@@ -174,3 +174,24 @@ extern "C" void dsfcore_host_quit( void )
 	std::fflush( stdout );
 	std::exit( 0 );
 }
+
+/* No host keeps achievements: the reports go to the log, for tests. */
+extern "C" void dsfcore_host_play_result( const DsfCorePlay *p )
+{
+	std::printf( "[dsf.achieve] play: player %d song %04x%s chart %d%s%s cleared %d grade %d "
+	             "judgments %d %d %d %d %d combo %d/%d kcal %.3f\n",
+	             p->player, p->song_id, p->new_song? " (new)": "", p->chart, p->double_style? " double": "",
+	             p->workout? " workout": "", p->cleared, p->grade, p->perfect, p->great, p->good, p->almost,
+	             p->boo, p->max_combo, p->steps, p->kcal_milli / 1000.0 );
+	std::fflush( stdout );
+}
+
+extern "C" void dsfcore_host_save_progress( const DsfCoreProgress *p )
+{
+	int songs = 0;
+	for( const DsfCoreSaveSong &s : p->song )
+		songs += s.song_id != 0;
+	std::printf( "[dsf.achieve] save: %d songs, %.3f kcal, lessons %08x\n", songs,
+	             p->workout_kcal_milli / 1000.0, (unsigned) p->lesson_sections );
+	std::fflush( stdout );
+}

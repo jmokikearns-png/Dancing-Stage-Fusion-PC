@@ -783,6 +783,36 @@ bool prepare_media( const PSXRecompV4::ModPrepareContext &ctx,
 
 } // namespace
 
+/* For dsfcore_achieve.cpp: the id of song number `number` (the music
+ * select's), from the disc's 20 or the extra songs; 0 when unknown. */
+uint32_t dsf_song_id_by_number( uint32_t number, bool *new_song )
+{
+	*new_song = false;
+	const int k = extra_by_number( number );
+	if( k >= 0 )
+	{
+		*new_song = true;
+		return g_songs[k].record[0] & 0xFFFF;
+	}
+	for( uint32_t i = 0; i < NUM_STOCK; ++i )
+		if( rd32(SONGTAB + SONG_SIZE * i + 4) == number )
+			return rd32( SONGTAB + SONG_SIZE * i ) & 0xFFFF;
+	return 0;
+}
+
+int dsf_new_song_count()
+{
+	return g_media_ok? int( g_songs.size() ): 0;
+}
+
+bool dsf_is_new_song( uint32_t id )
+{
+	for( const Song &s : g_songs )
+		if( (s.record[0] & 0xFFFF) == (id & 0xFFFF) )
+			return true;
+	return false;
+}
+
 PSX_MOD_CONSTRUCTOR( dsf_register_extrasong )
 {
 	(void) psx_mod_register_activation_plugin( "dsf.extrasong", on_activate );

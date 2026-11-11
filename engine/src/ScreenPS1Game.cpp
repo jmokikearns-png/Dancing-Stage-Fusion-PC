@@ -10,6 +10,7 @@
 #include "RageTexture.h"
 #include "RageLog.h"
 #include "RageUtil.h"
+#include "DsfAchievements.h"
 
 REGISTER_SCREEN_CLASS( ScreenPS1Game );
 
@@ -36,6 +37,7 @@ static const int PS1_PAD_BIT[NUM_PS1PAD_PS1_BUTTONS] =
 ScreenPS1Game::ScreenPS1Game( CString sName ) : Screen( sName )
 {
 	m_bFailed = false;
+	m_fToastLeft = 0;
 }
 
 void ScreenPS1Game::Init()
@@ -47,6 +49,27 @@ void ScreenPS1Game::Init()
 	m_textMessage.SetZoom( 0.7f );
 	m_textMessage.SetHidden( true );
 	this->AddChild( &m_textMessage );
+
+	/* The achievement pop-up: a dark bar over the top of the picture. */
+	m_quadToast.SetWidth( 360 );
+	m_quadToast.SetHeight( 54 );
+	m_quadToast.SetDiffuse( RageColor(0.05f, 0.05f, 0.08f, 0.88f) );
+	m_Toast.AddChild( &m_quadToast );
+	m_textToastTitle.LoadFromFont( THEME->GetPathF("Common","normal") );
+	m_textToastTitle.SetY( -12 );
+	m_textToastTitle.SetZoom( 0.5f );
+	m_textToastTitle.SetShadowLength( 0 );
+	m_textToastTitle.SetDiffuse( RageColor(1, 0.85f, 0.3f, 1) );
+	m_Toast.AddChild( &m_textToastTitle );
+	m_textToastName.LoadFromFont( THEME->GetPathF("Common","normal") );
+	m_textToastName.SetY( 10 );
+	m_textToastName.SetZoom( 0.7f );
+	m_textToastName.SetMaxWidth( 340 / 0.7f );
+	m_textToastName.SetShadowLength( 0 );
+	m_Toast.AddChild( &m_textToastName );
+	m_Toast.SetXY( SCREEN_CENTER_X, SCREEN_TOP - 40 );
+	m_Toast.SetHidden( true );
+	this->AddChild( &m_Toast );
 
 	if( PS1CORE == NULL )
 		PS1CORE = new PS1Core;
@@ -128,6 +151,53 @@ void ScreenPS1Game::Update( float fDeltaTime )
 
 	SendPads();
 	PS1CORE->Update( fDeltaTime );
+
+	if( m_fToastLeft > 0 )
+	{
+		m_fToastLeft -= fDeltaTime;
+		if( m_fToastLeft <= 0 )
+			m_Toast.SetHidden( true );
+	}
+	if( m_fToastLeft <= 0 )
+	{
+		vector<CString> asEarned;
+		if( DsfAchievements::TakeEarned(asEarned) )
+		{
+			/* many at once (records from before): one pop-up for them all */
+			if( asEarned.size() > 3 )
+				m_ToastQueue.push_back( ssprintf("%u achievements|See ACHIEVEMENTS on the title menu", (unsigned) asEarned.size()) );
+			else
+				for( unsigned i = 0; i < asEarned.size(); ++i )
+					m_ToastQueue.push_back( asEarned[i] );
+		}
+		if( !m_ToastQueue.empty() )
+			ShowNextAchievement();
+	}
+}
+
+void ScreenPS1Game::ShowNextAchievement()
+{
+	CString sItem = m_ToastQueue.front();
+	m_ToastQueue.erase( m_ToastQueue.begin() );
+	CString sTitle = "ACHIEVEMENT UNLOCKED", sName = sItem;
+	const size_t iBar = sItem.find( '|' );
+	if( iBar != CString::npos )
+	{
+		sTitle = sItem.substr( 0, iBar );
+		sName = sItem.substr( iBar + 1 );
+		sTitle.MakeUpper();
+	}
+	m_textToastTitle.SetText( sTitle );
+	m_textToastName.SetText( sName );
+	m_Toast.SetHidden( false );
+	m_Toast.StopTweening();
+	m_Toast.SetY( SCREEN_TOP - 40 );
+	m_Toast.BeginTweening( 0.3f, TWEEN_DECELERATE );
+	m_Toast.SetY( SCREEN_TOP + 36 );
+	m_Toast.BeginTweening( 3.5f );
+	m_Toast.BeginTweening( 0.3f, TWEEN_ACCELERATE );
+	m_Toast.SetY( SCREEN_TOP - 40 );
+	m_fToastLeft = 4.2f;
 }
 
 void ScreenPS1Game::DrawPrimitives()
