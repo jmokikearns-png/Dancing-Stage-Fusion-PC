@@ -32,6 +32,10 @@
  *
  * The music select lists a song when 0x80050C40 accepts it (in DOUBLE mode
  * only songs with double charts); AVAIL_GUEST adds the unlock condition.
+ * Its arrows are drawn by 0x80027C84 from 0x80050364, which calls NEW_GUEST
+ * instead: with a newly unlocked song under the cursor that has never been
+ * played, it also draws the game's unused "New!!" picture from the same
+ * sheet above the right arrow, like the Deluxe disc.
  *
  * Workout results show each song's 176x55 banner (READ_DT e181, item idx+1)
  * from a VRAM grid: x = 640 + 64*(idx/4), y = 256 + 55*(idx%4), CLUT at
@@ -112,6 +116,13 @@ const uint32_t KIND_FN = 0x8002C398, KIND_GUEST = 0x8F000040;
 const uint32_t MAX_STREAM_ID = 80;
 const uint32_t AVAIL_FN = 0x80050C40, AVAIL_GUEST = 0x8F000030;
 const uint32_t PLAY_STYLE = 0x800BA328;	/* byte; 2 = DOUBLE */
+/* NEW!! (see the header): the music select's right arrow, drawn by
+ * SPRT(x, y, w, h, u, v, clut x, clut y, colour, ot) = 0x80027C84 from
+ * 0x80050364 (u 52 is the right arrow); the unused "New!!" picture is on the
+ * same sheet at u 8, v 96, 64x25.  The list is at [0x800A9E10], the song
+ * under the cursor at +0x18 + 4 * [+0x14]. */
+const uint32_t SPRT_FN = 0x80027C84, ARROW_CALL = 0x80050364, NEW_GUEST = 0x8F000050;
+const uint32_t SELECT_LIST = 0x800A9E10;
 const uint32_t SAVE_PTR = 0x800B1AFC;	/* -> the save: song records at +0x90, 0x50 bytes each */
 const int SAVE_RECORDS = 32;
 const uint32_t MARKER_WORD = 0x58465344;	/* "DSFX" */
@@ -454,6 +465,8 @@ void install()
 	psx_mod_write_code_word( KIND_FN, j(KIND_GUEST) );
 	psx_mod_write_code_word( KIND_FN + 4, 0 );
 	patch_workout_slots();
+	if( rd32(ARROW_CALL) == jal(SPRT_FN) )
+		psx_mod_write_code_word( ARROW_CALL, jal(NEW_GUEST) );
 	psx_mod_counter_add( "dsf.extrasong.installed", 1 );
 }
 
@@ -612,6 +625,46 @@ int extra_by_number( uint32_t number )
 	return -1;
 }
 
+/* ---- NEW_GUEST: SPRT for the music select's arrows, plus NEW!! ----
+ * A song is new once it is unlocked and until the save has a record for it
+ * (the results code adds one the first time the song is played). */
+bool played( const Song &s )
+{
+	const uint32_t save = rd32( SAVE_PTR );
+	if( (save & 0xFFE00000u) != 0x80000000u )
+		return true;
+	for( int i = 0; i < SAVE_RECORDS; ++i )
+		if( (rd32(save + 0x90 + 0x50 * uint32_t(i) + 0x24) & 0xFFFF) == (s.record[0] & 0xFFFF) )
+			return true;
+	return false;
+}
+
+bool cursor_is_new()
+{
+	const uint32_t list = rd32( SELECT_LIST );
+	if( (list & 0xFFE00000u) != 0x80000000u )
+		return false;
+	const int k = extra_by_number( rd32(list + 0x18 + 4 * rd32(list + 0x14)) );
+	return k >= 0 && g_songs[k].unlock_id && unlocked( g_songs[k] ) && !played( g_songs[k] );
+}
+
+void on_new_arrow( CPUState *cpu, uint32_t )
+{
+	const uint32_t sp = cpu->gpr[29], ra = cpu->gpr[31];
+	const uint32_t y = cpu->gpr[5], u = rd32( sp + 0x10 ), v = rd32( sp + 0x14 );
+	cpu->gpr[2] = psx_mod_call_guest( cpu, SPRT_FN, ra, cpu->gpr[4], y, cpu->gpr[6], cpu->gpr[7] );
+	if( u == 52 && cursor_is_new() )
+	{
+		/* the same call's clut, colour and ot; u and v put back after */
+		wr32( sp + 0x10, 8 );
+		wr32( sp + 0x14, 96 );
+		cpu->gpr[2] = psx_mod_call_guest( cpu, SPRT_FN, ra, uint32_t(-136), y - 34, 64, 25 );
+		wr32( sp + 0x10, u );
+		wr32( sp + 0x14, v );
+	}
+	cpu->gpr[31] = ra;
+}
+
 void assign_workout_slots()
 {
 	for( int &s : g_slot_song ) s = -1;
@@ -738,5 +791,6 @@ PSX_MOD_CONSTRUCTOR( dsf_register_extrasong )
 	(void) psx_mod_register_guest_function_plugin( "dsf.extrasong", LZ_GUEST, on_lz );
 	(void) psx_mod_register_guest_function_plugin( "dsf.extrasong", AVAIL_GUEST, on_avail );
 	(void) psx_mod_register_guest_function_plugin( "dsf.extrasong", KIND_GUEST, on_kind );
+	(void) psx_mod_register_guest_function_plugin( "dsf.extrasong", NEW_GUEST, on_new_arrow );
 	(void) PSXRecompV4::mod_register_media_preparer( "dsf.extrasongs.media", prepare_media, prepare_media );
 }
