@@ -35,13 +35,13 @@ export const GameArrow: React.FC<{dir: number; size: number; kind: 'note' | 'rec
 /* Intro: the receptors fade in, then step arrows scroll up and hit them on
  * the beat, from the music's first beat. */
 const HITS: Array<[number, number[]]> = [[1, [0]], [2, [1]], [3, [2]], [4, [3]], [5, [0, 3]], [6, [1]], [7, [2]]];
-export const Intro: React.FC<{beats?: number}> = () => {
+export const Intro: React.FC<{beats?: number; beat?: number; phase?: number}> = ({beat = BEAT, phase = 0.01}) => {
 	const frame = useCurrentFrame();
 	const t = frame / FPS;
 	const SIZE = 170, GAP = 30, REC_Y = 250, SPEED = 1150;	/* px a second */
 	const fade = interpolate(t, [0, 0.45], [0, 1], clamp);
 	const x0 = (1920 - (4 * SIZE + 3 * GAP)) / 2;
-	const beatTime = (k: number) => 0.01 + k * BEAT;
+	const beatTime = (k: number) => phase + k * beat;
 	return (
 		<AbsoluteFill style={{background: '#050507', opacity: fade}}>
 			{[0, 1, 2, 3].map((dir) => {

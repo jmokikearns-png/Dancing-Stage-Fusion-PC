@@ -15,9 +15,9 @@ export const Title: React.FC<{text: string; size: number; style?: React.CSSPrope
 const clamp = {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'} as const;
 
 /* How far into the current beat this frame is (0..1), for pulses. */
-export const beatPhase = (absFrame: number) => {
-	const t = absFrame / FPS - PHASE;
-	return ((t / BEAT) % 1 + 1) % 1;
+export const beatPhase = (absFrame: number, beat = BEAT, phase = PHASE) => {
+	const t = absFrame / FPS - phase;
+	return ((t / beat) % 1 + 1) % 1;
 };
 
 /* Moving stripes in the game's menu colours: the backdrop between shots. */
@@ -90,11 +90,11 @@ export const Flash: React.FC<{len?: number; strength?: number}> = ({len = 8, str
 
 /* A piece of footage, 4:3, framed on the stripes; zooms a little on the beat. */
 export const Shot: React.FC<{src: string; from: number; len: number; still?: boolean; hue?: 'green' | 'orange' | 'red' | 'blue';
-	full?: boolean; zoom?: number; absStart: number; rate?: number}> =
-	({src, from, len, still, hue = 'green', full, zoom = 1, absStart, rate = 1}) => {
+	full?: boolean; zoom?: number; absStart: number; rate?: number; beat?: number; phase?: number}> =
+	({src, from, len, still, hue = 'green', full, zoom = 1, absStart, rate = 1, beat, phase}) => {
 	const frame = useCurrentFrame();
 	const enter = spring({frame, fps: FPS, config: {damping: 15, stiffness: 220}});
-	const pulse = 1 + 0.018 * Math.pow(1 - beatPhase(absStart + frame), 3);
+	const pulse = 1 + 0.018 * Math.pow(1 - beatPhase(absStart + frame, beat, phase), 3);
 	const drift = interpolate(frame, [0, len], [1, 1.05]);
 	const w = full ? 1920 : 1440, h = full ? 1080 : 1080;
 	const scale = (full ? 1.0 : 0.9) * zoom * pulse * drift * (0.92 + 0.08 * enter);
