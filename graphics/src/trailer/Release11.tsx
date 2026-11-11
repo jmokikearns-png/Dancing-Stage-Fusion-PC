@@ -23,7 +23,10 @@ const f = (s: number) => Math.round(s * RELEASE11_FPS);
 const beatT = (k: number) => PHASE + k * BEAT;
 const B = beatT;	/* cut points, in beats */
 const clamp = {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'} as const;
-const END_AT = B(220), END_LEN = B(236) - B(220);
+/* The song's end: a build (beats 188-204), the drop into its melodic last
+ * section (beat 204, 63.7 s), then its own fade-out (from beat 252, 78.7 s;
+ * silent from about 79.8 s): the end card rides the fade. */
+const END_AT = B(236), END_LEN = B(258) - B(236);
 export const release11Frames = () => f(END_AT + END_LEN);
 
 type Hue = 'green' | 'orange' | 'red' | 'blue';
@@ -61,15 +64,18 @@ const cuts: Scene[] = [
 	shot(B(152), B(164), 'g_k2', {hue: 'orange', flash: 'big'}),
 	shot(B(164), B(176), 'v_res2', {hue: 'blue', ...LOW}),
 	shot(B(176), B(188), 'g_h3', {hue: 'red', tag: 'KEPT ON YOUR PC', tagSub: 'a new memory card takes nothing away'}),
-	/* faster: two beats a shot */
-	...['g_h4', 'g_k3', 'g_h5', 'g_k4', 'g_h6', 'g_k5', 'g_h1', 'g_k6'].map((k, i) =>
-		shot(B(188 + 2 * i), B(190 + 2 * i), k, {hue: HUES[i % 4], flash: i === 0 ? 'big' : true})),
-	/* faster still: a beat a shot, no flashes from here */
-	...['g_k2', 'g_h2', 'g_k3', 'g_h3', 'g_k4', 'g_h4', 'g_k5', 'g_h5'].map((k, i) =>
-		shot(B(204 + i), B(205 + i), k, {hue: HUES[(i + 1) % 4], full: i % 2 === 1, flash: false})),
-	/* the build-up: a word every two beats */
+	/* the build: two beats a shot, then one */
+	...['g_h4', 'g_k3'].map((k, i) => shot(B(188 + 2 * i), B(190 + 2 * i), k, {hue: HUES[i % 4], flash: true})),
+	...['g_h5', 'g_k4', 'g_h6', 'g_k5'].map((k, i) =>
+		shot(B(192 + i), B(193 + i), k, {hue: HUES[(i + 2) % 4], full: i % 2 === 1, flash: false})),
+	/* the end of the build: a word every two beats */
 	...['PLAY.', 'EARN.', 'UNLOCK.', 'REPEAT.'].map((w, i): Scene =>
-		words(B(212 + 2 * i), B(214 + 2 * i), w, {slamSize: [220, 230, 210, 220][i], hue: HUES[i], flash: false})),
+		words(B(196 + 2 * i), B(198 + 2 * i), w, {slamSize: [220, 230, 210, 220][i], hue: HUES[i], flash: false})),
+	/* the drop into the melodic last section: a shot a phrase */
+	shot(B(204), B(212), 'g_k6', {hue: 'orange', full: true, flash: false}),
+	shot(B(212), B(220), 'g_h6', {hue: 'green', flash: false}),
+	shot(B(220), B(228), 'g_k5', {hue: 'blue', flash: false}),
+	shot(B(228), B(236), 'g_h5', {hue: 'red', full: true, flash: false}),
 ];
 
 /* The opening count, a word a vocal hit (beats), each slammed in on its hit,
@@ -150,7 +156,7 @@ const EndCard11: React.FC<{len: number}> = ({len}) => {
 
 export const Release11Trailer: React.FC = () => {
 	const total = f(END_AT + END_LEN);
-	const fade = (fr: number) => interpolate(fr, [total - 75, total], [1, 0], clamp);
+	const fade = (fr: number) => interpolate(fr, [total - 10, total], [1, 0], clamp);	/* the song fades itself */
 	return (
 		<AbsoluteFill style={{background: '#000'}}>
 			<Audio src={staticFile('stars.wav')} volume={fade} />
@@ -166,8 +172,8 @@ export const Release11Trailer: React.FC = () => {
 				);
 			})}
 			<Count />
-			<Sequence from={f(B(40))} durationInFrames={f(B(212)) - f(B(40))} name="footage note">
-				<FootageNote len={f(B(212)) - f(B(40))} />
+			<Sequence from={f(B(40))} durationInFrames={f(B(236)) - f(B(40))} name="footage note">
+				<FootageNote len={f(B(236)) - f(B(40))} />
 			</Sequence>
 			<Sequence from={f(END_AT)} durationInFrames={f(END_LEN)} name="end card">
 				<EndCard11 len={f(END_LEN)} />
