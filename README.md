@@ -53,7 +53,12 @@ On 1.0, get `DancingStageFusionPC-Updater.zip` from the same page to update.
   original 20: in the music select, results, WORKOUT and RECORDS, with their
   own banners, previews and backgrounds, and unlock conditions (Heaven and
   Earth stays hidden until you clear PARANOIA survivor on DIFFICULT or
-  EXPERT).
+  EXPERT). A newly unlocked song has the **NEW!!** marker in the music select
+  until you play it, as on the Deluxe disc.
+- **Achievements** (from 1.1): 25 of them, for clears, full combos, grades,
+  combos, the new songs, DOUBLE, WORKOUT and LESSON modes and totals. Each
+  one pops up when you earn it, and **ACHIEVEMENTS** on the title menu lists
+  them all with your progress. Records already on your memory card count.
 
 **Deluxe (PlayStation disc)**
 

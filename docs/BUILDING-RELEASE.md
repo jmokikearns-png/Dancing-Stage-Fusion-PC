@@ -31,8 +31,11 @@ scripts/setup_build_env.sh
 
 It sets up, under `$W`: the conda-forge compilers (`tc/linux`, `tc/win`), the
 Windows Python and wheels for the song tools (`tc/pywin`, `tc/wheels*`),
-PSXRecomp with this project's patches (`tools/recomp-src/psxrecomp`), the
-game project folder (`analysis/recomp-feasibility/dsf-project`) and the
+PSXRecomp with this project's patches and its rewind backend
+(`tools/recomp-src/psxrecomp`), two of its dependencies as git checkouts
+(`depsrc/libwebp`, `depsrc/openxr`), the
+game project folder (`analysis/recomp-feasibility/dsf-project`, a copy of
+`game-project/`: run `setup_build_env.sh psxrecomp` again after changing it) and the
 engine's libraries (`builds/deps-x86_64`, from
 `scripts/windows-build/build-deps-mingw.sh`). Steps can be run on their own:
 `setup_build_env.sh toolchains`, `psxrecomp` or `deps`.
@@ -61,7 +64,9 @@ cmake -S $W/analysis/recomp-feasibility/dsf-project \
       -DCMAKE_TOOLCHAIN_FILE=$REPO/scripts/win/toolchain-conda-ucrt.cmake \
       -DCMAKE_BUILD_TYPE=Release -DDSF_EMBED=ON -DPSX_EMBED=ON \
       -DCMAKE_C_STANDARD=17 -DCMAKE_CXX_STANDARD=17 -DPSX_ENABLE_VULKAN=OFF \
-      -DDSF_PORT_DIR=$REPO
+      -DDSF_PORT_DIR=$REPO \
+      -DFETCHCONTENT_SOURCE_DIR_PSX_LIBWEBP=$W/depsrc/libwebp \
+      -DFETCHCONTENT_SOURCE_DIR_PSX_OPENXR_SDK=$W/depsrc/openxr
 ninja -C $W/analysis/recomp-feasibility/build-win64-ucrt psx-runtime
 ```
 
@@ -85,8 +90,11 @@ cmake -S $W/tools/recomp-src/psxrecomp/recompiler -B $W/builds/recompiler-win64 
       -DCMAKE_TOOLCHAIN_FILE=$REPO/scripts/toolchain-x86_64-mingw-posix.cmake \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_EXE_LINKER_FLAGS="-static -static-libgcc -static-libstdc++"
-ninja -C $W/builds/recompiler-win64
+ninja -C $W/builds/recompiler-win64 psxrecomp-game
 ```
+
+(Only the recompiler program: some of the project's own tests don't link
+for Windows.)
 
 ## 6. The Windows compiler for players, and the release
 

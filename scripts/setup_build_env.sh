@@ -9,6 +9,10 @@
 #   $W/tc/wheels-songtools  numpy 2.0.2 and Pillow 13.0.0 for it (win_amd64, cp312)
 #   $W/tc/wheels            imageio-ffmpeg 0.7.0 (its static ffmpeg.exe)
 #   $W/tools/recomp-src/psxrecomp   PSXRecomp at the base commit, with patches/psxrecomp
+#                           and its rewind backend (submodule lib/retcomm-rbengine)
+#   $W/depsrc/libwebp, $W/depsrc/openxr   two of its dependencies at their pinned
+#                           commits, fetched with git (their archive downloads come
+#                           from codeload.github.com, which some networks block)
 #   $W/builds/deps-x86_64   the engine's libraries (scripts/windows-build/build-deps-mingw.sh)
 # Every download is checked against the SHA-256 of the file 1.0 was built with.
 #
@@ -114,7 +118,21 @@ psxrecomp() {
     GIT_COMMITTER_NAME="DSF PC Port" GIT_COMMITTER_EMAIL=jmokikearns@gmail.com \
       bash "$REPO/patches/psxrecomp/apply.sh" "$p"
   fi
+  git -C "$p" submodule update --init --quiet lib/retcomm-rbengine
+  # FetchContent sources (third_party/deps.manifest pins), as source trees:
+  # the build gets them with -DFETCHCONTENT_SOURCE_DIR_PSX_LIBWEBP / _PSX_OPENXR_SDK
+  local spec name url commit
+  for spec in "libwebp https://github.com/webmproject/libwebp 4fa21912338357f89e4fd51cf2368325b59e9bd9" \
+              "openxr https://github.com/KhronosGroup/OpenXR-SDK b76b80adaf65ac3ad6cc1ce61974fb29a5d02352"; do
+    read -r name url commit <<< "$spec"
+    if [ ! -d "$W/depsrc/$name/.git" ]; then
+      git init --quiet "$W/depsrc/$name"
+      git -C "$W/depsrc/$name" fetch --quiet --depth 1 "$url" "$commit"
+      git -C "$W/depsrc/$name" checkout --quiet FETCH_HEAD
+    fi
+  done
   # the core's CMake project expects the game project beside PSXRecomp
+  # (a copy: run this step again after changing game-project/)
   local g=$W/analysis/recomp-feasibility/dsf-project
   mkdir -p "$g"
   cp "$REPO/game-project/CMakeLists.txt" "$REPO/game-project/game.toml" "$g/"

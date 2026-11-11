@@ -96,6 +96,15 @@ THE NEW SONGS
      (songtools\extrasong\songs.toml) and replaces the old song pack.
   The song pack holds your music and charts: for your own use only.
 
+ACHIEVEMENTS
+  25 achievements for what you do in the game: clears on each difficulty,
+  full combos, grades, combos, the new songs, DOUBLE, WORKOUT and LESSON
+  modes, and totals (songs, steps, calories).  Each one pops up when you
+  earn it; ACHIEVEMENTS on the title menu lists them all with your progress.
+  Records already on your memory card count the first time the game loads
+  it.  They are kept in Data\Achievements.ini, so a new memory card takes
+  nothing away.
+
 UPDATES
   The game looks for a newer version on GitHub when it starts and offers it
   on the title menu: YES downloads and installs it, then starts the game

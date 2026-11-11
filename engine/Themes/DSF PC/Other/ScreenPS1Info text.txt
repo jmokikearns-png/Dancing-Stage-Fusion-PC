@@ -58,6 +58,11 @@ Player 2: the numeric keypad (8 2 4 6 arrows, 0 Cross, . Circle, 1 Square, 3 Tri
 
 QUIT, under OPTIONS on the game's main menu, closes Dancing Stage Fusion PC.
 
+[ACHIEVEMENTS]
+25 achievements for clears, full combos, grades, combos, the new songs, DOUBLE, WORKOUT and LESSON modes, and totals.  Each one pops up at the top of the screen when you earn it; ACHIEVEMENTS on the title menu lists them all with your progress.
+
+Records already on your memory card count when the game loads it.  Achievements are kept in Data\Achievements.ini, so a new memory card takes nothing away.
+
 [CREDITS]
 PORT BY
 CrashReporter
