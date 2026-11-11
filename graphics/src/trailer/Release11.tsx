@@ -24,9 +24,10 @@ const beatT = (k: number) => PHASE + k * BEAT;
 const B = beatT;	/* cut points, in beats */
 const clamp = {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'} as const;
 /* The song's end: a build (beats 188-204), the drop into its melodic last
- * section (beat 204, 63.7 s), then its own fade-out (from beat 252, 78.7 s;
- * silent from about 79.8 s): the end card rides the fade. */
-const END_AT = B(236), END_LEN = B(258) - B(236);
+ * section (beat 204, 63.7 s); on beat 252 (78.7 s) the drums stop and a
+ * sweep rings out until about 80 s.  The end card lands on that beat and
+ * holds past the song. */
+const END_AT = B(252), END_LEN = 6.4;
 export const release11Frames = () => f(END_AT + END_LEN);
 
 type Hue = 'green' | 'orange' | 'red' | 'blue';
@@ -76,6 +77,8 @@ const cuts: Scene[] = [
 	shot(B(212), B(220), 'g_h6', {hue: 'green', flash: false}),
 	shot(B(220), B(228), 'g_k5', {hue: 'blue', flash: false}),
 	shot(B(228), B(236), 'g_h5', {hue: 'red', full: true, flash: false}),
+	shot(B(236), B(244), 'g_k4', {hue: 'orange', flash: false}),
+	shot(B(244), B(252), 'g_h4', {hue: 'green', full: true, flash: false}),
 ];
 
 /* The opening count, a word a vocal hit (beats), each slammed in on its hit,
@@ -127,7 +130,7 @@ const EndCard11: React.FC<{len: number}> = ({len}) => {
 	const v = spring({frame: frame - 8, fps, config: {damping: 11, stiffness: 240, mass: 0.6}});
 	const b = spring({frame: frame - 18, fps, config: {damping: 14, stiffness: 160}});
 	const c = spring({frame: frame - 34, fps, config: {damping: 18, stiffness: 120}});
-	const out = Math.min(interpolate(frame, [len - 25, len], [1, 0], clamp), interpolate(frame, [0, 10], [0, 1], clamp));
+	const out = Math.min(interpolate(frame, [len - 25, len], [1, 0], clamp), interpolate(frame, [0, 3], [0, 1], clamp));
 	return (
 		<AbsoluteFill style={{opacity: out}}>
 			<Stripes hue="green" speed={0.5} dim={0.15} />
@@ -172,8 +175,8 @@ export const Release11Trailer: React.FC = () => {
 				);
 			})}
 			<Count />
-			<Sequence from={f(B(40))} durationInFrames={f(B(236)) - f(B(40))} name="footage note">
-				<FootageNote len={f(B(236)) - f(B(40))} />
+			<Sequence from={f(B(40))} durationInFrames={f(B(252)) - f(B(40))} name="footage note">
+				<FootageNote len={f(B(252)) - f(B(40))} />
 			</Sequence>
 			<Sequence from={f(END_AT)} durationInFrames={f(END_LEN)} name="end card">
 				<EndCard11 len={f(END_LEN)} />
