@@ -74,7 +74,7 @@ this build folder (`CB`).
 cmake -S $REPO/engine -B $W/builds/dsfpc-win64 -G Ninja \
       -DCMAKE_TOOLCHAIN_FILE=$REPO/engine/cmake/toolchains/x86_64-w64-mingw32.cmake \
       -DCMAKE_BUILD_TYPE=Release -DSM_DEPS_PREFIX=$W/builds/deps-x86_64 \
-      -DSM_STATIC_RUNTIME=ON -DSM_WITH_DSHOW=OFF -DSM_WITH_FFMPEG=OFF
+      -DSM_STATIC_RUNTIME=ON -DSM_WITH_DSHOW=OFF -DSM_WITH_FFMPEG=OFF -DSM_WITH_D3D=OFF
 ninja -C $W/builds/dsfpc-win64
 ```
 
