@@ -99,7 +99,7 @@ for Windows.)
 ## 6. The Windows compiler for players, and the release
 
 ```
-bash $REPO/scripts/dsfpc/make_compiler.sh      # tc/win -> builds/compiler-win64
+bash $REPO/scripts/dsfpc/make_compiler.sh $W/tc/win/Library $W/builds/compiler-win64
 bash $REPO/scripts/dsfpc/make_release.sh 1.1   # -> $W/deliverables/DancingStageFusionPC-1.1.zip
 ```
 
