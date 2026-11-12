@@ -338,6 +338,13 @@ bool PS1Core::Start( CString &sError )
 
 	LOG->Trace( "PS1Core: starting %s with disc \"%s\"", sDll.c_str(), sDisc.c_str() );
 	const int iRet = pfnStart( &host, (int) vArgv.size(), &vArgv[0], (sRoot + "\\Data\\dsfcore.log").c_str() );
+	if( iRet == 1 )	/* dsfcore_start: a core built for another version (DSFCORE_API_VERSION) */
+	{
+		sError = "dsfcore.dll was built for a different version of Dancing Stage Fusion PC.\n\n"
+			"Run Setup.exe again: it rebuilds it from your disc in about a minute.\n"
+			"Your songs, saves, settings and achievements stay.";
+		return false;
+	}
 	if( iRet != 0 )
 	{
 		sError = ssprintf( "dsfcore.dll refused to start (code %i).", iRet );
