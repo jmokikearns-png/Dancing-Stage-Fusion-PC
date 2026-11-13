@@ -22,7 +22,7 @@ namespace
 	enum Id
 	{
 		FIRST_STEPS, STANDARD, DIFFICULT, EXPERT_FEET, FULL_COMBO, EXPERT_FULL_COMBO, ALL_PERFECT,
-		COMPLETIONIST, EXPERT_COMPLETIONIST, DOUBLE_A, STRAIGHT_AS, COMBO_100, COMBO_300, COMBO_500,
+		COMPLETIONIST, EXPERT_COMPLETIONIST, DOUBLE_A, STRAIGHT_AS, COMBO_100, COMBO_200, COMBO_300,
 		SURVIVOR, HEAVEN, SOMETHING_NEW, ALL_NEW, SCENERY, DOUBLE_TROUBLE, WORKOUT, LESSON,
 		REGULAR, MARATHON, CALORIES, NUM_ACHIEVEMENTS
 	};
@@ -41,8 +41,8 @@ namespace
 		{ "DoubleA", "Double A", "Get an AA." },
 		{ "StraightAs", "Straight A's", "Get an A or better on 10 different songs." },
 		{ "Combo100", "Combo 100", "Reach a 100 combo." },
+		{ "Combo200", "Combo 200", "Reach a 200 combo." },
 		{ "Combo300", "Combo 300", "Reach a 300 combo." },
-		{ "Combo500", "Combo 500", "Reach a 500 combo." },
 		{ "Survivor", "Survivor", "Clear PARANOIA survivor on DIFFICULT or EXPERT." },
 		{ "HeavenAndEarth", "Heaven and Earth", "Play Heaven and Earth." },
 		{ "SomethingNew", "Something New", "Play one of the new songs." },
@@ -88,6 +88,8 @@ namespace
 		for( unsigned i = 0; i < as.size(); ++i )
 			out.insert( (int) strtol(as[i], NULL, 16) );
 	}
+
+	void Update();
 
 	void Load()
 	{
@@ -135,6 +137,8 @@ namespace
 		ini.GetValue( "Counts", "Kcal", g.iKcal );
 		ini.GetValue( "Counts", "ListSongs", g.iListSongs );
 		ini.GetValue( "Counts", "NewSongs", g.iNewSongs );
+		/* an achievement this version added may be done already */
+		Update();
 	}
 
 	void Save()
@@ -197,8 +201,8 @@ namespace
 		case DOUBLE_A:		bDone = g.bAA; break;
 		case STRAIGHT_AS:	iProgress = (int) g.AOrBetter.size(); iTarget = 10; break;
 		case COMBO_100:		iProgress = g.iBestCombo; iTarget = 100; break;
+		case COMBO_200:		iProgress = g.iBestCombo; iTarget = 200; break;
 		case COMBO_300:		iProgress = g.iBestCombo; iTarget = 300; break;
-		case COMBO_500:		iProgress = g.iBestCombo; iTarget = 500; break;
 		case SURVIVOR:		bDone = g.bSurvivor; break;
 		case HEAVEN:		bDone = g.bHeaven; break;
 		case SOMETHING_NEW:	bDone = !g.PlayedNew.empty(); break;
