@@ -25,6 +25,10 @@ and updates from inside the game. Download it from the
 [Releases page](https://github.com/jmokikearns-png/Dancing-Stage-Fusion-PC/releases/latest).
 On 1.0, get `DancingStageFusionPC-Updater.zip` from the same page to update.
 
+Version 1.1 is finished and will be released soon, with achievements and a
+NEW!! marker on newly unlocked songs. On 1.0.1, the game will offer it on its
+title menu once it's out.
+
 ## Features
 
 **PC version**
